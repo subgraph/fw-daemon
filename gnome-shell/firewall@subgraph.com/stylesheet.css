@@ -1,0 +1,71 @@
+.fw-prompt-dialog {
+    min-width: 450px;
+    max-width: 500px;
+}
+
+.fw-group-button:checked {
+    color: white;
+    border-color: rgba(0,0,0,0.7);
+    background-color: #222728;
+    box-shadow: inset 0 0 black;
+    text-shadow: none;
+}
+
+.fw-button-group {
+    padding-bottom: 10px;
+}
+
+.fw-option-list {
+    border: 2px solid rgba(238, 238, 236, 0.5);
+    padding: 10px;
+}
+
+.fw-option-item{
+    padding: 5px;
+}
+
+.fw-option-item:focus {
+    background-color: #215d9c;
+}
+
+.fw-option-item:selected {
+    font-weight: bold;
+}
+
+.fw-option-item-icon {
+    icon-size: 16px;
+}
+
+.fw-prompt-title {
+    font-size: 14pt;
+    font-weight: bold;
+}
+
+.fw-prompt-icon {
+    padding: 10px;
+}
+
+.fw-detail-title {
+    font-weight: bold;
+}
+
+.fw-expanding-section-header {
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0);
+}
+
+.fw-expanding-section-header:focus {
+    border-color: #215d9c;
+}
+
+.fw-expanding-section-label {
+    font-weight: bold;
+}
+
+.fw-details-section {
+    padding: 20px;
+}
+
+.fw-details-left {
+    padding-right: 10px;
+}
