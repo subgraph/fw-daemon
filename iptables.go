@@ -7,42 +7,38 @@ import (
 	"strings"
 )
 
-const iptablesRule = "-t mangle -%c OUTPUT -m conntrack --ctstate NEW -j NFQUEUE --queue-num 0 --queue-bypass"
-const dnsRule = "-%c INPUT --protocol udp -m multiport --source-ports 53 -j NFQUEUE --queue-num 0 --queue-bypass"
+const iptablesRule = "OUTPUT -t mangle -m conntrack --ctstate NEW -j NFQUEUE --queue-num 0 --queue-bypass"
+const dnsRule = "INPUT --protocol udp --sport 53 -j NFQUEUE --queue-num 0 --queue-bypass"
+const blockRule = "OUTPUT --protocol tcp -m mark --mark 1 -j REJECT"
 
 func setupIPTables() {
-	removeIPTRules(dnsRule, iptablesRule)
-	addIPTRules(iptablesRule, dnsRule)
-}
-
-func removeIPTRules(rules ...string) {
-	for _, r := range rules {
-		iptables('D', r)
-	}
+	addIPTRules(iptablesRule, dnsRule, blockRule)
 }
 
 func addIPTRules(rules ...string) {
 	for _, r := range rules {
-		iptables('I', r)
+		if(iptables('C', r)) {
+			log.Info("IPTables rule already present: %s", r)
+		} else {
+			log.Info("Installing IPTables rule: %s", r)
+			iptables('I', r)
+		}
 	}
 }
 
-func iptables(verb rune, rule string) {
-
+func iptables(verb rune, rule string) bool {
 	iptablesPath, err := exec.LookPath("iptables")
 	if err != nil {
 		log.Warning("Could not find iptables binary in path")
 		os.Exit(1)
 	}
-
-	argLine := fmt.Sprintf(rule, verb)
+	argLine := fmt.Sprintf("-%c %s", verb, rule)
 	args := strings.Fields(argLine)
-	fmt.Println(iptablesPath, argLine)
 	cmd := exec.Command(iptablesPath, args...)
-	out, err := cmd.CombinedOutput()
-	fmt.Fprintf(os.Stderr, string(out))
+	_, err = cmd.CombinedOutput()
 	_, exitErr := err.(*exec.ExitError)
 	if err != nil && !exitErr {
-		log.Warning("Error reading output: %v", err)
+		log.Warning("Error running iptables: %v", err)
 	}
+	return !exitErr
 }
