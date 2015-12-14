@@ -51,7 +51,7 @@ func (r *Rule) String() string {
 		rtype = "ALLOW"
 	}
 
-	return fmt.Sprintf("%s %s:%s", rtype, addr, port)
+	return fmt.Sprintf("%s|%s:%s", rtype, addr, port)
 }
 
 type RuleList []*Rule
@@ -238,7 +238,7 @@ func (fw *Firewall) loadRules() {
 	for _, line := range strings.Split(string(bs), "\n") {
 		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
 			policy = fw.processPathLine(line)
-		} else {
+		} else if len(strings.TrimSpace(line)) > 0 {
 			processRuleLine(policy, line)
 		}
 	}
