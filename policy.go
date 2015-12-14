@@ -26,8 +26,6 @@ type Policy struct {
 }
 
 func (fw *Firewall) policyForPath(path string) *Policy {
-	fw.lock.Lock()
-	defer fw.lock.Unlock()
 	if _, ok := fw.policyMap[path]; !ok {
 		p := new(Policy)
 		p.fw = fw
@@ -175,7 +173,9 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.Packet) {
 		pkt.Accept()
 		return
 	}
+	fw.lock.Lock()
 	policy := fw.policyForPath(proc.exePath)
+	fw.lock.Unlock()
 	policy.processPacket(pkt, proc)
 }
 
