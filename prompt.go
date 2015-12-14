@@ -98,7 +98,9 @@ func (p *prompter) processPacket(pp *pendingPkt) {
 	if err != nil {
 		log.Warning("Error sending dbus RequestPrompt message: %v", err)
 		pp.policy.removePending(pp)
-		pp.pkt.Drop()
+		pp.pkt.Mark = 1
+		pp.pkt.Accept()
+		//pp.pkt.Drop()
 		return
 	}
 	log.Debug("Received prompt response: %s [%s]", printScope(scope), rule)
@@ -107,7 +109,9 @@ func (p *prompter) processPacket(pp *pendingPkt) {
 	if err != nil {
 		log.Warning("Error parsing rule string returned from dbus RequestPrompt: %v", err)
 		pp.policy.removePending(pp)
-		pp.pkt.Drop()
+		pp.pkt.Mark = 1
+		pp.pkt.Accept()
+		//pp.pkt.Drop()
 		return
 	}
 	if scope == APPLY_SESSION {

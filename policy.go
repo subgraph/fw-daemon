@@ -50,7 +50,8 @@ func (p *Policy) processPacket(pkt *nfqueue.Packet, proc *ProcInfo) {
 	result := p.rules.filter(pkt, proc, name)
 	switch result {
 	case FILTER_DENY:
-		pkt.Drop()
+		pkt.Mark = 1
+		pkt.Accept()
 	case FILTER_ALLOW:
 		pkt.Accept()
 	case FILTER_PROMPT:
@@ -116,7 +117,8 @@ func (p *Policy) filterPending(rule *Rule) {
 			if rule.rtype == RULE_ALLOW {
 				pp.pkt.Accept()
 			} else {
-				pp.pkt.Drop()
+				pp.pkt.Mark = 1
+				pp.pkt.Accept()
 			}
 		} else {
 			remaining = append(remaining, pp)
