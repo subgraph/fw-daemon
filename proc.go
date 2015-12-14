@@ -214,6 +214,7 @@ func getAllPids() []int {
 		log.Warning("Error opening /proc: %v", err)
 		return nil
 	}
+	defer d.Close()
 	names, err := d.Readdirnames(0)
 	if err != nil {
 		log.Warning("Error reading directory names from /proc: %v", err)
