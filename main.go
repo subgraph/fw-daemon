@@ -64,12 +64,7 @@ func main() {
 
 	setupIPTables()
 
-	dbus, err := dbusConnect()
-	if err != nil {
-		log.Error(err.Error())
-		os.Exit(1)
-	}
-	ds, err := newDbusServer(dbus)
+	ds, err := newDbusServer()
 	if err != nil {
 		log.Error(err.Error())
 		os.Exit(1)

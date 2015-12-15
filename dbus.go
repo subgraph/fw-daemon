@@ -3,10 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
-	"runtime"
 	"strings"
-	"syscall"
 
 	"github.com/godbus/dbus"
 	"github.com/godbus/dbus/introspect"
@@ -31,26 +28,12 @@ type dbusServer struct {
 	prompter *prompter
 }
 
-func dbusConnect() (*dbus.Conn, error) {
-	// https://github.com/golang/go/issues/1435
-	runtime.LockOSThread()
-	syscall.Setresuid(-1, 1000, 0)
-
-	conn, err := dbus.SessionBus()
+func newDbusServer() (*dbusServer, error) {
+	conn, err := dbus.SystemBus()
 	if err != nil {
 		return nil, err
 	}
-	syscall.Setresuid(0, 0, -1)
-	runtime.UnlockOSThread()
 
-	if os.Geteuid() != 0 || os.Getuid() != 0 {
-		log.Warning("Not root as expected")
-		os.Exit(0)
-	}
-	return conn, nil
-}
-
-func newDbusServer(conn *dbus.Conn) (*dbusServer, error) {
 	reply, err := conn.RequestName(busName, dbus.NameFlagDoNotQueue)
 	if err != nil {
 		return nil, err
