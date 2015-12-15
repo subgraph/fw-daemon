@@ -56,8 +56,8 @@ const FirewallPromptHandler = new Lang.Class({
 
     _init: function() {
         this._dbusImpl = Gio.DBusExportedObject.wrapJSObject(FirewallPromptInterface, this);
-        this._dbusImpl.export(Gio.DBus.session, '/com/subgraph/FirewallPrompt');
-        Gio.bus_own_name_on_connection(Gio.DBus.session, 'com.subgraph.FirewallPrompt', Gio.BusNameOwnerFlags.REPLACE, null, null);
+        this._dbusImpl.export(Gio.DBus.system, '/com/subgraph/FirewallPrompt');
+        Gio.bus_own_name_on_connection(Gio.DBus.system, 'com.subgraph.FirewallPrompt', Gio.BusNameOwnerFlags.REPLACE, null, null);
         this._dialog = null;
     },
 
