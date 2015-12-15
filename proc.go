@@ -32,6 +32,8 @@ type socketStatus struct {
 	uid    int
 	inode  uint64
 	pid    int
+	// XXX debugging
+	line string
 }
 
 func findProcessForPacket(pkt *nfqueue.Packet) *ProcInfo {
@@ -142,24 +144,29 @@ func getSocketForPacket(pkt *nfqueue.Packet) *socketStatus {
 		return nil
 	}
 	pid := findPidForInode(ss.inode)
-	if pid == -1 {
-		return nil
+	if pid > 0 {
+		ss.pid = pid
+		return ss
 	}
-	ss.pid = pid
-	return ss
+	log.Info("Unable to find socket link socket:[%d] %s", ss.inode, printPacket(pkt, ""))
+	log.Info("Line was %s", ss.line)
+	return nil
 }
 
 func findSocket(pkt *nfqueue.Packet) *socketStatus {
 	var status socketStatus
 	for _, line := range getSocketLinesForPacket(pkt) {
+		if len(line) == 0 {
+			continue
+		}
 		if err := status.parseLine(line); err != nil {
 			log.Warning("Unable to parse line [%s]: %v", line, err)
-		} else {
-			if status.remote.ip.Equal(pkt.Dst) && status.remote.port == pkt.DstPort {
-				return &status
-			}
+		} else if status.remote.ip.Equal(pkt.Dst) && status.remote.port == pkt.DstPort && status.local.ip.Equal(pkt.Src) && status.local.port == pkt.SrcPort {
+			status.line = line
+			return &status
 		}
 	}
+	log.Info("Failed to find socket for packet: %s", printPacket(pkt, ""))
 	return nil
 }
 
