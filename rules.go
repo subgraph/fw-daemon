@@ -139,10 +139,10 @@ func (r *Rule) parseAddr(a string) bool {
 		return true
 	}
 	ip := net.ParseIP(a)
-	if ip == nil || len(ip) != 4 {
+	if ip == nil {
 		return false
 	}
-	r.addr = binary.BigEndian.Uint32(ip)
+	r.addr = binary.BigEndian.Uint32(ip.To4())
 	return true
 }
 
