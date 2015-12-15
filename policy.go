@@ -162,16 +162,14 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.Packet) {
 		fw.dns.processDNS(pkt)
 		return
 	}
-	log.Debug("filterPacket %s", printPacket(pkt, fw.dns.Lookup(pkt.Dst)))
-	if basicAllowPacket(pkt) {
+	proc := findProcessForPacket(pkt)
+	if proc == nil {
+		log.Warning("No proc found for %s", printPacket(pkt, fw.dns.Lookup(pkt.Dst)))
 		pkt.Accept()
 		return
 	}
-
-	proc := findProcessForPacket(pkt)
-
-	if proc == nil {
-		log.Warning("No process for: %v", pkt)
+	log.Debug("filterPacket [%s] %s", proc.exePath, printPacket(pkt, fw.dns.Lookup(pkt.Dst)))
+	if basicAllowPacket(pkt) {
 		pkt.Accept()
 		return
 	}
