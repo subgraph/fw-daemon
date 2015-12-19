@@ -3,6 +3,7 @@ const Gio = imports.gi.Gio;
 
 const Extension = imports.misc.extensionUtils.getCurrentExtension();
 const Dialog = Extension.imports.dialog;
+const Menu = Extension.imports.menu;
 
 function init() {
     return new FirewallSupport();
@@ -12,6 +13,7 @@ const FirewallSupport = new Lang.Class({
     Name: 'FirewallSupport',
 
     _init: function() {
+        this.menu = new Menu.FirewallMenu();
         this.handler = null;
     },
 
@@ -24,8 +26,10 @@ const FirewallSupport = new Lang.Class({
     enable: function() {
         this._destroyHandler();
         this.handler = new FirewallPromptHandler();
+        this.menu.install();
     },
     disable: function() {
+        this.menu.destroy();
         this._destroyHandler();
     }
 });
