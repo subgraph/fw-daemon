@@ -10,8 +10,8 @@ import (
 	"github.com/subgraph/fw-daemon/nfqueue"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"strconv"
+	"path"
 )
 
 const (
@@ -168,24 +168,35 @@ func parseRule(s string) (*Rule, error) {
 	return r, nil
 }
 
-const ruleFile = ".sgfw_rules"
+const ruleFile = "/var/lib/sgfw/sgfw_rules"
 
-func rulesPath() string {
-	home := os.Getenv("HOME")
-	if home != "" {
-		return filepath.Join(home, ruleFile)
+func maybeCreateDir(dir string) error {
+	_,err := os.Stat(dir)
+	if os.IsNotExist(err) {
+		return os.MkdirAll(dir, 0755)
 	}
-	// XXX try something else?
-	return ""
+	return err
+}
+
+func rulesPath() (string, error) {
+	if err := maybeCreateDir(path.Dir(ruleFile)); err != nil {
+		return ruleFile, err
+	}
+	return ruleFile, nil
 }
 
 func (fw *Firewall) saveRules() {
 	fw.lock.Lock()
 	defer fw.lock.Unlock()
 
-	f, err := os.Create(rulesPath())
+	p,err := rulesPath()
 	if err != nil {
-		log.Warning("Failed to open %s for writing: %v", rulesPath(), err)
+		log.Warning("Failed to open %s for writing: %v", p, err)
+		return
+	}
+	f, err := os.Create(p)
+	if err != nil {
+		log.Warning("Failed to open %s for writing: %v", p, err)
 		return
 	}
 	defer f.Close()
@@ -227,10 +238,15 @@ func (fw *Firewall) loadRules() {
 	fw.lock.Lock()
 	defer fw.lock.Unlock()
 
-	bs, err := ioutil.ReadFile(rulesPath())
+	p,err := rulesPath()
+	if err != nil {
+		log.Warning("Failed to open %s for reading: %v", p, err)
+		return
+	}
+	bs, err := ioutil.ReadFile(p)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			log.Warning("Failed to open %s for reading: %v", rulesPath(), err)
+			log.Warning("Failed to open %s for reading: %v", p, err)
 		}
 		return
 	}
