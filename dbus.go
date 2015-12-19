@@ -15,6 +15,9 @@ const introspectXml = `
     <method name="SetEnabled">
       <arg name="enabled" direction="in" type="b" />
     </method>
+    <method name="IsEnabled">
+      <arg name="enabled" direction="out" type="b" />
+    </method>
   </interface>` +
 	introspect.IntrospectDataString +
 	`</node>`
@@ -85,7 +88,13 @@ func (ds *dbusServer) Introspect(msg dbus.Message) (string, *dbus.Error) {
 }
 
 func (ds *dbusServer) SetEnabled(flag bool) *dbus.Error {
+	log.Info("SetEnabled(%v) called", flag)
 	return nil
+}
+
+func (ds *dbusServer) IsEnabled() (bool, *dbus.Error) {
+	log.Info("IsEnabled() called")
+	return true, nil
 }
 
 func (ds *dbusServer) prompt(p *Policy) {

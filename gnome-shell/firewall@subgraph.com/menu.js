@@ -1,18 +1,46 @@
 const Lang = imports.lang;
+const Gio = imports.gi.Gio;
 
 const Main = imports.ui.main;
 const PopupMenu = imports.ui.popupMenu;
 
+const FirewallInterface = '<node> \
+<interface name="com.subgraph.Firewall"> \
+  <method name="SetEnabled"> \
+    <arg name="enabled" direction="in" type="b" /> \
+  </method> \
+  <method name="IsEnabled"> \
+    <arg name="enabled" direction="out" type="b" /> \
+  </method> \
+</interface>\
+</node>';
+
+const FirewallProxy = Gio.DBusProxy.makeProxyWrapper(FirewallInterface);
 
 const FirewallMenu = new Lang.Class({
     Name: 'FirewallSupport',
 
     _init: function() {
+        this.proxy = new FirewallProxy(Gio.DBus.system, "com.subgraph.Firewall",
+        "/com/subgraph/Firewall", Lang.bind(this, function(proxy, error) {
+            if(error) {
+                log(error.message);
+                return;
+            }
+        }));
         this.aggregate = Main.panel.statusArea.aggregateMenu;
     },
 
     install: function() {
         this.createMenu();
+        this.proxy.IsEnabledRemote(Lang.bind(this, function(result, err) {
+            if(err) {
+                log(err.message);
+                return;
+            }
+            let [enabled] = result;
+            this.toggle.setToggleState(enabled);
+        }));
         let idx = this.findMenu(this.aggregate._power.menu);
         if(idx >= 0) {
             this.aggregate.menu.addMenuItem(this.menu, idx);
@@ -43,7 +71,7 @@ const FirewallMenu = new Lang.Class({
         this.menu = new PopupMenu.PopupMenuSection();
         this.item = new PopupMenu.PopupSubMenuMenuItem("Firewall", true);
         this.item.icon.icon_name = "security-high-symbolic";
-        this.toggle = new PopupMenu.PopupSwitchMenuItem("Firewall Enabled", false);
+        this.toggle = new PopupMenu.PopupSwitchMenuItem("Firewall Enabled", true);
         this.toggle.connect('toggled', Lang.bind(this, this.onToggle));
         this.item.menu.addMenuItem(this.toggle);
 
@@ -58,6 +86,7 @@ const FirewallMenu = new Lang.Class({
         } else {
             log("Toggle OFF");
         }
+        this.proxy.SetEnabledRemote(this.toggle.state);
     },
 
     onSettings: function() {
