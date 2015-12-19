@@ -4,7 +4,6 @@ import (
 	// _ "net/http/pprof"
 	"os"
 	"os/signal"
-	"runtime"
 	"time"
 
 	"github.com/op/go-logging"
@@ -55,7 +54,6 @@ func (fw *Firewall) runFilter() {
 }
 
 func main() {
-	runtime.GOMAXPROCS(1)
 
 	if os.Geteuid() != 0 {
 		log.Error("Must be run as root")
