@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="gnome-shell-extensions">
+    <schema path="/com/subgraph/firewall/" id="com.subgraph.firewall">
+        <key type="as" name="open-connection-monitor">
+            <default><![CDATA[['<Control><Alt>space']]]></default>
+            <summary>Key to open connection monitor</summary>
+            <description></description>
+        </key>
+    </schema>
+</schemalist>

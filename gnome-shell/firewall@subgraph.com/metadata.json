@@ -1,1 +1,7 @@
-{"description": "Firewall Extension", "shell-version": ["3.18"], "uuid": "firewall@subgraph.com", "name": "Firewall Extension"}
+{
+  "description": "Firewall Extension",
+  "shell-version": ["3.18"],
+  "uuid": "firewall@subgraph.com",
+  "name": "Firewall Extension",
+  "settings-schema": "com.subgraph.firewall"
+}
