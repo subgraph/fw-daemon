@@ -6,7 +6,7 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/op/go-logging"
+	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/op/go-logging"
 	"github.com/subgraph/fw-daemon/nfqueue"
 	"sync"
 	"syscall"
@@ -31,7 +31,7 @@ func isTerminal(fd int) bool {
 
 func init() {
 	format := logFormat
-	if(isTerminal(int(os.Stderr.Fd()))) {
+	if isTerminal(int(os.Stderr.Fd())) {
 		format = ttyFormat
 	}
 	backend := logging.NewLogBackend(os.Stderr, "", 0)

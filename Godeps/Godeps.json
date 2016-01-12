@@ -1,0 +1,15 @@
+{
+	"ImportPath": "github.com/subgraph/fw-daemon",
+	"GoVersion": "go1.5",
+	"Deps": [
+		{
+			"ImportPath": "github.com/godbus/dbus",
+			"Comment": "v3-6-ga1b8ba5",
+			"Rev": "a1b8ba5163b7f041b22761461eabd02b70d1f824"
+		},
+		{
+			"ImportPath": "github.com/op/go-logging",
+			"Rev": "dfaf3dff9b631bc4236201d90d41ee0de9202889"
+		}
+	]
+}

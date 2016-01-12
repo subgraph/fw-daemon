@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/godbus/dbus"
-	"github.com/godbus/dbus/introspect"
+	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/godbus/dbus"
+	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/godbus/dbus/introspect"
 )
 
 const introspectXml = `
