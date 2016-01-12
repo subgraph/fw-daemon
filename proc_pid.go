@@ -126,4 +126,6 @@ func (pi *ProcInfo) loadProcessInfo() bool {
 	finfo.Sys()
 	pi.exePath = exePath
 	pi.cmdLine = string(bs)
+	// TODO finish...
+	return false
 }
