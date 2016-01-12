@@ -4,6 +4,8 @@ const Gio = imports.gi.Gio;
 const Extension = imports.misc.extensionUtils.getCurrentExtension();
 const Dialog = Extension.imports.dialog;
 const Menu = Extension.imports.menu;
+const ConnectionMonitor = Extension.imports.cmonitor;
+
 
 function init() {
     return new FirewallSupport();
@@ -14,6 +16,7 @@ const FirewallSupport = new Lang.Class({
 
     _init: function() {
         this.menu = new Menu.FirewallMenu();
+        this.cmon = new ConnectionMonitor.ConnectionMonitor();
         this.handler = null;
     },
 
@@ -26,10 +29,12 @@ const FirewallSupport = new Lang.Class({
     enable: function() {
         this._destroyHandler();
         this.handler = new FirewallPromptHandler();
+        this.cmon.install();
         this.menu.install();
     },
     disable: function() {
         this.menu.destroy();
+        this.cmon.remove();
         this._destroyHandler();
     }
 });

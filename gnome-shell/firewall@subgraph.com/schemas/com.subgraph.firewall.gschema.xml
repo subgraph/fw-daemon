@@ -4,7 +4,6 @@
         <key type="as" name="open-connection-monitor">
             <default><![CDATA[['<Control><Alt>space']]]></default>
             <summary>Key to open connection monitor</summary>
-            <description></description>
         </key>
     </schema>
 </schemalist>
