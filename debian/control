@@ -1,0 +1,25 @@
+Source: fw-daemon
+Section: devel
+Priority: extra
+Maintainer: Bruce Leidl <bruce@subgraph.com>
+Build-Depends: debhelper (>= 9),
+               dh-golang,
+               dh-systemd,
+               golang-go
+Standards-Version: 3.9.6
+Homepage: https://github.com/subgraph/fw-daemon
+Vcs-Git: https://github.com/subgraph/fw-daemon.git
+XS-Go-Import-Path: github.com/subgraph/fw-daemon
+
+Package: fw-daemon
+Architecture: any
+Built-Using: ${misc:Built-Using}
+Depends: ${shlibs:Depends},
+         ${misc:Depends}
+Description: Subgraph Application Firewall
+ Subgraph Firewall A desktop application firewall for Subgraph OS.
+
+Package: fw-daemon-gnome
+Depends: gnome-shell, fw-daemon (= ${binary:Version})
+Architecture: all
+Description: Subgraph Application Firewall Gnome Shell Extension

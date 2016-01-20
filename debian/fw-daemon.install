@@ -1,0 +1,2 @@
+usr/bin/fw-daemon usr/sbin
+sources/etc/dbus-1/system.d/com.subgraph.Firewall.conf etc/dbus-1/system.d/

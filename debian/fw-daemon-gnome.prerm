@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = "remove" ]; then
+	gnome-shell-extension-tool --disable-extension=firewall@subgraph.com
+fi
+
+#DEBHELPER#
+
+
