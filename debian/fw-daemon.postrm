@@ -3,7 +3,7 @@
 set -e
 
 if [ "$1" = "remove" ]; then
-	systemctl reload dbus.service
+	systemctl reload dbus.service || true
 fi
 
 #DEBHELPER#
