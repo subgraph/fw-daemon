@@ -3,7 +3,7 @@
 set -e
 
 if [ "$1" = "remove" ]; then
-	su user -c gnome-shell-extension-tool --disable-extension=firewall@subgraph.com
+	su user -c 'gnome-shell-extension-tool --disable-extension=firewall@subgraph.com' || true
 fi
 
 #DEBHELPER#
