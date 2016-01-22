@@ -1,3 +1,9 @@
+fw-daemon (0.0.1-2) unstable; urgency=medium
+
+  * Fixed some problems with package scripts 
+
+ -- Bruce Leidl <bruce@subgraph.com>  Thu, 21 Jan 2016 23:59:34 +0000
+
 fw-daemon (0.0.1-1) unstable; urgency=medium
 
   * Initial release 
