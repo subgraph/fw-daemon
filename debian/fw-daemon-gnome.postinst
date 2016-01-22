@@ -4,7 +4,7 @@ set -e
 
 case $1 in
 	configure)
-		su user -c 'gnome-extension-tool --enable-extension=firewall@subgraph.com' || true
+		su user -c 'gnome-shell-extension-tool --enable-extension=firewall@subgraph.com' || true
 	;;
 	abort-upgrade|abort-remove|abort-deconfigure)
 	;;
