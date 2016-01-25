@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"path"
+	"github.com/subgraph/fw-daemon/proc"
 )
 
 const (
@@ -77,14 +78,14 @@ const (
 	FILTER_PROMPT
 )
 
-func (rl *RuleList) filter(p *nfqueue.Packet, proc *ProcInfo, hostname string) FilterResult {
+func (rl *RuleList) filter(p *nfqueue.Packet, pinfo *proc.ProcInfo, hostname string) FilterResult {
 	if rl == nil {
 		return FILTER_PROMPT
 	}
 	result := FILTER_PROMPT
 	for _, r := range *rl {
 		if r.match(p, hostname) {
-			log.Info("%s (%s -> %s:%d)", r, proc.exePath, p.Dst.String(), p.DstPort)
+			log.Info("%s (%s -> %s:%d)", r, pinfo.ExePath, p.Dst.String(), p.DstPort)
 			if r.rtype == RULE_DENY {
 				return FILTER_DENY
 			} else if r.rtype == RULE_ALLOW {

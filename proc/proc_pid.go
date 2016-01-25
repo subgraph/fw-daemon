@@ -1,4 +1,5 @@
-package main
+package proc
+
 import (
 	"os"
 	"strconv"
@@ -10,12 +11,12 @@ import (
 
 
 type ProcInfo struct {
-	pid     int
+	Uid int
+	Pid     int
 	loaded bool
-	exePath string
-	cmdLine string
+	ExePath string
+	CmdLine string
 }
-
 
 var cacheMap = make(map[uint64]*ProcInfo)
 
@@ -79,10 +80,10 @@ func extractSocket(name string, pid int) {
 
 func cacheAddPid(inode uint64, pid int) {
 	pi,ok := cacheMap[inode]
-	if ok && pi.pid == pid {
+	if ok && pi.Pid == pid {
 		return
 	}
-	cacheMap[inode] = &ProcInfo{ pid: pid }
+	cacheMap[inode] = &ProcInfo{ Pid: pid }
 }
 
 func readdir(dir string) []string {
@@ -105,14 +106,14 @@ func (pi *ProcInfo) loadProcessInfo() bool {
 		return true
 	}
 
-	exePath, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pi.pid))
+	exePath, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pi.Pid))
 	if err != nil {
-		log.Warning("Error reading exe link for pid %d: %v", pi.pid, err)
+		log.Warning("Error reading exe link for pid %d: %v", pi.Pid, err)
 		return false
 	}
-	bs, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pi.pid))
+	bs, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pi.Pid))
 	if err != nil {
-		log.Warning("Error reading cmdline for pid %d: %v", pi.pid, err)
+		log.Warning("Error reading cmdline for pid %d: %v", pi.Pid, err)
 		return false
 	}
 	for i, b := range bs {
@@ -121,14 +122,14 @@ func (pi *ProcInfo) loadProcessInfo() bool {
 		}
 	}
 
-	finfo, err := os.Stat(fmt.Sprintf("/proc/%d", pi.pid))
+	finfo, err := os.Stat(fmt.Sprintf("/proc/%d", pi.Pid))
 	if err != nil {
-		log.Warning("Could not stat /proc/%d: %v", pi.pid, err)
+		log.Warning("Could not stat /proc/%d: %v", pi.Pid, err)
 		return false
 	}
 	finfo.Sys()
-	pi.exePath = exePath
-	pi.cmdLine = string(bs)
+	pi.ExePath = exePath
+	pi.CmdLine = string(bs)
 	pi.loaded = true
 	return true
 }

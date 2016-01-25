@@ -11,6 +11,7 @@ import (
 	"sync"
 	"syscall"
 	"unsafe"
+	"github.com/subgraph/fw-daemon/proc"
 )
 
 var log = logging.MustGetLogger("sgfw")
@@ -71,6 +72,7 @@ func (fw *Firewall) runFilter() {
 }
 
 func main() {
+	proc.SetLogger(log)
 
 	if os.Geteuid() != 0 {
 		log.Error("Must be run as root")

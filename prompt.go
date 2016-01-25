@@ -92,8 +92,8 @@ func (p *prompter) processPacket(pp *pendingPkt) {
 		addr,
 		int32(pp.pkt.DstPort),
 		pp.pkt.Dst.String(),
-		uidToUser(pp.proc.uid),
-		int32(pp.proc.pid))
+		uidToUser(pp.pinfo.Uid),
+		int32(pp.pinfo.Pid))
 	err := call.Store(&scope, &rule)
 	if err != nil {
 		log.Warning("Error sending dbus RequestPrompt message: %v", err)

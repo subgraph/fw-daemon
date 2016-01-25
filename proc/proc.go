@@ -1,4 +1,4 @@
-package main
+package proc
 
 import (
 	"encoding/hex"
@@ -10,9 +10,14 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-
+	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/op/go-logging"
 	"github.com/subgraph/fw-daemon/nfqueue"
 )
+
+var log = logging.MustGetLogger("proc")
+func SetLogger(logger *logging.Logger) {
+	log = logger
+}
 
 type socketAddr struct {
 	ip   net.IP
@@ -47,7 +52,7 @@ func (ci *ConnectionInfo) String() string {
 	return fmt.Sprintf("%v %s %s", ci.proc, ci.local, ci.remote)
 }
 
-func findProcessForPacket(pkt *nfqueue.Packet) *ProcInfo {
+func FindProcessForPacket(pkt *nfqueue.Packet) *ProcInfo {
 	ss := getSocketForPacket(pkt)
 	if ss == nil {
 		return nil
@@ -79,10 +84,10 @@ func findProcessForSocket(ss *socketStatus) *ProcInfo {
 	}
 	finfo.Sys()
 	return &ProcInfo{
-		pid:     ss.pid,
-		uid:     ss.uid,
-		exePath: exePath,
-		cmdLine: string(bs),
+		Pid:     ss.pid,
+		Uid:     ss.uid,
+		ExePath: exePath,
+		CmdLine: string(bs),
 	}
 }
 
@@ -153,6 +158,20 @@ func (ss *socketStatus) parseLine(line string) error {
 	return nil
 }
 
+func printPacket(pkt *nfqueue.Packet) string {
+	proto := func() string {
+		switch pkt.Protocol {
+		case nfqueue.TCP:
+			return "TCP"
+		case nfqueue.UDP:
+			return "UDP"
+		default:
+			return "???"
+		}
+	}()
+	return fmt.Sprintf("(%s %s:%d --> %s:%d)", proto, pkt.Src, pkt.SrcPort, pkt.Dst.String(), pkt.DstPort)
+}
+
 func getSocketForPacket(pkt *nfqueue.Packet) *socketStatus {
 	ss := findSocket(pkt)
 	if ss == nil {
@@ -163,7 +182,7 @@ func getSocketForPacket(pkt *nfqueue.Packet) *socketStatus {
 		ss.pid = pid
 		return ss
 	}
-	log.Info("Unable to find socket link socket:[%d] %s", ss.inode, printPacket(pkt, ""))
+	log.Info("Unable to find socket link socket:[%d] %s", ss.inode, printPacket(pkt))
 	log.Info("Line was %s", ss.line)
 	return nil
 }
@@ -181,7 +200,7 @@ func findSocket(pkt *nfqueue.Packet) *socketStatus {
 			return &status
 		}
 	}
-	log.Info("Failed to find socket for packet: %s", printPacket(pkt, ""))
+	log.Info("Failed to find socket for packet: %s", printPacket(pkt))
 	return nil
 }
 
