@@ -11,7 +11,7 @@ import (
 
 type ProcInfo struct {
 	pid     int
-	uid     int
+	loaded bool
 	exePath string
 	cmdLine string
 }
@@ -101,6 +101,9 @@ func readdir(dir string) []string {
 }
 
 func (pi *ProcInfo) loadProcessInfo() bool {
+	if pi.loaded {
+		return true
+	}
 
 	exePath, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pi.pid))
 	if err != nil {
@@ -126,6 +129,6 @@ func (pi *ProcInfo) loadProcessInfo() bool {
 	finfo.Sys()
 	pi.exePath = exePath
 	pi.cmdLine = string(bs)
-	// TODO finish...
-	return false
+	pi.loaded = true
+	return true
 }
