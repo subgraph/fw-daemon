@@ -181,17 +181,15 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.Packet) {
 }
 
 func findProcessForPacket(pkt *nfqueue.Packet) *proc.ProcInfo {
-	proto := ""
 	switch pkt.Protocol {
 	case nfqueue.TCP:
-		proto = "tcp"
+		return proc.LookupTCPSocketProcess(pkt.SrcPort, pkt.Dst, pkt.DstPort)
 	case nfqueue.UDP:
-		proto = "udp"
+		return proc.LookupUDPSocketProcess(pkt.SrcPort)
 	default:
 		log.Warning("Packet has unknown protocol: %d", pkt.Protocol)
 		return nil
 	}
-	return proc.LookupSocketProcess(proto, pkt.SrcPort, pkt.Dst, pkt.DstPort)
 }
 
 func basicAllowPacket(pkt *nfqueue.Packet) bool {

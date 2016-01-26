@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/op/go-logging"
-	"github.com/subgraph/fw-daemon/nfqueue"
 )
 
 var log = logging.MustGetLogger("proc")
@@ -19,8 +18,17 @@ func SetLogger(logger *logging.Logger) {
 
 var pcache = &pidCache{}
 
-func LookupSocketProcess(proto string, srcPort uint16, dstAddr net.IP, dstPort uint16) *ProcInfo {
-	ss := findSocket(proto, srcPort, dstAddr, dstPort)
+
+func LookupUDPSocketProcess(srcPort uint16) *ProcInfo {
+	ss := findUDPSocket(srcPort)
+	if ss == nil {
+		return nil
+	}
+	return pcache.lookup(ss.inode)
+}
+
+func LookupTCPSocketProcess(srcPort uint16, dstAddr net.IP, dstPort uint16) *ProcInfo {
+	ss := findTCPSocket(srcPort, dstAddr, dstPort)
 	if ss == nil {
 		return nil
 	}
@@ -55,20 +63,6 @@ func (sa *socketAddr) parse(s string) error {
 	return nil
 }
 
-
-func printPacket(pkt *nfqueue.Packet) string {
-	proto := func() string {
-		switch pkt.Protocol {
-		case nfqueue.TCP:
-			return "TCP"
-		case nfqueue.UDP:
-			return "UDP"
-		default:
-			return "???"
-		}
-	}()
-	return fmt.Sprintf("(%s %s:%d --> %s:%d)", proto, pkt.Src, pkt.SrcPort, pkt.Dst.String(), pkt.DstPort)
-}
 
 func ParseIp(ip string) (net.IP, error) {
 	var result net.IP

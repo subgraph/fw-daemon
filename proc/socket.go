@@ -29,15 +29,19 @@ func (ss *socketStatus) String() string {
 	return fmt.Sprintf("%s -> %s uid=%d inode=%d", ss.local, ss.remote, ss.uid, ss.inode)
 }
 
-func findUDPSocket(srcPort uint16, dstAddr net.IP, dstPort uint16) *socketStatus {
-	return findSocket("udp", srcPort, dstAddr, dstPort)
+func findUDPSocket(srcPort uint16) *socketStatus {
+	return findSocket("udp", func(ss socketStatus) bool {
+		return ss.local.port == srcPort
+	})
 }
 
 func findTCPSocket(srcPort uint16, dstAddr net.IP, dstPort uint16) *socketStatus {
-	return findSocket("tcp", srcPort, dstAddr, dstPort)
+	return findSocket("tcp", func(ss socketStatus) bool {
+		return ss.remote.port == dstPort && ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort
+	})
 }
 
-func findSocket(proto string, srcPort uint16, dstAddr net.IP, dstPort uint16) *socketStatus {
+func findSocket(proto string, matcher func(socketStatus) bool) *socketStatus {
 	var ss socketStatus
 	for _,line := range getSocketLines(proto) {
 		if len(line) == 0 {
@@ -47,7 +51,7 @@ func findSocket(proto string, srcPort uint16, dstAddr net.IP, dstPort uint16) *s
 			log.Warning("Unable to parse line from /proc/net/%s [%s]: %v", proto, line, err)
 			continue
 		}
-		if ss.remote.port == dstPort && ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort {
+		if matcher(ss) {
 			ss.line = line
 			return &ss
 		}
