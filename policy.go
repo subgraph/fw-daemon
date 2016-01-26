@@ -163,7 +163,7 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.Packet) {
 		fw.dns.processDNS(pkt)
 		return
 	}
-	pinfo := proc.FindProcessForPacket(pkt)
+	pinfo := findProcessForPacket(pkt)
 	if pinfo == nil {
 		log.Warning("No proc found for %s", printPacket(pkt, fw.dns.Lookup(pkt.Dst)))
 		pkt.Accept()
@@ -178,6 +178,20 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.Packet) {
 	policy := fw.policyForPath(pinfo.ExePath)
 	fw.lock.Unlock()
 	policy.processPacket(pkt, pinfo)
+}
+
+func findProcessForPacket(pkt *nfqueue.Packet) *proc.ProcInfo {
+	proto := ""
+	switch pkt.Protocol {
+	case nfqueue.TCP:
+		proto = "tcp"
+	case nfqueue.UDP:
+		proto = "udp"
+	default:
+		log.Warning("Packet has unknown protocol: %d", pkt.Protocol)
+		return nil
+	}
+	return proc.LookupSocketProcess(proto, pkt.SrcPort, pkt.Dst, pkt.DstPort)
 }
 
 func basicAllowPacket(pkt *nfqueue.Packet) bool {

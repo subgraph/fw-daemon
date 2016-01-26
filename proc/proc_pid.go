@@ -7,35 +7,51 @@ import (
 	"strings"
 	"path"
 	"io/ioutil"
+	"sync"
+	"syscall"
 )
 
 
 type ProcInfo struct {
-	Uid int
+	Uid 	int
 	Pid     int
 	loaded bool
 	ExePath string
 	CmdLine string
 }
 
-var cacheMap = make(map[uint64]*ProcInfo)
-
-func pidCacheLookup(inode uint64) *ProcInfo {
-	pi,ok := cacheMap[inode]
-	if ok {
-		return pi
-	}
-	pidCacheReload()
-	return cacheMap[inode]
+type pidCache struct {
+	cacheMap map[uint64]*ProcInfo
+	lock sync.Mutex
 }
 
-func pidCacheReload() {
+func (pc *pidCache) lookup(inode uint64) *ProcInfo {
+	pc.lock.Lock()
+	defer pc.lock.Unlock()
+	pi,ok := pc.cacheMap[inode]
+	if ok && pi.loadProcessInfo() {
+		return pi
+	}
+	pc.cacheMap = loadCache()
+	pi,ok = pc.cacheMap[inode]
+	if ok && pi.loadProcessInfo() {
+		return pi
+	}
+	return nil
+}
+
+func loadCache() map[uint64]*ProcInfo {
+	cmap := make(map[uint64]*ProcInfo)
 	for _, n := range readdir("/proc") {
 		pid := toPid(n)
 		if pid != 0 {
-			scrapePid(pid)
+			pinfo := &ProcInfo{Pid: pid}
+			for _,inode := range inodesFromPid(pid) {
+				cmap[inode] = pinfo
+			}
 		}
 	}
+	return cmap
 }
 
 func toPid(name string) int {
@@ -54,36 +70,34 @@ func toPid(name string) int {
 	return (int)(pid)
 }
 
-func scrapePid(pid int) {
+func inodesFromPid(pid int) []uint64 {
+	var inodes []uint64
 	fdpath := fmt.Sprintf("/proc/%d/fd", pid)
 	for _, n := range readdir(fdpath) {
 		if link, err := os.Readlink(path.Join(fdpath, n)); err != nil {
-			log.Warning("Error reading link %s: %v", n, err)
+			if !os.IsNotExist(err) {
+				log.Warning("Error reading link %s: %v", n, err)
+			}
 		} else {
-			extractSocket(link, pid)
+			if inode := extractSocket(link); inode > 0 {
+				inodes = append(inodes, inode)
+			}
 		}
 	}
+	return inodes
 }
 
-func extractSocket(name string, pid int) {
+func extractSocket(name string) uint64 {
 	if !strings.HasPrefix(name, "socket:[") || !strings.HasSuffix(name, "]") {
-		return
+		return 0
 	}
 	val := name[8:len(name)-1]
 	inode,err := strconv.ParseUint(val, 10, 64)
 	if err != nil {
 		log.Warning("Error parsing inode value from %s: %v", name, err)
-		return
+		return 0
 	}
-	cacheAddPid(inode, pid)
-}
-
-func cacheAddPid(inode uint64, pid int) {
-	pi,ok := cacheMap[inode]
-	if ok && pi.Pid == pid {
-		return
-	}
-	cacheMap[inode] = &ProcInfo{ Pid: pid }
+	return inode
 }
 
 func readdir(dir string) []string {
@@ -127,7 +141,8 @@ func (pi *ProcInfo) loadProcessInfo() bool {
 		log.Warning("Could not stat /proc/%d: %v", pi.Pid, err)
 		return false
 	}
-	finfo.Sys()
+	sys := finfo.Sys().(*syscall.Stat_t)
+	pi.Uid = int(sys.Uid)
 	pi.ExePath = exePath
 	pi.CmdLine = string(bs)
 	pi.loaded = true
