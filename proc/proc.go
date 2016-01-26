@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/op/go-logging"
