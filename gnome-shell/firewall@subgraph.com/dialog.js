@@ -378,10 +378,8 @@ const PromptDialog = new Lang.Class({
         this.optionList = new OptionList();
         box.add_child(this.optionList.actor);
         this.optionList.addOptions([
-            "Any Connection",
-            "Only PORT",
-            "Only ADDRESS",
-            "Only PORT AND ADDRESS"]);
+            "Only PORT AND ADDRESS",
+            "Any Connection"]);
 
 
         this.setButtons([
@@ -417,13 +415,9 @@ const PromptDialog = new Lang.Class({
     ruleTarget: function() {
         switch(this.optionList.selectedIdx()) {
         case 0:
-            return "*:*";
-        case 1:
-            return "*:" + this._port;
-        case 2:
-            return this._address + ":*";
-        case 3:
             return this._address + ":" + this._port;
+        case 1:
+            return "*:*";
         }
 
     },
@@ -443,9 +437,7 @@ const PromptDialog = new Lang.Class({
             this.header.setIconDefault();
         }
 
-        this.optionList.setOptionText(1, "Only "+ port_str);
-        this.optionList.setOptionText(2, "Only "+ address);
-        this.optionList.setOptionText(3, "Only "+ address + " on "+ port_str);
+        this.optionList.setOptionText(0, "Only "+ address + " on "+ port_str);
         this.info.setDetails(ip, path, pid, user);
     },
 });
