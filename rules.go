@@ -8,11 +8,11 @@ import (
 	"unicode"
 
 	"github.com/subgraph/fw-daemon/nfqueue"
+	"github.com/subgraph/fw-daemon/proc"
 	"io/ioutil"
 	"os"
-	"strconv"
 	"path"
-	"github.com/subgraph/fw-daemon/proc"
+	"strconv"
 )
 
 const (
@@ -24,6 +24,8 @@ const matchAny = 0
 const noAddress = uint32(0xffffffff)
 
 type Rule struct {
+	id          uint
+	policy      *Policy
 	sessionOnly bool
 	rtype       int
 	hostname    string
@@ -32,10 +34,17 @@ type Rule struct {
 }
 
 func (r *Rule) String() string {
+	rtype := "DENY"
+	if r.rtype == RULE_ALLOW {
+		rtype = "ALLOW"
+	}
+
+	return fmt.Sprintf("%s|%s", rtype, r.AddrString())
+}
+
+func (r *Rule) AddrString() string {
 	addr := "*"
 	port := "*"
-	rtype := "DENY"
-
 	if r.hostname != "" {
 		addr = r.hostname
 	} else if r.addr != matchAny && r.addr != noAddress {
@@ -48,11 +57,7 @@ func (r *Rule) String() string {
 		port = fmt.Sprintf("%d", r.port)
 	}
 
-	if r.rtype == RULE_ALLOW {
-		rtype = "ALLOW"
-	}
-
-	return fmt.Sprintf("%s|%s:%s", rtype, addr, port)
+	return fmt.Sprintf("%s:%s", addr, port)
 }
 
 type RuleList []*Rule
@@ -154,25 +159,17 @@ func (r *Rule) parsePort(p string) bool {
 	}
 	var err error
 	port, err := strconv.ParseUint(p, 10, 16)
-	if err != nil {
+	if err != nil || port == 0 || port > 0xFFFF {
 		return false
 	}
 	r.port = uint16(port)
 	return true
 }
 
-func parseRule(s string) (*Rule, error) {
-	r := new(Rule)
-	if !r.parse(s) {
-		return nil, parseError(s)
-	}
-	return r, nil
-}
-
 const ruleFile = "/var/lib/sgfw/sgfw_rules"
 
 func maybeCreateDir(dir string) error {
-	_,err := os.Stat(dir)
+	_, err := os.Stat(dir)
 	if os.IsNotExist(err) {
 		return os.MkdirAll(dir, 0755)
 	}
@@ -190,7 +187,7 @@ func (fw *Firewall) saveRules() {
 	fw.lock.Lock()
 	defer fw.lock.Unlock()
 
-	p,err := rulesPath()
+	p, err := rulesPath()
 	if err != nil {
 		log.Warning("Failed to open %s for writing: %v", p, err)
 		return
@@ -239,7 +236,9 @@ func (fw *Firewall) loadRules() {
 	fw.lock.Lock()
 	defer fw.lock.Unlock()
 
-	p,err := rulesPath()
+	fw.clearRules()
+
+	p, err := rulesPath()
 	if err != nil {
 		log.Warning("Failed to open %s for reading: %v", p, err)
 		return
@@ -275,12 +274,9 @@ func processRuleLine(policy *Policy, line string) {
 		log.Warning("Cannot process rule line without first seeing path line: %s", line)
 		return
 	}
-	rule, err := parseRule(line)
+	_, err := policy.parseRule(line, true)
 	if err != nil {
 		log.Warning("Error parsing rule (%s): %v", line, err)
 		return
 	}
-	policy.lock.Lock()
-	defer policy.lock.Unlock()
-	policy.rules = append(policy.rules, rule)
 }

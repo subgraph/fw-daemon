@@ -12,7 +12,7 @@ type pendingPkt struct {
 	policy   *Policy
 	hostname string
 	pkt      *nfqueue.Packet
-	pinfo     *proc.ProcInfo
+	pinfo    *proc.ProcInfo
 }
 
 type Policy struct {
@@ -108,6 +108,34 @@ func (p *Policy) processNewRule(r *Rule, scope int32) bool {
 	}
 
 	return p.promptInProgress
+}
+
+func (p *Policy) parseRule(s string, add bool) (*Rule, error) {
+	r := new(Rule)
+	r.policy = p
+	if !r.parse(s) {
+		return nil, parseError(s)
+	}
+	if add {
+		p.lock.Lock()
+		defer p.lock.Unlock()
+		p.rules = append(p.rules, r)
+	}
+	p.fw.addRule(r)
+	return r, nil
+}
+
+func (p *Policy) removeRule(r *Rule) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	var newRules RuleList
+	for _, rr := range p.rules {
+		if rr.id != r.id {
+			newRules = append(newRules, rr)
+		}
+	}
+	p.rules = newRules
 }
 
 func (p *Policy) filterPending(rule *Rule) {
