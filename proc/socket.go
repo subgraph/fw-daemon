@@ -1,15 +1,16 @@
 package proc
+
 import (
-	"net"
+	"errors"
 	"fmt"
 	"io/ioutil"
-	"strings"
-	"errors"
+	"net"
 	"strconv"
+	"strings"
 )
 
 type socketAddr struct {
-	ip net.IP
+	ip   net.IP
 	port uint16
 }
 
@@ -18,11 +19,11 @@ func (sa socketAddr) String() string {
 }
 
 type socketStatus struct {
-	local socketAddr
+	local  socketAddr
 	remote socketAddr
-	uid int
-	inode uint64
-	line string
+	uid    int
+	inode  uint64
+	line   string
 }
 
 func (ss *socketStatus) String() string {
@@ -43,7 +44,7 @@ func findTCPSocket(srcPort uint16, dstAddr net.IP, dstPort uint16) *socketStatus
 
 func findSocket(proto string, matcher func(socketStatus) bool) *socketStatus {
 	var ss socketStatus
-	for _,line := range getSocketLines(proto) {
+	for _, line := range getSocketLines(proto) {
 		if len(line) == 0 {
 			continue
 		}
@@ -82,7 +83,6 @@ func (ss *socketStatus) parseLine(line string) error {
 	ss.inode = inode
 	return nil
 }
-
 
 func getSocketLines(proto string) []string {
 	path := fmt.Sprintf("/proc/net/%s", proto)

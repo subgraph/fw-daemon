@@ -4,20 +4,20 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/op/go-logging"
 	"io/ioutil"
 	"net"
 	"strconv"
 	"strings"
-	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/op/go-logging"
 )
 
 var log = logging.MustGetLogger("proc")
+
 func SetLogger(logger *logging.Logger) {
 	log = logger
 }
 
 var pcache = &pidCache{}
-
 
 func LookupUDPSocketProcess(srcPort uint16) *ProcInfo {
 	ss := findUDPSocket(srcPort)
@@ -36,8 +36,8 @@ func LookupTCPSocketProcess(srcPort uint16, dstAddr net.IP, dstPort uint16) *Pro
 }
 
 type ConnectionInfo struct {
-	pinfo *ProcInfo
-	local *socketAddr
+	pinfo  *ProcInfo
+	local  *socketAddr
 	remote *socketAddr
 }
 
@@ -63,7 +63,6 @@ func (sa *socketAddr) parse(s string) error {
 	return nil
 }
 
-
 func ParseIp(ip string) (net.IP, error) {
 	var result net.IP
 	dst, err := hex.DecodeString(ip)
@@ -88,7 +87,7 @@ func ParsePort(port string) (uint16, error) {
 }
 
 func getConnections() ([]*ConnectionInfo, error) {
-	conns,err := readConntrack()
+	conns, err := readConntrack()
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +97,7 @@ func getConnections() ([]*ConnectionInfo, error) {
 
 func resolveProcinfo(conns []*ConnectionInfo) {
 	var sockets []*socketStatus
-	for _,line := range getSocketLines("tcp") {
+	for _, line := range getSocketLines("tcp") {
 		if len(strings.TrimSpace(line)) == 0 {
 			continue
 		}
@@ -107,16 +106,16 @@ func resolveProcinfo(conns []*ConnectionInfo) {
 			log.Warning("Unable to parse line [%s]: %v", line, err)
 		} else {
 			/*
-			pid := findPidForInode(ss.inode)
-			if pid > 0 {
-				ss.pid = pid
-				fmt.Println("Socket", ss)
-				sockets = append(sockets, ss)
-			}
+				pid := findPidForInode(ss.inode)
+				if pid > 0 {
+					ss.pid = pid
+					fmt.Println("Socket", ss)
+					sockets = append(sockets, ss)
+				}
 			*/
 		}
 	}
-	for _,ci := range conns {
+	for _, ci := range conns {
 		ss := findContrackSocket(ci, sockets)
 		if ss == nil {
 			continue
@@ -129,7 +128,7 @@ func resolveProcinfo(conns []*ConnectionInfo) {
 }
 
 func findContrackSocket(ci *ConnectionInfo, sockets []*socketStatus) *socketStatus {
-	for _,ss := range sockets {
+	for _, ss := range sockets {
 		if ss.local.port == ci.local.port && ss.remote.ip.Equal(ci.remote.ip) && ss.remote.port == ci.remote.port {
 			return ss
 		}
@@ -145,8 +144,8 @@ func readConntrack() ([]*ConnectionInfo, error) {
 	}
 	var result []*ConnectionInfo
 	lines := strings.Split(string(data), "\n")
-	for _,line := range(lines) {
-		ci,err := parseConntrackLine(line)
+	for _, line := range lines {
+		ci, err := parseConntrackLine(line)
 		if err != nil {
 			return nil, err
 		}
@@ -163,33 +162,33 @@ func parseConntrackLine(line string) (*ConnectionInfo, error) {
 		return nil, nil
 	}
 
-	local,err := conntrackAddr(parts[4], parts[6])
+	local, err := conntrackAddr(parts[4], parts[6])
 	if err != nil {
 		return nil, err
 	}
-	remote,err := conntrackAddr(parts[5], parts[7])
+	remote, err := conntrackAddr(parts[5], parts[7])
 	if err != nil {
 		return nil, err
 	}
 	return &ConnectionInfo{
-		local: local,
+		local:  local,
 		remote: remote,
-	},nil
+	}, nil
 }
 
 func conntrackAddr(ip_str, port_str string) (*socketAddr, error) {
 	ip := net.ParseIP(stripLabel(ip_str))
 	if ip == nil {
-		return nil, errors.New("Could not parse IP: "+ip_str)
+		return nil, errors.New("Could not parse IP: " + ip_str)
 	}
 	i64, err := strconv.Atoi(stripLabel(port_str))
 	if err != nil {
 		return nil, err
 	}
 	return &socketAddr{
-		ip: ip,
+		ip:   ip,
 		port: uint16(i64),
-	},nil
+	}, nil
 }
 
 func stripLabel(s string) string {

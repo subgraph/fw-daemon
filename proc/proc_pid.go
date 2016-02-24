@@ -1,39 +1,38 @@
 package proc
 
 import (
-	"os"
-	"strconv"
 	"fmt"
-	"strings"
-	"path"
 	"io/ioutil"
+	"os"
+	"path"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 )
 
-
 type ProcInfo struct {
-	Uid 	int
+	Uid     int
 	Pid     int
-	loaded bool
+	loaded  bool
 	ExePath string
 	CmdLine string
 }
 
 type pidCache struct {
 	cacheMap map[uint64]*ProcInfo
-	lock sync.Mutex
+	lock     sync.Mutex
 }
 
 func (pc *pidCache) lookup(inode uint64) *ProcInfo {
 	pc.lock.Lock()
 	defer pc.lock.Unlock()
-	pi,ok := pc.cacheMap[inode]
+	pi, ok := pc.cacheMap[inode]
 	if ok && pi.loadProcessInfo() {
 		return pi
 	}
 	pc.cacheMap = loadCache()
-	pi,ok = pc.cacheMap[inode]
+	pi, ok = pc.cacheMap[inode]
 	if ok && pi.loadProcessInfo() {
 		return pi
 	}
@@ -46,7 +45,7 @@ func loadCache() map[uint64]*ProcInfo {
 		pid := toPid(n)
 		if pid != 0 {
 			pinfo := &ProcInfo{Pid: pid}
-			for _,inode := range inodesFromPid(pid) {
+			for _, inode := range inodesFromPid(pid) {
 				cmap[inode] = pinfo
 			}
 		}
@@ -60,7 +59,7 @@ func toPid(name string) int {
 		return 0
 	}
 	fdpath := fmt.Sprintf("/proc/%d/fd", pid)
-	fi,err := os.Stat(fdpath)
+	fi, err := os.Stat(fdpath)
 	if err != nil {
 		return 0
 	}
@@ -91,8 +90,8 @@ func extractSocket(name string) uint64 {
 	if !strings.HasPrefix(name, "socket:[") || !strings.HasSuffix(name, "]") {
 		return 0
 	}
-	val := name[8:len(name)-1]
-	inode,err := strconv.ParseUint(val, 10, 64)
+	val := name[8 : len(name)-1]
+	inode, err := strconv.ParseUint(val, 10, 64)
 	if err != nil {
 		log.Warning("Error parsing inode value from %s: %v", name, err)
 		return 0
@@ -101,7 +100,7 @@ func extractSocket(name string) uint64 {
 }
 
 func readdir(dir string) []string {
-	d,err := os.Open(dir)
+	d, err := os.Open(dir)
 	if err != nil {
 		log.Warning("Error opening directory %s: %v", dir, err)
 		return nil
