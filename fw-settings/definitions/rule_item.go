@@ -21,6 +21,7 @@ func (*defRuleItem) String() string {
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="halign">start</property>
+        <property name="margin_left">8</property>
         <property name="margin_right">10</property>
         <property name="xalign">0</property>
       </object>
@@ -59,6 +60,7 @@ func (*defRuleItem) String() string {
         <property name="visible">True</property>
         <property name="can_focus">True</property>
         <property name="receives_default">True</property>
+        <property name="tooltip_text" translatable="yes">Edit Firewall rule</property>
         <property name="relief">none</property>
         <signal name="clicked" handler="on_edit_rule" swapped="no"/>
         <child>
@@ -79,6 +81,7 @@ func (*defRuleItem) String() string {
         <property name="visible">True</property>
         <property name="can_focus">True</property>
         <property name="receives_default">True</property>
+        <property name="tooltip_text" translatable="yes">Delete Firewall rule</property>
         <property name="relief">none</property>
         <signal name="clicked" handler="on_delete_rule" swapped="no"/>
         <child>
