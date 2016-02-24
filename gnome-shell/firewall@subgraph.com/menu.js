@@ -3,6 +3,7 @@ const Gio = imports.gi.Gio;
 
 const Main = imports.ui.main;
 const PopupMenu = imports.ui.popupMenu;
+const Util = imports.misc.util;
 
 const FirewallInterface = '<node> \
 <interface name="com.subgraph.Firewall"> \
@@ -33,6 +34,14 @@ const FirewallMenu = new Lang.Class({
 
     install: function() {
         this.createMenu();
+        this.menu.connect('open-state-changed', Lang.bind(this, this.openStateChanged));
+        let idx = this.findMenu(this.aggregate._power.menu);
+        if(idx >= 0) {
+            this.aggregate.menu.addMenuItem(this.menu, idx);
+        }
+    },
+
+    openStateChanged: function() {
         this.proxy.IsEnabledRemote(Lang.bind(this, function(result, err) {
             if(err) {
                 log(err.message);
@@ -41,10 +50,6 @@ const FirewallMenu = new Lang.Class({
             let [enabled] = result;
             this.toggle.setToggleState(enabled);
         }));
-        let idx = this.findMenu(this.aggregate._power.menu);
-        if(idx >= 0) {
-            this.aggregate.menu.addMenuItem(this.menu, idx);
-        }
     },
 
     destroy: function() {
@@ -75,7 +80,7 @@ const FirewallMenu = new Lang.Class({
         this.toggle.connect('toggled', Lang.bind(this, this.onToggle));
         this.item.menu.addMenuItem(this.toggle);
 
-        this.item.menu.addAction("Connection Monitor", Lang.bind(this, this.onMonitor));
+        //this.item.menu.addAction("Connection Monitor", Lang.bind(this, this.onMonitor));
         this.item.menu.addAction("Firewall Settings", Lang.bind(this, this.onSettings));
         this.menu.addMenuItem(this.item);
     },
@@ -90,7 +95,7 @@ const FirewallMenu = new Lang.Class({
     },
 
     onSettings: function() {
-        log("Firewall Settings clicked");
+        Util.spawnCommandLine("/usr/bin/fw-settings")
     },
 
     onMonitor: function() {

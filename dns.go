@@ -54,7 +54,9 @@ func (dc *dnsCache) processRecordA(name string, answers []dnsRR) {
 				name = name[:len(name)-1]
 			}
 			dc.ipMap[ip] = name
-			log.Info("Adding %s: %s", name, ip)
+			if !logRedact {
+				log.Info("Adding %s: %s", name, ip)
+			}
 		default:
 			log.Warning("Unexpected RR type in answer section of A response: %v", rec)
 		}

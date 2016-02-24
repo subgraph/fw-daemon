@@ -92,26 +92,23 @@ func (p *prompter) processPacket(pp *pendingPkt) {
 		addr,
 		int32(pp.pkt.DstPort),
 		pp.pkt.Dst.String(),
-		uidToUser(pp.proc.uid),
-		int32(pp.proc.pid))
+		uidToUser(pp.pinfo.Uid),
+		int32(pp.pinfo.Pid))
 	err := call.Store(&scope, &rule)
 	if err != nil {
 		log.Warning("Error sending dbus RequestPrompt message: %v", err)
 		pp.policy.removePending(pp)
 		pp.pkt.Mark = 1
 		pp.pkt.Accept()
-		//pp.pkt.Drop()
 		return
 	}
-	log.Debug("Received prompt response: %s [%s]", printScope(scope), rule)
 
-	r, err := parseRule(rule)
+	r, err := pp.policy.parseRule(rule, false)
 	if err != nil {
 		log.Warning("Error parsing rule string returned from dbus RequestPrompt: %v", err)
 		pp.policy.removePending(pp)
 		pp.pkt.Mark = 1
 		pp.pkt.Accept()
-		//pp.pkt.Drop()
 		return
 	}
 	if scope == APPLY_SESSION {

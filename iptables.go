@@ -17,7 +17,7 @@ func setupIPTables() {
 
 func addIPTRules(rules ...string) {
 	for _, r := range rules {
-		if(iptables('C', r)) {
+		if iptables('C', r) {
 			log.Info("IPTables rule already present: %s", r)
 		} else {
 			log.Info("Installing IPTables rule: %s", r)

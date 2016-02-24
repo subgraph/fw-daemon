@@ -5,13 +5,14 @@ import (
 	"sync"
 
 	"github.com/subgraph/fw-daemon/nfqueue"
+	"github.com/subgraph/fw-daemon/proc"
 )
 
 type pendingPkt struct {
 	policy   *Policy
 	hostname string
 	pkt      *nfqueue.Packet
-	proc     *ProcInfo
+	pinfo    *proc.ProcInfo
 }
 
 type Policy struct {
@@ -42,12 +43,14 @@ func (fw *Firewall) policyForPath(path string) *Policy {
 	return fw.policyMap[path]
 }
 
-func (p *Policy) processPacket(pkt *nfqueue.Packet, proc *ProcInfo) {
+func (p *Policy) processPacket(pkt *nfqueue.Packet, pinfo *proc.ProcInfo) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	name := p.fw.dns.Lookup(pkt.Dst)
-	log.Info("Lookup(%s): %s", pkt.Dst.String(), name)
-	result := p.rules.filter(pkt, proc, name)
+	if !logRedact {
+		log.Info("Lookup(%s): %s", pkt.Dst.String(), name)
+	}
+	result := p.rules.filter(pkt, pinfo, name)
 	switch result {
 	case FILTER_DENY:
 		pkt.Mark = 1
@@ -55,7 +58,7 @@ func (p *Policy) processPacket(pkt *nfqueue.Packet, proc *ProcInfo) {
 	case FILTER_ALLOW:
 		pkt.Accept()
 	case FILTER_PROMPT:
-		p.processPromptResult(&pendingPkt{policy: p, hostname: name, pkt: pkt, proc: proc})
+		p.processPromptResult(&pendingPkt{policy: p, hostname: name, pkt: pkt, pinfo: pinfo})
 	default:
 		log.Warning("Unexpected filter result: %d", result)
 	}
@@ -109,11 +112,39 @@ func (p *Policy) processNewRule(r *Rule, scope int32) bool {
 	return p.promptInProgress
 }
 
+func (p *Policy) parseRule(s string, add bool) (*Rule, error) {
+	r := new(Rule)
+	r.policy = p
+	if !r.parse(s) {
+		return nil, parseError(s)
+	}
+	if add {
+		p.lock.Lock()
+		defer p.lock.Unlock()
+		p.rules = append(p.rules, r)
+	}
+	p.fw.addRule(r)
+	return r, nil
+}
+
+func (p *Policy) removeRule(r *Rule) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	var newRules RuleList
+	for _, rr := range p.rules {
+		if rr.id != r.id {
+			newRules = append(newRules, rr)
+		}
+	}
+	p.rules = newRules
+}
+
 func (p *Policy) filterPending(rule *Rule) {
 	remaining := []*pendingPkt{}
 	for _, pp := range p.pendingQueue {
 		if rule.match(pp.pkt, pp.hostname) {
-			log.Info("Also applying %s to %s", rule, printPacket(pp.pkt, pp.hostname))
+			log.Info("Also applying %s to %s", rule.getString(logRedact), printPacket(pp.pkt, pp.hostname))
 			if rule.rtype == RULE_ALLOW {
 				pp.pkt.Accept()
 			} else {
@@ -149,6 +180,10 @@ func printPacket(pkt *nfqueue.Packet, hostname string) string {
 			return "???"
 		}
 	}()
+
+	if logRedact {
+		hostname = "[redacted]"
+	}
 	name := hostname
 	if name == "" {
 		name = pkt.Dst.String()
@@ -162,21 +197,33 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.Packet) {
 		fw.dns.processDNS(pkt)
 		return
 	}
-	proc := findProcessForPacket(pkt)
-	if proc == nil {
+	pinfo := findProcessForPacket(pkt)
+	if pinfo == nil {
 		log.Warning("No proc found for %s", printPacket(pkt, fw.dns.Lookup(pkt.Dst)))
 		pkt.Accept()
 		return
 	}
-	log.Debug("filterPacket [%s] %s", proc.exePath, printPacket(pkt, fw.dns.Lookup(pkt.Dst)))
+	log.Debug("filterPacket [%s] %s", pinfo.ExePath, printPacket(pkt, fw.dns.Lookup(pkt.Dst)))
 	if basicAllowPacket(pkt) {
 		pkt.Accept()
 		return
 	}
 	fw.lock.Lock()
-	policy := fw.policyForPath(proc.exePath)
+	policy := fw.policyForPath(pinfo.ExePath)
 	fw.lock.Unlock()
-	policy.processPacket(pkt, proc)
+	policy.processPacket(pkt, pinfo)
+}
+
+func findProcessForPacket(pkt *nfqueue.Packet) *proc.ProcInfo {
+	switch pkt.Protocol {
+	case nfqueue.TCP:
+		return proc.LookupTCPSocketProcess(pkt.SrcPort, pkt.Dst, pkt.DstPort)
+	case nfqueue.UDP:
+		return proc.LookupUDPSocketProcess(pkt.SrcPort)
+	default:
+		log.Warning("Packet has unknown protocol: %d", pkt.Protocol)
+		return nil
+	}
 }
 
 func basicAllowPacket(pkt *nfqueue.Packet) bool {
