@@ -4,8 +4,8 @@ import (
 	"os"
 
 	"fmt"
-	"github.com/gotk3/gotk3/glib"
-	"github.com/gotk3/gotk3/gtk"
+	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/gotk3/gotk3/glib"
+	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/gotk3/gotk3/gtk"
 )
 
 func failDialog(parent *gtk.Window, format string, args ...interface{}) {

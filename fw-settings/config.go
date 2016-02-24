@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/op/go-logging"
+	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/gotk3/gotk3/gtk"
+	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/op/go-logging"
 )
 
 var levelToId = map[int32]string{
