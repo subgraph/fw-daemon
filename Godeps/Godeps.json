@@ -4,8 +4,8 @@
 	"Deps": [
 		{
 			"ImportPath": "github.com/godbus/dbus",
-			"Comment": "v3-6-ga1b8ba5",
-			"Rev": "a1b8ba5163b7f041b22761461eabd02b70d1f824"
+			"Comment": "v3-15-g230e4b2",
+			"Rev": "230e4b23db2fd81c53eaa0073f76659d4849ce51"
 		},
 		{
 			"ImportPath": "github.com/op/go-logging",
