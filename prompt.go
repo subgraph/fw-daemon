@@ -102,7 +102,6 @@ func (p *prompter) processPacket(pp *pendingPkt) {
 		pp.pkt.Accept()
 		return
 	}
-	log.Debug("Received prompt response: %s [%s]", printScope(scope), rule)
 
 	r, err := pp.policy.parseRule(rule, false)
 	if err != nil {

@@ -42,13 +42,14 @@ func setupLoggerBackend() logging.LeveledBackend {
 	return leveler
 }
 
+var logRedact bool
+
 type Firewall struct {
 	dbus *dbusServer
 	dns  *dnsCache
 
 	enabled bool
 
-	logRedact  bool
 	logBackend logging.LeveledBackend
 
 	lock      sync.Mutex
@@ -148,7 +149,6 @@ func main() {
 		dbus:       ds,
 		dns:        NewDnsCache(),
 		enabled:    true,
-		logRedact:  false,
 		logBackend: logBackend,
 		policyMap:  make(map[string]*Policy),
 	}

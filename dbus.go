@@ -137,7 +137,7 @@ func createDbusRule(r *Rule) DbusRule {
 		App:    path.Base(r.policy.path),
 		Path:   r.policy.path,
 		Verb:   uint32(r.rtype),
-		Target: r.AddrString(),
+		Target: r.AddrString(false),
 	}
 }
 
@@ -196,7 +196,7 @@ func (ds *dbusServer) UpdateRule(rule DbusRule) *dbus.Error {
 func (ds *dbusServer) GetConfig() (map[string]dbus.Variant, *dbus.Error) {
 	conf := make(map[string]dbus.Variant)
 	conf["loglevel"] = dbus.MakeVariant(int32(ds.fw.logBackend.GetLevel("sgfw")))
-	conf["logredact"] = dbus.MakeVariant(ds.fw.logRedact)
+	conf["logredact"] = dbus.MakeVariant(logRedact)
 	return conf, nil
 }
 
@@ -208,7 +208,7 @@ func (ds *dbusServer) SetConfig(key string, val dbus.Variant) *dbus.Error {
 		ds.fw.logBackend.SetLevel(lvl, "sgfw")
 	case "logredact":
 		flag := val.Value().(bool)
-		ds.fw.logRedact = flag
+		logRedact = flag
 	}
 	return nil
 }

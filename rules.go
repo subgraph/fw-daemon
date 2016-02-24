@@ -34,15 +34,19 @@ type Rule struct {
 }
 
 func (r *Rule) String() string {
+	return r.getString(false)
+}
+
+func (r *Rule) getString(redact bool) string {
 	rtype := "DENY"
 	if r.rtype == RULE_ALLOW {
 		rtype = "ALLOW"
 	}
 
-	return fmt.Sprintf("%s|%s", rtype, r.AddrString())
+	return fmt.Sprintf("%s|%s", rtype, r.AddrString(redact))
 }
 
-func (r *Rule) AddrString() string {
+func (r *Rule) AddrString(redact bool) string {
 	addr := "*"
 	port := "*"
 	if r.hostname != "" {
@@ -55,6 +59,10 @@ func (r *Rule) AddrString() string {
 
 	if r.port != matchAny {
 		port = fmt.Sprintf("%d", r.port)
+	}
+
+	if redact && addr != "*" {
+		addr = "[redacted]"
 	}
 
 	return fmt.Sprintf("%s:%s", addr, port)
@@ -90,7 +98,11 @@ func (rl *RuleList) filter(p *nfqueue.Packet, pinfo *proc.ProcInfo, hostname str
 	result := FILTER_PROMPT
 	for _, r := range *rl {
 		if r.match(p, hostname) {
-			log.Info("%s (%s -> %s:%d)", r, pinfo.ExePath, p.Dst.String(), p.DstPort)
+			dst := p.Dst.String()
+			if logRedact {
+				dst = "[redacted]"
+			}
+			log.Info("%s (%s -> %s:%d)", r.getString(logRedact), pinfo.ExePath, dst, p.DstPort)
 			if r.rtype == RULE_DENY {
 				return FILTER_DENY
 			} else if r.rtype == RULE_ALLOW {

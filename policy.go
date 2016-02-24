@@ -47,7 +47,9 @@ func (p *Policy) processPacket(pkt *nfqueue.Packet, pinfo *proc.ProcInfo) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	name := p.fw.dns.Lookup(pkt.Dst)
-	log.Info("Lookup(%s): %s", pkt.Dst.String(), name)
+	if !logRedact {
+		log.Info("Lookup(%s): %s", pkt.Dst.String(), name)
+	}
 	result := p.rules.filter(pkt, pinfo, name)
 	switch result {
 	case FILTER_DENY:
@@ -142,7 +144,7 @@ func (p *Policy) filterPending(rule *Rule) {
 	remaining := []*pendingPkt{}
 	for _, pp := range p.pendingQueue {
 		if rule.match(pp.pkt, pp.hostname) {
-			log.Info("Also applying %s to %s", rule, printPacket(pp.pkt, pp.hostname))
+			log.Info("Also applying %s to %s", rule.getString(logRedact), printPacket(pp.pkt, pp.hostname))
 			if rule.rtype == RULE_ALLOW {
 				pp.pkt.Accept()
 			} else {
@@ -178,6 +180,10 @@ func printPacket(pkt *nfqueue.Packet, hostname string) string {
 			return "???"
 		}
 	}()
+
+	if logRedact {
+		hostname = "[redacted]"
+	}
 	name := hostname
 	if name == "" {
 		name = pkt.Dst.String()
