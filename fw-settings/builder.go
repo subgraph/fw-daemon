@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -24,7 +23,6 @@ func getDefinitionWithFileFallback(uiName string) string {
 
 	fileName := filepath.Join(defsFolder, uiName+xmlExtension)
 	if fileNotFound(fileName) {
-		log.Printf("gui: loading compiled definition %q\n", uiName)
 		return uiDef.String()
 	}
 
