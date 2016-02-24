@@ -39,6 +39,7 @@ func setupLoggerBackend() logging.LeveledBackend {
 	backend := logging.NewLogBackend(os.Stderr, "", 0)
 	formatter := logging.NewBackendFormatter(backend, format)
 	leveler := logging.AddModuleLevel(formatter)
+	leveler.SetLevel(logging.NOTICE, "sgfw")
 	return leveler
 }
 
