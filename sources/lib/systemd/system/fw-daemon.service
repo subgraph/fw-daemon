@@ -2,6 +2,7 @@
 Description=Subgraph Firewall Daemon
 
 [Service]
+Environment="GODEBUG=cgocheck=0"
 ExecStart=/usr/sbin/fw-daemon
 
 [Install]
