@@ -111,8 +111,11 @@ func (fw *Firewall) runFilter() {
 	q.Timeout = 5 * time.Minute
 	packets := q.Process()
 
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, os.Interrupt, os.Kill)
+	sigKillChan := make(chan os.Signal, 1)
+	signal.Notify(sigKillChan, os.Interrupt, os.Kill)
+
+	sigHupChan := make(chan os.Signal, 1)
+	signal.Notify(sigHupChan, syscall.SIGHUP)
 
 	for {
 		select {
@@ -122,7 +125,9 @@ func (fw *Firewall) runFilter() {
 			} else {
 				pkt.Accept()
 			}
-		case <-sigs:
+		case <-sigHupChan:
+			fw.loadRules()
+		case <-sigKillChan:
 			return
 		}
 	}
