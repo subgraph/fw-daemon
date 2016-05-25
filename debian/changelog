@@ -1,3 +1,9 @@
+fw-daemon (0.0.3-1) unstable; urgency=medium
+
+  * added 3.20 to shell-version 
+
+ -- Bruce Leidl <bruce@subgraph.com>  Wed, 25 May 2016 18:47:46 +0000
+
 fw-daemon (0.0.2-1) unstable; urgency=medium
 
   * now with settings dialog 
