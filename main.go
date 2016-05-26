@@ -168,5 +168,14 @@ func main() {
 		}()
 	*/
 
+	socksConfig := SocksChainConfig{
+		TargetSocksNet:  "tcp",
+		TargetSocksAddr: "127.0.0.1:9050",
+		ListenSocksNet:  "tcp",
+		ListenSocksAddr: "127.0.0.1:8850",
+	}
+	wg := sync.WaitGroup{}
+	InitSocksListener(&socksConfig, &wg)
+
 	fw.runFilter()
 }
