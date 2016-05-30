@@ -60,6 +60,9 @@ type Firewall struct {
 	ruleLock   sync.Mutex
 	rulesById  map[uint]*Rule
 	nextRuleId uint
+
+	reloadRulesChan chan bool
+	stopChan        chan bool
 }
 
 func (fw *Firewall) setEnabled(flag bool) {
@@ -103,6 +106,14 @@ func (fw *Firewall) getRuleById(id uint) *Rule {
 	return fw.rulesById[id]
 }
 
+func (fw *Firewall) stop() {
+	fw.stopChan <- true
+}
+
+func (fw *Firewall) reloadRules() {
+	fw.reloadRulesChan <- true
+}
+
 func (fw *Firewall) runFilter() {
 	q := nfqueue.NewNFQueue(0)
 	defer q.Destroy()
@@ -110,12 +121,6 @@ func (fw *Firewall) runFilter() {
 	q.DefaultVerdict = nfqueue.DROP
 	q.Timeout = 5 * time.Minute
 	packets := q.Process()
-
-	sigKillChan := make(chan os.Signal, 1)
-	signal.Notify(sigKillChan, os.Interrupt, os.Kill)
-
-	sigHupChan := make(chan os.Signal, 1)
-	signal.Notify(sigHupChan, syscall.SIGHUP)
 
 	for {
 		select {
@@ -125,9 +130,9 @@ func (fw *Firewall) runFilter() {
 			} else {
 				pkt.Accept()
 			}
-		case <-sigHupChan:
+		case <-fw.reloadRulesChan:
 			fw.loadRules()
-		case <-sigKillChan:
+		case <-fw.stopChan:
 			return
 		}
 	}
@@ -152,11 +157,13 @@ func main() {
 	}
 
 	fw := &Firewall{
-		dbus:       ds,
-		dns:        NewDnsCache(),
-		enabled:    true,
-		logBackend: logBackend,
-		policyMap:  make(map[string]*Policy),
+		dbus:            ds,
+		dns:             NewDnsCache(),
+		enabled:         true,
+		logBackend:      logBackend,
+		policyMap:       make(map[string]*Policy),
+		reloadRulesChan: make(chan bool, 0),
+		stopChan:        make(chan bool, 0),
 	}
 	ds.fw = fw
 
@@ -176,6 +183,24 @@ func main() {
 	}
 	wg := sync.WaitGroup{}
 	InitSocksListener(&socksConfig, &wg)
-
 	fw.runFilter()
+
+	// observe process signals and either
+	// reload rules or shutdown firewall service
+	sigKillChan := make(chan os.Signal, 1)
+	signal.Notify(sigKillChan, os.Interrupt, os.Kill)
+
+	sigHupChan := make(chan os.Signal, 1)
+	signal.Notify(sigHupChan, syscall.SIGHUP)
+
+	for {
+		select {
+		case <-sigHupChan:
+			fw.reloadRules()
+			// XXX perhaps restart SOCKS proxy chain service?
+		case <-sigKillChan:
+			fw.stop()
+			return
+		}
+	}
 }
