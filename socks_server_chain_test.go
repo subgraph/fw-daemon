@@ -221,8 +221,6 @@ func fakeSocksSessionWorker(clientConn net.Conn, targetNet, targetAddr string) e
 	// till the session is done.
 	var wg sync.WaitGroup
 	wg.Add(2)
-	//upstreamConn.Write([]byte("meow 123\r\n"))
-	//clientConn.Write([]byte("meow 123\r\n"))
 	copyLoop := func(dst, src net.Conn) {
 		defer wg.Done()
 		defer dst.Close()
