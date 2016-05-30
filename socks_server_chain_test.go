@@ -31,6 +31,7 @@ func NewAccumulatingService(net, address, banner string) *AccumulatingService {
 		banner:          banner,
 		hasProtocolInfo: true,
 		hasAuthenticate: true,
+		receivedChan:    make(chan bool, 0),
 	}
 	return &l
 }
@@ -158,5 +159,15 @@ func TestSocksServerProxyChain(t *testing.T) {
 	}
 	if string(line) != banner {
 		t.Errorf("Did not receive expected banner. Got %s, wanted %s\n", string(line), banner)
+		t.Fail()
+	}
+
+	// send the service some data and verify it was received
+	clientData := "hello world\r\n"
+	conn.Write([]byte(clientData))
+	service.WaitUntilReceived()
+	if service.buffer.String() != strings.TrimSpace(clientData)+"\n" {
+		t.Errorf("Client sent %s but service only received %s\n", "hello world\n", service.buffer.String())
+		t.Fail()
 	}
 }
