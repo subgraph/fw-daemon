@@ -2,16 +2,20 @@ package main
 
 import (
 	// _ "net/http/pprof"
+	"bufio"
+	"encoding/json"
 	"os"
 	"os/signal"
+	"regexp"
+	"strings"
+	"sync"
+	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/op/go-logging"
 	"github.com/subgraph/fw-daemon/nfqueue"
 	"github.com/subgraph/fw-daemon/proc"
-	"sync"
-	"syscall"
-	"unsafe"
 )
 
 var log = logging.MustGetLogger("sgfw")
@@ -138,7 +142,52 @@ func (fw *Firewall) runFilter() {
 	}
 }
 
+type SocksJsonConfig struct {
+	SocksListener string
+	TorSocks      string
+}
+
+var commentRegexp = regexp.MustCompile("^[ \t]*#")
+
+func loadConfiguration(configFilePath string) (*SocksJsonConfig, error) {
+	config := SocksJsonConfig{}
+	file, err := os.Open(configFilePath)
+	if err != nil {
+		return nil, err
+	}
+	scanner := bufio.NewScanner(file)
+	bs := ""
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !commentRegexp.MatchString(line) {
+			bs += line + "\n"
+		}
+	}
+	if err := json.Unmarshal([]byte(bs), &config); err != nil {
+		return nil, err
+	}
+	return &config, nil
+}
+
 func main() {
+	config, err := loadConfiguration("/etc/fw-daemon-socks.json")
+	if err != nil {
+		panic(err)
+	}
+	// XXX
+	fields := strings.Split(config.TorSocks, ":")
+	torSocksNet := fields[0]
+	torSocksAddr := fields[1]
+	fields = strings.Split(config.SocksListener, ":")
+	socksListenNet := fields[0]
+	socksListenAddr := fields[1]
+	socksConfig := SocksChainConfig{
+		TargetSocksNet:  torSocksNet,
+		TargetSocksAddr: torSocksAddr,
+		ListenSocksNet:  socksListenNet,
+		ListenSocksAddr: socksListenAddr,
+	}
+
 	logBackend := setupLoggerBackend()
 	log.SetBackend(logBackend)
 	proc.SetLogger(log)
@@ -175,12 +224,6 @@ func main() {
 		}()
 	*/
 
-	socksConfig := SocksChainConfig{
-		TargetSocksNet:  "tcp",
-		TargetSocksAddr: "127.0.0.1:9050",
-		ListenSocksNet:  "tcp",
-		ListenSocksAddr: "127.0.0.1:8850",
-	}
 	wg := sync.WaitGroup{}
 	InitSocksListener(&socksConfig, &wg)
 	fw.runFilter()
