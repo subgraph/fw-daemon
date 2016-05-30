@@ -16,6 +16,7 @@ import (
 
 type AccumulatingService struct {
 	net, address    string
+	banner          string
 	buffer          bytes.Buffer
 	mortalService   *MortalService
 	hasProtocolInfo bool
@@ -23,10 +24,11 @@ type AccumulatingService struct {
 	receivedChan    chan bool
 }
 
-func NewAccumulatingService(net, address string) *AccumulatingService {
+func NewAccumulatingService(net, address, banner string) *AccumulatingService {
 	l := AccumulatingService{
 		net:             net,
 		address:         address,
+		banner:          banner,
 		hasProtocolInfo: true,
 		hasAuthenticate: true,
 	}
@@ -49,8 +51,8 @@ func (a *AccumulatingService) WaitUntilReceived() {
 
 func (a *AccumulatingService) SessionWorker(conn net.Conn) error {
 	connReader := bufio.NewReader(conn)
+	conn.Write([]byte(a.banner))
 	for {
-
 		line, err := connReader.ReadBytes('\n')
 		if err != nil {
 			panic(fmt.Sprintf("AccumulatingService read error: %s", err))
@@ -69,7 +71,6 @@ func fakeSocksSessionWorker(clientConn net.Conn, targetNet, targetAddr string) e
 	fmt.Printf("INFO/socks: New connection from: %v\n", clientAddr)
 
 	// Do the SOCKS handshake with the client, and read the command.
-	fmt.Println("meow1")
 	req, err := socks5.Handshake(clientConn)
 	if err != nil {
 		panic(fmt.Sprintf("ERR/socks: Failed SOCKS5 handshake: %v", err))
@@ -80,18 +81,15 @@ func fakeSocksSessionWorker(clientConn net.Conn, targetNet, targetAddr string) e
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("meow2")
 	defer upstreamConn.Close()
 	req.Reply(socks5.ReplySucceeded)
-	fmt.Println("meow3")
 
 	// A upstream connection has been established, push data back and forth
 	// till the session is done.
 	var wg sync.WaitGroup
 	wg.Add(2)
-
 	//upstreamConn.Write([]byte("meow 123\r\n"))
-	fmt.Println("meow4")
+	//clientConn.Write([]byte("meow 123\r\n"))
 	copyLoop := func(dst, src net.Conn) {
 		defer wg.Done()
 		defer dst.Close()
@@ -100,8 +98,6 @@ func fakeSocksSessionWorker(clientConn net.Conn, targetNet, targetAddr string) e
 	}
 	go copyLoop(upstreamConn, clientConn)
 	go copyLoop(clientConn, upstreamConn)
-
-	fmt.Println("meow5")
 
 	wg.Wait()
 	fmt.Printf("INFO/socks: Closed SOCKS connection from: %v\n", clientAddr)
@@ -117,13 +113,12 @@ func TestSocksServerProxyChain(t *testing.T) {
 	serviceNet := "tcp"
 	serviceAddr := "127.0.0.1:9950"
 
-	fmt.Println("foo1")
+	banner := "meow 123\r\n"
 	// setup the service listener
-	service := NewAccumulatingService(serviceNet, serviceAddr)
+	service := NewAccumulatingService(serviceNet, serviceAddr, banner)
 	service.Start()
 	defer service.Stop()
 
-	fmt.Println("foo2")
 	// setup the "socks server"
 	session := func(clientConn net.Conn) error {
 		return fakeSocksSessionWorker(clientConn, serviceNet, serviceAddr)
@@ -132,7 +127,6 @@ func TestSocksServerProxyChain(t *testing.T) {
 	socksService.Start()
 	defer socksService.Stop()
 
-	fmt.Println("foo3")
 	// setup the SOCKS proxy chain
 	socksConfig := SocksChainConfig{
 		TargetSocksNet:  socksServerNet,
@@ -143,7 +137,6 @@ func TestSocksServerProxyChain(t *testing.T) {
 	wg := sync.WaitGroup{}
 	InitSocksListener(&socksConfig, &wg)
 
-	fmt.Println("foo4")
 	// setup the SOCKS client
 	auth := proxy.Auth{
 		User:     "",
@@ -156,19 +149,14 @@ func TestSocksServerProxyChain(t *testing.T) {
 		panic(err)
 	}
 
-	fmt.Println("foo5")
-	conn.Write([]byte("meow 123\r\n"))
-	service.WaitUntilReceived()
-	fmt.Println("DATA RECEIVED", service.buffer.String())
-	fmt.Println("foo6")
 	// read a banner from the service
-	//rd := bufio.NewReader(conn)
-	//line := []byte{}
-	//line, err = rd.ReadBytes('\n')
-	//if err != nil {
-	//	panic(err)
-	//}
-	//fmt.Println("socks client received", string(line))
-
-	//wg.Wait()
+	rd := bufio.NewReader(conn)
+	line := []byte{}
+	line, err = rd.ReadBytes('\n')
+	if err != nil {
+		panic(err)
+	}
+	if string(line) != banner {
+		t.Errorf("Did not receive expected banner. Got %s, wanted %s\n", string(line), banner)
+	}
 }
