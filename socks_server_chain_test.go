@@ -55,7 +55,7 @@ func (a *AccumulatingService) SessionWorker(conn net.Conn) error {
 	for {
 		line, err := connReader.ReadBytes('\n')
 		if err != nil {
-			panic(fmt.Sprintf("AccumulatingService read error: %s", err))
+			fmt.Printf("AccumulatingService read error: %s\n", err)
 		}
 		lineStr := strings.TrimSpace(string(line))
 		a.buffer.WriteString(lineStr + "\n")
