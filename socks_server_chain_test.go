@@ -259,14 +259,16 @@ func TestSocksServerProxyChain(t *testing.T) {
 	defer socksService.Stop()
 
 	// setup the SOCKS proxy chain
-	socksConfig := SocksChainConfig{
+	socksConfig := socksChainConfig{
 		TargetSocksNet:  socksServerNet,
 		TargetSocksAddr: socksServerAddr,
 		ListenSocksNet:  socksChainNet,
 		ListenSocksAddr: socksChainAddr,
 	}
 	wg := sync.WaitGroup{}
-	InitSocksListener(&socksConfig, &wg)
+	ds := dbusServer{}
+	chain := NewSocksChain(&socksConfig, &wg, &ds)
+	chain.start()
 
 	// setup the SOCKS client
 	auth := proxy.Auth{

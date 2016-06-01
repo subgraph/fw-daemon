@@ -169,11 +169,7 @@ func loadConfiguration(configFilePath string) (*SocksJsonConfig, error) {
 	return &config, nil
 }
 
-func main() {
-	config, err := loadConfiguration("/etc/fw-daemon-socks.json")
-	if err != nil {
-		panic(err)
-	}
+func getSocksChainConfig(config *SocksJsonConfig) *socksChainConfig {
 	// XXX
 	fields := strings.Split(config.TorSocks, ":")
 	torSocksNet := fields[0]
@@ -181,12 +177,23 @@ func main() {
 	fields = strings.Split(config.SocksListener, ":")
 	socksListenNet := fields[0]
 	socksListenAddr := fields[1]
-	socksConfig := SocksChainConfig{
+	socksConfig := socksChainConfig{
 		TargetSocksNet:  torSocksNet,
 		TargetSocksAddr: torSocksAddr,
 		ListenSocksNet:  socksListenNet,
 		ListenSocksAddr: socksListenAddr,
 	}
+	return &socksConfig
+}
+
+func main() {
+	// XXX should this really be hardcoded?
+	// or should i add a CLI to specify config file location?
+	config, err := loadConfiguration("/etc/fw-daemon-socks.json")
+	if err != nil {
+		panic(err)
+	}
+	socksConfig := getSocksChainConfig(config)
 
 	logBackend := setupLoggerBackend()
 	log.SetBackend(logBackend)
@@ -225,7 +232,9 @@ func main() {
 	*/
 
 	wg := sync.WaitGroup{}
-	InitSocksListener(&socksConfig, &wg)
+	chain := NewSocksChain(socksConfig, &wg, ds)
+	chain.start()
+
 	fw.runFilter()
 
 	// observe process signals and either
@@ -240,7 +249,7 @@ func main() {
 		select {
 		case <-sigHupChan:
 			fw.reloadRules()
-			// XXX perhaps restart SOCKS proxy chain service?
+			// XXX perhaps restart SOCKS proxy chain service with new proxy config specification?
 		case <-sigKillChan:
 			fw.stop()
 			return
