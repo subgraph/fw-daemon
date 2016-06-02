@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/subgraph/fw-daemon/socks5"
+	"github.com/subgraph/go-procsnitch"
 )
 
 type socksChainConfig struct {
@@ -21,6 +22,7 @@ type socksChain struct {
 	dbus     *dbusServer
 	listener net.Listener
 	wg       *sync.WaitGroup
+	procInfo procsnitch.ProcInfo
 }
 
 type socksChainSession struct {
@@ -30,13 +32,15 @@ type socksChainSession struct {
 	req          *socks5.Request
 	bndAddr      *socks5.Address
 	optData      []byte
+	procInfo     procsnitch.ProcInfo
 }
 
 func NewSocksChain(cfg *socksChainConfig, wg *sync.WaitGroup, dbus *dbusServer) *socksChain {
 	chain := socksChain{
-		cfg:  cfg,
-		dbus: dbus,
-		wg:   wg,
+		cfg:      cfg,
+		dbus:     dbus,
+		wg:       wg,
+		procInfo: procsnitch.SystemProcInfo{},
 	}
 	return &chain
 }
@@ -68,7 +72,7 @@ func (s *socksChain) socksAcceptLoop() error {
 			}
 			continue
 		}
-		session := &socksChainSession{cfg: s.cfg, clientConn: conn}
+		session := &socksChainSession{cfg: s.cfg, clientConn: conn, procInfo: s.procInfo}
 		go session.sessionWorker()
 	}
 }
@@ -86,15 +90,14 @@ func (c *socksChainSession) sessionWorker() {
 		return
 	}
 
-	pinfo := c.findProcessForConnection(c.clientConn)
+	pinfo := procsnitch.FindProcessForConnection(c.clientConn, c.procInfo)
 	if pinfo == nil {
-		log.Warning("No proc found for %s", printPacket(pkt, fw.dns.Lookup(pkt.Dst)))
-		pkt.Accept()
+		log.Warning("No proc found for connection from: %s", c.clientConn.RemoteAddr())
 		return
 	}
 
 	// target address of the socks connection
-	addr := c.req.Addr.String()
+	//addr := c.req.Addr.String()
 
 	switch c.req.Cmd {
 	case socks5.CommandTorResolve, socks5.CommandTorResolvePTR:

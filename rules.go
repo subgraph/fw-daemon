@@ -3,16 +3,16 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
+	"io/ioutil"
 	"net"
+	"os"
+	"path"
+	"strconv"
 	"strings"
 	"unicode"
 
 	"github.com/subgraph/fw-daemon/nfqueue"
-	"github.com/subgraph/fw-daemon/proc"
-	"io/ioutil"
-	"os"
-	"path"
-	"strconv"
+	"github.com/subgraph/go-procsnitch"
 )
 
 const (
@@ -91,7 +91,7 @@ const (
 	FILTER_PROMPT
 )
 
-func (rl *RuleList) filter(p *nfqueue.Packet, pinfo *proc.ProcInfo, hostname string) FilterResult {
+func (rl *RuleList) filter(p *nfqueue.Packet, pinfo *procsnitch.Info, hostname string) FilterResult {
 	if rl == nil {
 		return FILTER_PROMPT
 	}

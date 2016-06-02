@@ -13,9 +13,10 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/op/go-logging"
+	"github.com/op/go-logging"
 	"github.com/subgraph/fw-daemon/nfqueue"
-	"github.com/subgraph/fw-daemon/proc"
+	"github.com/subgraph/go-procsnitch"
+	//	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/op/go-logging"
 )
 
 var log = logging.MustGetLogger("sgfw")
@@ -197,7 +198,7 @@ func main() {
 
 	logBackend := setupLoggerBackend()
 	log.SetBackend(logBackend)
-	proc.SetLogger(log)
+	procsnitch.SetLogger(log)
 
 	if os.Geteuid() != 0 {
 		log.Error("Must be run as root")

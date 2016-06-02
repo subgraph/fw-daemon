@@ -3,12 +3,13 @@ package main
 import (
 	"errors"
 	"fmt"
+	"path"
 	"strings"
 
+	"github.com/op/go-logging"
 	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/godbus/dbus"
 	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/godbus/dbus/introspect"
-	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/op/go-logging"
-	"path"
+	//	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/op/go-logging"
 )
 
 const introspectXml = `

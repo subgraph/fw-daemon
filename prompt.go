@@ -92,7 +92,7 @@ func (p *prompter) processPacket(pp *pendingPkt) {
 		addr,
 		int32(pp.pkt.DstPort),
 		pp.pkt.Dst.String(),
-		uidToUser(pp.pinfo.Uid),
+		uidToUser(pp.pinfo.UID),
 		int32(pp.pinfo.Pid))
 	err := call.Store(&scope, &rule)
 	if err != nil {
