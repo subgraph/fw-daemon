@@ -86,6 +86,16 @@ func (c *socksChainSession) sessionWorker() {
 		return
 	}
 
+	pinfo := c.findProcessForConnection(c.clientConn)
+	if pinfo == nil {
+		log.Warning("No proc found for %s", printPacket(pkt, fw.dns.Lookup(pkt.Dst)))
+		pkt.Accept()
+		return
+	}
+
+	// target address of the socks connection
+	addr := c.req.Addr.String()
+
 	switch c.req.Cmd {
 	case socks5.CommandTorResolve, socks5.CommandTorResolvePTR:
 		err = c.dispatchTorSOCKS()
