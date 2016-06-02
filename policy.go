@@ -5,14 +5,14 @@ import (
 	"sync"
 
 	"github.com/subgraph/fw-daemon/nfqueue"
-	"github.com/subgraph/fw-daemon/proc"
+	"github.com/subgraph/go-procsnitch"
 )
 
 type pendingPkt struct {
 	policy   *Policy
 	hostname string
 	pkt      *nfqueue.Packet
-	pinfo    *proc.ProcInfo
+	pinfo    *procsnitch.Info
 }
 
 type Policy struct {
@@ -43,7 +43,7 @@ func (fw *Firewall) policyForPath(path string) *Policy {
 	return fw.policyMap[path]
 }
 
-func (p *Policy) processPacket(pkt *nfqueue.Packet, pinfo *proc.ProcInfo) {
+func (p *Policy) processPacket(pkt *nfqueue.Packet, pinfo *procsnitch.Info) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	name := p.fw.dns.Lookup(pkt.Dst)
@@ -214,12 +214,12 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.Packet) {
 	policy.processPacket(pkt, pinfo)
 }
 
-func findProcessForPacket(pkt *nfqueue.Packet) *proc.ProcInfo {
+func findProcessForPacket(pkt *nfqueue.Packet) *procsnitch.Info {
 	switch pkt.Protocol {
 	case nfqueue.TCP:
-		return proc.LookupTCPSocketProcess(pkt.SrcPort, pkt.Dst, pkt.DstPort)
+		return procsnitch.LookupTCPSocketProcess(pkt.SrcPort, pkt.Dst, pkt.DstPort)
 	case nfqueue.UDP:
-		return proc.LookupUDPSocketProcess(pkt.SrcPort)
+		return procsnitch.LookupUDPSocketProcess(pkt.SrcPort)
 	default:
 		log.Warning("Packet has unknown protocol: %d", pkt.Protocol)
 		return nil
