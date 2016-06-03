@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -23,6 +24,10 @@ type socksChain struct {
 	listener net.Listener
 	wg       *sync.WaitGroup
 	procInfo procsnitch.ProcInfo
+
+	lock      sync.Mutex
+	policyMap map[string]*Policy
+	policies  []*Policy
 }
 
 type socksChainSession struct {
@@ -33,14 +38,16 @@ type socksChainSession struct {
 	bndAddr      *socks5.Address
 	optData      []byte
 	procInfo     procsnitch.ProcInfo
+	server       *socksChain
 }
 
 func NewSocksChain(cfg *socksChainConfig, wg *sync.WaitGroup, dbus *dbusServer) *socksChain {
 	chain := socksChain{
-		cfg:      cfg,
-		dbus:     dbus,
-		wg:       wg,
-		procInfo: procsnitch.SystemProcInfo{},
+		cfg:       cfg,
+		dbus:      dbus,
+		wg:        wg,
+		procInfo:  procsnitch.SystemProcInfo{},
+		policyMap: make(map[string]*Policy),
 	}
 	return &chain
 }
@@ -72,7 +79,7 @@ func (s *socksChain) socksAcceptLoop() error {
 			}
 			continue
 		}
-		session := &socksChainSession{cfg: s.cfg, clientConn: conn, procInfo: s.procInfo}
+		session := &socksChainSession{cfg: s.cfg, clientConn: conn, procInfo: s.procInfo, server: s}
 		go session.sessionWorker()
 	}
 }
@@ -96,8 +103,14 @@ func (c *socksChainSession) sessionWorker() {
 		return
 	}
 
-	// target address of the socks connection
-	//addr := c.req.Addr.String()
+	// XXX work-in-progress
+	// Determine policy for the connection
+	// if destination not specified in existing policy
+	// then prompt user for policy ALLOW/DENY for that destination
+	c.server.lock.Lock()
+	policy := c.policyForPath(pinfo.ExePath)
+	c.server.lock.Unlock()
+	fmt.Printf("policyForPath %s is %s\n", pinfo.ExePath, policy)
 
 	switch c.req.Cmd {
 	case socks5.CommandTorResolve, socks5.CommandTorResolvePTR:
@@ -156,4 +169,25 @@ func (c *socksChainSession) dispatchTorSOCKS() (err error) {
 		c.req.Reply(socks5.ErrorToReplyCode(err))
 	}
 	return
+}
+
+func (s *socksChainSession) policyForPath(path string) *Policy {
+	s.server.lock.Lock()
+	defer s.server.lock.Unlock()
+
+	if _, ok := s.server.policyMap[path]; !ok {
+		p := new(Policy)
+		// XXX is fw needed?
+		// p.fw = fw
+		p.path = path
+		p.application = path
+		entry := entryForPath(path)
+		if entry != nil {
+			p.application = entry.name
+			p.icon = entry.icon
+		}
+		s.server.policyMap[path] = p
+		s.server.policies = append(s.server.policies, p)
+	}
+	return s.server.policyMap[path]
 }
