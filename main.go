@@ -13,10 +13,10 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/op/go-logging"
 	"github.com/subgraph/fw-daemon/nfqueue"
 	"github.com/subgraph/go-procsnitch"
 	//	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/op/go-logging"
+	"github.com/op/go-logging"
 )
 
 var log = logging.MustGetLogger("sgfw")
@@ -172,10 +172,10 @@ func loadConfiguration(configFilePath string) (*SocksJsonConfig, error) {
 
 func getSocksChainConfig(config *SocksJsonConfig) *socksChainConfig {
 	// XXX
-	fields := strings.Split(config.TorSocks, ":")
+	fields := strings.Split(config.TorSocks, "|")
 	torSocksNet := fields[0]
 	torSocksAddr := fields[1]
-	fields = strings.Split(config.SocksListener, ":")
+	fields = strings.Split(config.SocksListener, "|")
 	socksListenNet := fields[0]
 	socksListenAddr := fields[1]
 	socksConfig := socksChainConfig{
@@ -233,7 +233,7 @@ func main() {
 	*/
 
 	wg := sync.WaitGroup{}
-	chain := NewSocksChain(socksConfig, &wg, ds)
+	chain := NewSocksChain(socksConfig, &wg, fw)
 	chain.start()
 
 	fw.runFilter()
