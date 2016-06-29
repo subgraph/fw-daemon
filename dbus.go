@@ -2,9 +2,7 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"path"
-	"strings"
 
 	"github.com/godbus/dbus"
 	"github.com/godbus/dbus/introspect"
@@ -82,42 +80,13 @@ func newDbusServer() (*dbusServer, error) {
 	if err := conn.Export(ds, objectPath, interfaceName); err != nil {
 		return nil, err
 	}
-
-	ps := strings.Split(objectPath, "/")
-	path := "/"
-	for _, p := range ps {
-		if len(path) > 1 {
-			path += "/"
-		}
-		path += p
-
-		if err := conn.Export(ds, dbus.ObjectPath(path), "org.freedesktop.DBus.Introspectable"); err != nil {
-			return nil, err
-		}
+	if err := conn.Export(introspect.Introspectable(introspectXml), objectPath, "org.freedesktop.DBus.Introspectable"); err != nil {
+		return nil, err
 	}
+
 	ds.conn = conn
 	ds.prompter = newPrompter(conn)
 	return ds, nil
-}
-
-func (ds *dbusServer) Introspect(msg dbus.Message) (string, *dbus.Error) {
-	path := string(msg.Headers[dbus.FieldPath].Value().(dbus.ObjectPath))
-	if path == objectPath {
-		return introspectXml, nil
-	}
-	parts := strings.Split(objectPath, "/")
-	current := "/"
-	for i := 0; i < len(parts)-1; i++ {
-		if len(current) > 1 {
-			current += "/"
-		}
-		current += parts[i]
-		if path == current {
-			next := parts[i+1]
-			return fmt.Sprintf("<node><node name=\"%s\"/></node>", next), nil
-		}
-	}
-	return "", nil
 }
 
 func (ds *dbusServer) SetEnabled(flag bool) *dbus.Error {
