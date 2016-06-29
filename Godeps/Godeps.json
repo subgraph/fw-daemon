@@ -8,13 +8,13 @@
 	"Deps": [
 		{
 			"ImportPath": "github.com/godbus/dbus",
-			"Comment": "v3-15-g230e4b2",
-			"Rev": "230e4b23db2fd81c53eaa0073f76659d4849ce51"
+			"Comment": "v4.0.0-5-g32c6cc2",
+			"Rev": "32c6cc29c14570de4cf6d7e7737d68fb2d01ad15"
 		},
 		{
 			"ImportPath": "github.com/godbus/dbus/introspect",
-			"Comment": "v3-15-g230e4b2",
-			"Rev": "230e4b23db2fd81c53eaa0073f76659d4849ce51"
+			"Comment": "v4.0.0-5-g32c6cc2",
+			"Rev": "32c6cc29c14570de4cf6d7e7737d68fb2d01ad15"
 		},
 		{
 			"ImportPath": "github.com/gotk3/gotk3/cairo",
