@@ -99,7 +99,7 @@ func (p *Policy) processPacket(pkt *nfqueue.Packet, pinfo *procsnitch.Info) {
 	defer p.lock.Unlock()
 	name := p.fw.dns.Lookup(pkt.Dst)
 	if !logRedact {
-		log.Info("Lookup(%s): %s", pkt.Dst.String(), name)
+		log.Infof("Lookup(%s): %s", pkt.Dst.String(), name)
 	}
 	result := p.rules.filterPacket(pkt, pinfo, name)
 	switch result {
@@ -111,7 +111,7 @@ func (p *Policy) processPacket(pkt *nfqueue.Packet, pinfo *procsnitch.Info) {
 	case FILTER_PROMPT:
 		p.processPromptResult(&pendingPkt{pol: p, name: name, pkt: pkt, pinfo: pinfo})
 	default:
-		log.Warning("Unexpected filter result: %d", result)
+		log.Warningf("Unexpected filter result: %d", result)
 	}
 }
 
@@ -195,7 +195,7 @@ func (p *Policy) filterPending(rule *Rule) {
 	remaining := []pendingConnection{}
 	for _, pc := range p.pendingQueue {
 		if rule.match(pc.dst(), pc.dstPort(), pc.hostname()) {
-			log.Info("Also applying %s to %s", rule.getString(logRedact), pc.print())
+			log.Infof("Also applying %s to %s", rule.getString(logRedact), pc.print())
 			if rule.rtype == RULE_ALLOW {
 				pc.accept()
 			} else {
@@ -249,11 +249,11 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.Packet) {
 	}
 	pinfo := findProcessForPacket(pkt)
 	if pinfo == nil {
-		log.Warning("No proc found for %s", printPacket(pkt, fw.dns.Lookup(pkt.Dst)))
+		log.Warningf("No proc found for %s", printPacket(pkt, fw.dns.Lookup(pkt.Dst)))
 		pkt.Accept()
 		return
 	}
-	log.Debug("filterPacket [%s] %s", pinfo.ExePath, printPacket(pkt, fw.dns.Lookup(pkt.Dst)))
+	log.Debugf("filterPacket [%s] %s", pinfo.ExePath, printPacket(pkt, fw.dns.Lookup(pkt.Dst)))
 	if basicAllowPacket(pkt) {
 		pkt.Accept()
 		return
@@ -269,7 +269,7 @@ func findProcessForPacket(pkt *nfqueue.Packet) *procsnitch.Info {
 	case nfqueue.UDP:
 		return procsnitch.LookupUDPSocketProcess(pkt.SrcPort)
 	default:
-		log.Warning("Packet has unknown protocol: %d", pkt.Protocol)
+		log.Warningf("Packet has unknown protocol: %d", pkt.Protocol)
 		return nil
 	}
 }

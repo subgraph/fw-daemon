@@ -43,7 +43,7 @@ func NewMortalService(network, address string, connectionCallback func(net.Conn)
 
 // Stop will kill our listener and all it's connections
 func (l *MortalService) Stop() {
-	log.Info("stopping listener service %s:%s", l.network, l.address)
+	log.Infof("stopping listener service %s:%s", l.network, l.address)
 	close(l.quit)
 	if l.listener != nil {
 		l.listener.Close()
@@ -54,10 +54,10 @@ func (l *MortalService) Stop() {
 func (l *MortalService) acceptLoop() {
 	defer l.waitGroup.Done()
 	defer func() {
-		log.Info("stoping listener service %s:%s", l.network, l.address)
+		log.Infof("stoping listener service %s:%s", l.network, l.address)
 		for i, conn := range l.conns {
 			if conn != nil {
-				log.Info("Closing connection #%d", i)
+				log.Infof("Closing connection #%d", i)
 				conn.Close()
 			}
 		}
@@ -70,7 +70,7 @@ func (l *MortalService) acceptLoop() {
 			if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
 				continue
 			} else {
-				log.Info("MortalService connection accept failure: %s\n", err)
+				log.Infof("MortalService connection accept failure: %s\n", err)
 				select {
 				case <-l.quit:
 					return
@@ -130,12 +130,12 @@ func (l *MortalService) Start() error {
 
 func (l *MortalService) handleConnection(conn net.Conn, id int) error {
 	defer func() {
-		log.Info("Closing connection #%d", id)
+		log.Infof("Closing connection #%d", id)
 		conn.Close()
 		l.conns[id] = nil
 	}()
 
-	log.Info("Starting connection #%d", id)
+	log.Infof("Starting connection #%d", id)
 
 	for {
 		if err := l.connectionCallback(conn); err != nil {

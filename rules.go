@@ -106,7 +106,7 @@ func (rl *RuleList) filter(dst net.IP, dstPort uint16, hostname string, pinfo *p
 			if logRedact {
 				dstStr = "[redacted]"
 			}
-			log.Info("%s (%s -> %s:%d)", r.getString(logRedact), pinfo.ExePath, dstStr, dstPort)
+			log.Infof("%s (%s -> %s:%d)", r.getString(logRedact), pinfo.ExePath, dstStr, dstPort)
 			if r.rtype == RULE_DENY {
 				return FILTER_DENY
 			} else if r.rtype == RULE_ALLOW {
@@ -205,12 +205,12 @@ func (fw *Firewall) saveRules() {
 
 	p, err := rulesPath()
 	if err != nil {
-		log.Warning("Failed to open %s for writing: %v", p, err)
+		log.Warningf("Failed to open %s for writing: %v", p, err)
 		return
 	}
 	f, err := os.Create(p)
 	if err != nil {
-		log.Warning("Failed to open %s for writing: %v", p, err)
+		log.Warningf("Failed to open %s for writing: %v", p, err)
 		return
 	}
 	defer f.Close()
@@ -242,7 +242,7 @@ func savePolicy(f *os.File, p *Policy) {
 func writeLine(f *os.File, line string) bool {
 	_, err := f.WriteString(line + "\n")
 	if err != nil {
-		log.Warning("Error writing to rule file: %v", err)
+		log.Warningf("Error writing to rule file: %v", err)
 		return false
 	}
 	return true
@@ -256,13 +256,13 @@ func (fw *Firewall) loadRules() {
 
 	p, err := rulesPath()
 	if err != nil {
-		log.Warning("Failed to open %s for reading: %v", p, err)
+		log.Warningf("Failed to open %s for reading: %v", p, err)
 		return
 	}
 	bs, err := ioutil.ReadFile(p)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			log.Warning("Failed to open %s for reading: %v", p, err)
+			log.Warningf("Failed to open %s for reading: %v", p, err)
 		}
 		return
 	}
@@ -287,12 +287,12 @@ func (fw *Firewall) processPathLine(line string) *Policy {
 
 func processRuleLine(policy *Policy, line string) {
 	if policy == nil {
-		log.Warning("Cannot process rule line without first seeing path line: %s", line)
+		log.Warningf("Cannot process rule line without first seeing path line: %s", line)
 		return
 	}
 	_, err := policy.parseRule(line, true)
 	if err != nil {
-		log.Warning("Error parsing rule (%s): %v", line, err)
+		log.Warningf("Error parsing rule (%s): %v", line, err)
 		return
 	}
 }

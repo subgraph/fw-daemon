@@ -97,7 +97,7 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		int32(pc.procInfo().Pid))
 	err := call.Store(&scope, &rule)
 	if err != nil {
-		log.Warning("Error sending dbus RequestPrompt message: %v", err)
+		log.Warningf("Error sending dbus RequestPrompt message: %v", err)
 		policy.removePending(pc)
 		pc.drop()
 		return
@@ -105,7 +105,7 @@ func (p *prompter) processConnection(pc pendingConnection) {
 
 	r, err := policy.parseRule(rule, false)
 	if err != nil {
-		log.Warning("Error parsing rule string returned from dbus RequestPrompt: %v", err)
+		log.Warningf("Error parsing rule string returned from dbus RequestPrompt: %v", err)
 		policy.removePending(pc)
 		pc.drop()
 		return

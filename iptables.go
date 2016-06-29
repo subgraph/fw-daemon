@@ -18,9 +18,9 @@ func setupIPTables() {
 func addIPTRules(rules ...string) {
 	for _, r := range rules {
 		if iptables('C', r) {
-			log.Info("IPTables rule already present: %s", r)
+			log.Infof("IPTables rule already present: %s", r)
 		} else {
-			log.Info("Installing IPTables rule: %s", r)
+			log.Infof("Installing IPTables rule: %s", r)
 			iptables('I', r)
 		}
 	}
@@ -38,7 +38,7 @@ func iptables(verb rune, rule string) bool {
 	_, err = cmd.CombinedOutput()
 	_, exitErr := err.(*exec.ExitError)
 	if err != nil && !exitErr {
-		log.Warning("Error running iptables: %v", err)
+		log.Warningf("Error running iptables: %v", err)
 	}
 	return !exitErr
 }

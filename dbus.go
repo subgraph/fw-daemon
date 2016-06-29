@@ -90,7 +90,7 @@ func newDbusServer() (*dbusServer, error) {
 }
 
 func (ds *dbusServer) SetEnabled(flag bool) *dbus.Error {
-	log.Debug("SetEnabled(%v) called", flag)
+	log.Debugf("SetEnabled(%v) called", flag)
 	ds.fw.setEnabled(flag)
 	return nil
 }
@@ -136,7 +136,7 @@ func (ds *dbusServer) DeleteRule(id uint32) *dbus.Error {
 }
 
 func (ds *dbusServer) UpdateRule(rule DbusRule) *dbus.Error {
-	log.Debug("UpdateRule %v", rule)
+	log.Debugf("UpdateRule %v", rule)
 	ds.fw.lock.Lock()
 	r := ds.fw.rulesById[uint(rule.Id)]
 	ds.fw.lock.Unlock()
@@ -144,7 +144,7 @@ func (ds *dbusServer) UpdateRule(rule DbusRule) *dbus.Error {
 		tmp := new(Rule)
 		tmp.addr = noAddress
 		if !tmp.parseTarget(rule.Target) {
-			log.Warning("Unable to parse target: %s", rule.Target)
+			log.Warningf("Unable to parse target: %s", rule.Target)
 			return nil
 		}
 		r.policy.lock.Lock()
