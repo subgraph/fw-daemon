@@ -1077,6 +1077,29 @@ func (v *EventScroll) Type() EventType {
 	return EventType(c)
 }
 
+func (v *EventScroll) Direction() ScrollDirection {
+	c := v.native().direction
+	return ScrollDirection(c)
+}
+
+/*
+ * GdkGravity
+ */
+type GdkGravity int
+
+const (
+	GDK_GRAVITY_NORTH_WEST = C.GDK_GRAVITY_NORTH_WEST
+	GDK_GRAVITY_NORTH      = C.GDK_GRAVITY_NORTH
+	GDK_GRAVITY_NORTH_EAST = C.GDK_GRAVITY_NORTH_EAST
+	GDK_GRAVITY_WEST       = C.GDK_GRAVITY_WEST
+	GDK_GRAVITY_CENTER     = C.GDK_GRAVITY_CENTER
+	GDK_GRAVITY_EAST       = C.GDK_GRAVITY_EAST
+	GDK_GRAVITY_SOUTH_WEST = C.GDK_GRAVITY_SOUTH_WEST
+	GDK_GRAVITY_SOUTH      = C.GDK_GRAVITY_SOUTH
+	GDK_GRAVITY_SOUTH_EAST = C.GDK_GRAVITY_SOUTH_EAST
+	GDK_GRAVITY_STATIC     = C.GDK_GRAVITY_STATIC
+)
+
 /*
  * GdkPixbuf
  */
@@ -1515,6 +1538,17 @@ func PixbufGetType() glib.Type {
 // Rectangle is a representation of GDK's GdkRectangle type.
 type Rectangle struct {
 	GdkRectangle C.GdkRectangle
+}
+
+func WrapRectangle(p uintptr) *Rectangle {
+	return wrapRectangle((*C.GdkRectangle)(unsafe.Pointer(p)))
+}
+
+func wrapRectangle(obj *C.GdkRectangle) *Rectangle {
+	if obj == nil {
+		return nil
+	}
+	return &Rectangle{*obj}
 }
 
 // Native() returns a pointer to the underlying GdkRectangle.

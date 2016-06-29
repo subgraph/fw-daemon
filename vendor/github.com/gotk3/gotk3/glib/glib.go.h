@@ -24,6 +24,8 @@
 #include <stdio.h>
 
 #include <gio/gio.h>
+#define G_SETTINGS_ENABLE_BACKEND
+#include <gio/gsettingsbackend.h>
 #include <glib.h>
 #include <glib-object.h>
 #include <glib/gi18n.h>
@@ -64,6 +66,18 @@ static GApplication *
 toGApplication(void *p)
 {
 	return (G_APPLICATION(p));
+}
+
+static GSettings *
+toGSettings(void *p)
+{
+	return (G_SETTINGS(p));
+}
+
+static GSettingsBackend *
+toGSettingsBackend(void *p)
+{
+	return (G_SETTINGS_BACKEND(p));
 }
 
 
@@ -180,6 +194,10 @@ static void init_i18n(const char *domain, const char *dir) {
   textdomain(domain);
 }
 
+static const char* localize(const char *string) {
+  return _(string);
+}
+
 static inline char** make_strings(int count) {
 	return (char**)malloc(sizeof(char*) * count);
 }
@@ -195,5 +213,7 @@ static inline char* get_string(char** strings, int n) {
 static inline void set_string(char** strings, int n, char* str) {
 	strings[n] = str;
 }
+
+static inline gchar** next_gcharptr(gchar** s) { return (s+1); }
 
 #endif
