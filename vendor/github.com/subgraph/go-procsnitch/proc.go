@@ -163,7 +163,7 @@ func resolveProcinfo(conns []*connectionInfo) {
 		}
 		ss := new(socketStatus)
 		if err := ss.parseLine(line); err != nil {
-			log.Warning("Unable to parse line [%s]: %v", line, err)
+			log.Warningf("Unable to parse line [%s]: %v", line, err)
 		} /* else {
 			/*
 				pid := findPidForInode(ss.inode)

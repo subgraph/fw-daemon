@@ -48,11 +48,11 @@
 		},
 		{
 			"ImportPath": "github.com/subgraph/go-procsnitch",
-			"Rev": "84754d9af0ff985a28b3e6be743c7d453fda7322"
+			"Rev": "9ed73dde9f6f84be72aa010394902057ac26b625"
 		},
 		{
 			"ImportPath": "golang.org/x/net/proxy",
-			"Rev": "2e9cee70ee697e0a2ef894b560dda50dec7dff58"
+			"Rev": "ef2e00e88c5e0a3569f0bb9df697e9cbc6215fea"
 		}
 	]
 }

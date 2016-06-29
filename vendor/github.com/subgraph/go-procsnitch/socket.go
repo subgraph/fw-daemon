@@ -106,7 +106,7 @@ func findUNIXSocket(socketFile string) *socketStatus {
 		}
 		ss := socketStatus{}
 		if err := ss.parseUnixProcLine(line); err != nil {
-			log.Warning("Unable to parse line from /proc/net/%s [%s]: %v", proto, line, err)
+			log.Warningf("Unable to parse line from /proc/net/%s [%s]: %v", proto, line, err)
 			continue
 		}
 		if ss.remoteInode != 0 {
@@ -134,7 +134,7 @@ func findSocket(proto string, matcher func(socketStatus) bool) *socketStatus {
 			continue
 		}
 		if err := ss.parseLine(line); err != nil {
-			log.Warning("Unable to parse line from /proc/net/%s [%s]: %v", proto, line, err)
+			log.Warningf("Unable to parse line from /proc/net/%s [%s]: %v", proto, line, err)
 			continue
 		}
 		if matcher(ss) {
@@ -203,7 +203,7 @@ func getSocketLines(proto string) []string {
 	path := fmt.Sprintf("/proc/net/%s", proto)
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
-		log.Warning("Error reading %s: %v", path, err)
+		log.Warningf("Error reading %s: %v", path, err)
 		return nil
 	}
 	lines := strings.Split(string(data), "\n")
