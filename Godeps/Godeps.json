@@ -1,12 +1,18 @@
 {
 	"ImportPath": "github.com/subgraph/fw-daemon",
-	"GoVersion": "go1.5",
+	"GoVersion": "go1.6",
+	"GodepVersion": "v74",
 	"Packages": [
 		"./..."
 	],
 	"Deps": [
 		{
 			"ImportPath": "github.com/godbus/dbus",
+			"Comment": "v3-15-g230e4b2",
+			"Rev": "230e4b23db2fd81c53eaa0073f76659d4849ce51"
+		},
+		{
+			"ImportPath": "github.com/godbus/dbus/introspect",
 			"Comment": "v3-15-g230e4b2",
 			"Rev": "230e4b23db2fd81c53eaa0073f76659d4849ce51"
 		},
@@ -38,6 +44,14 @@
 		{
 			"ImportPath": "github.com/op/go-logging",
 			"Rev": "dfaf3dff9b631bc4236201d90d41ee0de9202889"
+		},
+		{
+			"ImportPath": "github.com/subgraph/go-procsnitch",
+			"Rev": "84754d9af0ff985a28b3e6be743c7d453fda7322"
+		},
+		{
+			"ImportPath": "golang.org/x/net/proxy",
+			"Rev": "2e9cee70ee697e0a2ef894b560dda50dec7dff58"
 		}
 	]
 }

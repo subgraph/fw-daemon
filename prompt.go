@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/godbus/dbus"
+	"github.com/godbus/dbus"
 	"os/user"
 	"strconv"
 	"sync"

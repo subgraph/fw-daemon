@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/gotk3/gotk3/gtk"
+	"github.com/gotk3/gotk3/gtk"
 	"strings"
 )
 

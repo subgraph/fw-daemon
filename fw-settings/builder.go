@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"reflect"
 
-	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/gotk3/gotk3/glib"
-	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/gotk3/gotk3/gtk"
+	"github.com/gotk3/gotk3/glib"
+	"github.com/gotk3/gotk3/gtk"
 	"github.com/subgraph/fw-daemon/fw-settings/definitions"
 )
 

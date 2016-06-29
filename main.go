@@ -15,7 +15,6 @@ import (
 
 	"github.com/subgraph/fw-daemon/nfqueue"
 	"github.com/subgraph/go-procsnitch"
-	//	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/op/go-logging"
 	"github.com/op/go-logging"
 )
 
