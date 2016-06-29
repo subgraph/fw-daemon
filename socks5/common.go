@@ -72,6 +72,7 @@ const (
 
 // Address is a SOCKS 5 address + port.
 type Address struct {
+	atyp    uint8
 	raw     []byte
 	addrStr string
 	portStr string
@@ -128,6 +129,12 @@ func (addr *Address) HostPort() (string, string) {
 	return addr.addrStr, addr.portStr
 }
 
+// Type returns the address type from the connect command this address was
+// parsed from
+func (addr *Address) Type() uint8 {
+	return addr.atyp
+}
+
 func (addr *Address) read(conn net.Conn) (err error) {
 	// The address looks like:
 	//  uint8_t atyp
@@ -176,6 +183,7 @@ func (addr *Address) read(conn net.Conn) (err error) {
 	default:
 		return errInvalidAtyp
 	}
+	addr.atyp = atyp
 	addr.raw = append(addr.raw, rawAddr...)
 
 	// Read the port.
