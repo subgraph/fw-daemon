@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/godbus/dbus"
+	"github.com/godbus/dbus"
 	"os/user"
 	"strconv"
 	"sync"
@@ -53,13 +53,13 @@ func (p *prompter) promptLoop() {
 }
 
 func (p *prompter) processNextPacket() bool {
-	pp := p.nextPacket()
-	if pp == nil {
+	pc := p.nextConnection()
+	if pc == nil {
 		return false
 	}
 	p.lock.Unlock()
 	defer p.lock.Lock()
-	p.processPacket(pp)
+	p.processConnection(pc)
 	return true
 }
 
@@ -76,65 +76,64 @@ func printScope(scope int32) string {
 	}
 }
 
-func (p *prompter) processPacket(pp *pendingPkt) {
+func (p *prompter) processConnection(pc pendingConnection) {
 	var scope int32
 	var rule string
 
-	addr := pp.hostname
+	addr := pc.hostname()
 	if addr == "" {
-		addr = pp.pkt.Dst.String()
+		addr = pc.dst().String()
 	}
+	policy := pc.policy()
 
 	call := p.dbusObj.Call("com.subgraph.FirewallPrompt.RequestPrompt", 0,
-		pp.policy.application,
-		pp.policy.icon,
-		pp.policy.path,
+		policy.application,
+		policy.icon,
+		policy.path,
 		addr,
-		int32(pp.pkt.DstPort),
-		pp.pkt.Dst.String(),
-		uidToUser(pp.pinfo.Uid),
-		int32(pp.pinfo.Pid))
+		int32(pc.dstPort()),
+		pc.dst().String(),
+		uidToUser(pc.procInfo().UID),
+		int32(pc.procInfo().Pid))
 	err := call.Store(&scope, &rule)
 	if err != nil {
-		log.Warning("Error sending dbus RequestPrompt message: %v", err)
-		pp.policy.removePending(pp)
-		pp.pkt.Mark = 1
-		pp.pkt.Accept()
+		log.Warningf("Error sending dbus RequestPrompt message: %v", err)
+		policy.removePending(pc)
+		pc.drop()
 		return
 	}
 
-	r, err := pp.policy.parseRule(rule, false)
+	r, err := policy.parseRule(rule, false)
 	if err != nil {
-		log.Warning("Error parsing rule string returned from dbus RequestPrompt: %v", err)
-		pp.policy.removePending(pp)
-		pp.pkt.Mark = 1
-		pp.pkt.Accept()
+		log.Warningf("Error parsing rule string returned from dbus RequestPrompt: %v", err)
+		policy.removePending(pc)
+		pc.drop()
 		return
 	}
 	if scope == APPLY_SESSION {
 		r.sessionOnly = true
 	}
-	if !pp.policy.processNewRule(r, scope) {
+	if !policy.processNewRule(r, scope) {
 		p.lock.Lock()
 		defer p.lock.Unlock()
-		p.removePolicy(pp.policy)
+		p.removePolicy(pc.policy())
 	}
 	if scope == APPLY_FOREVER {
-		pp.policy.fw.saveRules()
+		policy.fw.saveRules()
 	}
 }
 
-func (p *prompter) nextPacket() *pendingPkt {
+func (p *prompter) nextConnection() pendingConnection {
 	for {
 		if len(p.policyQueue) == 0 {
 			return nil
 		}
 		policy := p.policyQueue[0]
-		pp := policy.nextPending()
-		if pp == nil {
+		pc := policy.nextPending()
+		if pc == nil {
 			p.removePolicy(policy)
 		} else {
-			return pp
+			return pc
 		}
 	}
 }

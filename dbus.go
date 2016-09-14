@@ -2,13 +2,11 @@ package main
 
 import (
 	"errors"
-	"fmt"
-	"strings"
-
-	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/godbus/dbus"
-	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/godbus/dbus/introspect"
-	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/op/go-logging"
 	"path"
+
+	"github.com/godbus/dbus"
+	"github.com/godbus/dbus/introspect"
+	"github.com/op/go-logging"
 )
 
 const introspectXml = `
@@ -82,46 +80,17 @@ func newDbusServer() (*dbusServer, error) {
 	if err := conn.Export(ds, objectPath, interfaceName); err != nil {
 		return nil, err
 	}
-
-	ps := strings.Split(objectPath, "/")
-	path := "/"
-	for _, p := range ps {
-		if len(path) > 1 {
-			path += "/"
-		}
-		path += p
-
-		if err := conn.Export(ds, dbus.ObjectPath(path), "org.freedesktop.DBus.Introspectable"); err != nil {
-			return nil, err
-		}
+	if err := conn.Export(introspect.Introspectable(introspectXml), objectPath, "org.freedesktop.DBus.Introspectable"); err != nil {
+		return nil, err
 	}
+
 	ds.conn = conn
 	ds.prompter = newPrompter(conn)
 	return ds, nil
 }
 
-func (ds *dbusServer) Introspect(msg dbus.Message) (string, *dbus.Error) {
-	path := string(msg.Headers[dbus.FieldPath].Value().(dbus.ObjectPath))
-	if path == objectPath {
-		return introspectXml, nil
-	}
-	parts := strings.Split(objectPath, "/")
-	current := "/"
-	for i := 0; i < len(parts)-1; i++ {
-		if len(current) > 1 {
-			current += "/"
-		}
-		current += parts[i]
-		if path == current {
-			next := parts[i+1]
-			return fmt.Sprintf("<node><node name=\"%s\"/></node>", next), nil
-		}
-	}
-	return "", nil
-}
-
 func (ds *dbusServer) SetEnabled(flag bool) *dbus.Error {
-	log.Debug("SetEnabled(%v) called", flag)
+	log.Debugf("SetEnabled(%v) called", flag)
 	ds.fw.setEnabled(flag)
 	return nil
 }
@@ -167,7 +136,7 @@ func (ds *dbusServer) DeleteRule(id uint32) *dbus.Error {
 }
 
 func (ds *dbusServer) UpdateRule(rule DbusRule) *dbus.Error {
-	log.Debug("UpdateRule %v", rule)
+	log.Debugf("UpdateRule %v", rule)
 	ds.fw.lock.Lock()
 	r := ds.fw.rulesById[uint(rule.Id)]
 	ds.fw.lock.Unlock()
@@ -175,7 +144,7 @@ func (ds *dbusServer) UpdateRule(rule DbusRule) *dbus.Error {
 		tmp := new(Rule)
 		tmp.addr = noAddress
 		if !tmp.parseTarget(rule.Target) {
-			log.Warning("Unable to parse target: %s", rule.Target)
+			log.Warningf("Unable to parse target: %s", rule.Target)
 			return nil
 		}
 		r.policy.lock.Lock()

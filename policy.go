@@ -5,14 +5,58 @@ import (
 	"sync"
 
 	"github.com/subgraph/fw-daemon/nfqueue"
-	"github.com/subgraph/fw-daemon/proc"
+	"github.com/subgraph/go-procsnitch"
+	"net"
 )
 
+type pendingConnection interface {
+	policy() *Policy
+	procInfo() *procsnitch.Info
+	hostname() string
+	dst() net.IP
+	dstPort() uint16
+	accept()
+	drop()
+	print() string
+}
+
 type pendingPkt struct {
-	policy   *Policy
-	hostname string
-	pkt      *nfqueue.Packet
-	pinfo    *proc.ProcInfo
+	pol   *Policy
+	name  string
+	pkt   *nfqueue.Packet
+	pinfo *procsnitch.Info
+}
+
+func (pp *pendingPkt) policy() *Policy {
+	return pp.pol
+}
+
+func (pp *pendingPkt) procInfo() *procsnitch.Info {
+	return pp.pinfo
+}
+
+func (pp *pendingPkt) hostname() string {
+	return pp.name
+}
+func (pp *pendingPkt) dst() net.IP {
+	return pp.pkt.Dst
+}
+
+func (pp *pendingPkt) dstPort() uint16 {
+	return pp.pkt.DstPort
+}
+
+func (pp *pendingPkt) accept() {
+	pp.pkt.Accept()
+}
+
+func (pp *pendingPkt) drop() {
+	pp.pkt.Mark = 1
+	pp.pkt.Accept()
+}
+
+func (pp *pendingPkt) print() string {
+	return printPacket(pp.pkt, pp.name)
 }
 
 type Policy struct {
@@ -21,9 +65,16 @@ type Policy struct {
 	application      string
 	icon             string
 	rules            RuleList
-	pendingQueue     []*pendingPkt
+	pendingQueue     []pendingConnection
 	promptInProgress bool
 	lock             sync.Mutex
+}
+
+func (fw *Firewall) PolicyForPath(path string) *Policy {
+	fw.lock.Lock()
+	defer fw.lock.Unlock()
+
+	return fw.policyForPath(path)
 }
 
 func (fw *Firewall) policyForPath(path string) *Policy {
@@ -43,14 +94,14 @@ func (fw *Firewall) policyForPath(path string) *Policy {
 	return fw.policyMap[path]
 }
 
-func (p *Policy) processPacket(pkt *nfqueue.Packet, pinfo *proc.ProcInfo) {
+func (p *Policy) processPacket(pkt *nfqueue.Packet, pinfo *procsnitch.Info) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	name := p.fw.dns.Lookup(pkt.Dst)
 	if !logRedact {
-		log.Info("Lookup(%s): %s", pkt.Dst.String(), name)
+		log.Infof("Lookup(%s): %s", pkt.Dst.String(), name)
 	}
-	result := p.rules.filter(pkt, pinfo, name)
+	result := p.rules.filterPacket(pkt, pinfo, name)
 	switch result {
 	case FILTER_DENY:
 		pkt.Mark = 1
@@ -58,21 +109,21 @@ func (p *Policy) processPacket(pkt *nfqueue.Packet, pinfo *proc.ProcInfo) {
 	case FILTER_ALLOW:
 		pkt.Accept()
 	case FILTER_PROMPT:
-		p.processPromptResult(&pendingPkt{policy: p, hostname: name, pkt: pkt, pinfo: pinfo})
+		p.processPromptResult(&pendingPkt{pol: p, name: name, pkt: pkt, pinfo: pinfo})
 	default:
-		log.Warning("Unexpected filter result: %d", result)
+		log.Warningf("Unexpected filter result: %d", result)
 	}
 }
 
-func (p *Policy) processPromptResult(pp *pendingPkt) {
-	p.pendingQueue = append(p.pendingQueue, pp)
+func (p *Policy) processPromptResult(pc pendingConnection) {
+	p.pendingQueue = append(p.pendingQueue, pc)
 	if !p.promptInProgress {
 		p.promptInProgress = true
 		go p.fw.dbus.prompt(p)
 	}
 }
 
-func (p *Policy) nextPending() *pendingPkt {
+func (p *Policy) nextPending() pendingConnection {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	if len(p.pendingQueue) == 0 {
@@ -81,14 +132,14 @@ func (p *Policy) nextPending() *pendingPkt {
 	return p.pendingQueue[0]
 }
 
-func (p *Policy) removePending(pp *pendingPkt) {
+func (p *Policy) removePending(pc pendingConnection) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	remaining := []*pendingPkt{}
-	for _, pkt := range p.pendingQueue {
-		if pkt != pp {
-			remaining = append(remaining, pkt)
+	remaining := []pendingConnection{}
+	for _, c := range p.pendingQueue {
+		if c != pc {
+			remaining = append(remaining, c)
 		}
 	}
 	if len(remaining) != len(p.pendingQueue) {
@@ -141,18 +192,17 @@ func (p *Policy) removeRule(r *Rule) {
 }
 
 func (p *Policy) filterPending(rule *Rule) {
-	remaining := []*pendingPkt{}
-	for _, pp := range p.pendingQueue {
-		if rule.match(pp.pkt, pp.hostname) {
-			log.Info("Also applying %s to %s", rule.getString(logRedact), printPacket(pp.pkt, pp.hostname))
+	remaining := []pendingConnection{}
+	for _, pc := range p.pendingQueue {
+		if rule.match(pc.dst(), pc.dstPort(), pc.hostname()) {
+			log.Infof("Also applying %s to %s", rule.getString(logRedact), pc.print())
 			if rule.rtype == RULE_ALLOW {
-				pp.pkt.Accept()
+				pc.accept()
 			} else {
-				pp.pkt.Mark = 1
-				pp.pkt.Accept()
+				pc.drop()
 			}
 		} else {
-			remaining = append(remaining, pp)
+			remaining = append(remaining, pc)
 		}
 	}
 	if len(remaining) != len(p.pendingQueue) {
@@ -199,29 +249,27 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.Packet) {
 	}
 	pinfo := findProcessForPacket(pkt)
 	if pinfo == nil {
-		log.Warning("No proc found for %s", printPacket(pkt, fw.dns.Lookup(pkt.Dst)))
+		log.Warningf("No proc found for %s", printPacket(pkt, fw.dns.Lookup(pkt.Dst)))
 		pkt.Accept()
 		return
 	}
-	log.Debug("filterPacket [%s] %s", pinfo.ExePath, printPacket(pkt, fw.dns.Lookup(pkt.Dst)))
+	log.Debugf("filterPacket [%s] %s", pinfo.ExePath, printPacket(pkt, fw.dns.Lookup(pkt.Dst)))
 	if basicAllowPacket(pkt) {
 		pkt.Accept()
 		return
 	}
-	fw.lock.Lock()
-	policy := fw.policyForPath(pinfo.ExePath)
-	fw.lock.Unlock()
+	policy := fw.PolicyForPath(pinfo.ExePath)
 	policy.processPacket(pkt, pinfo)
 }
 
-func findProcessForPacket(pkt *nfqueue.Packet) *proc.ProcInfo {
+func findProcessForPacket(pkt *nfqueue.Packet) *procsnitch.Info {
 	switch pkt.Protocol {
 	case nfqueue.TCP:
-		return proc.LookupTCPSocketProcess(pkt.SrcPort, pkt.Dst, pkt.DstPort)
+		return procsnitch.LookupTCPSocketProcess(pkt.SrcPort, pkt.Dst, pkt.DstPort)
 	case nfqueue.UDP:
-		return proc.LookupUDPSocketProcess(pkt.SrcPort)
+		return procsnitch.LookupUDPSocketProcess(pkt.SrcPort)
 	default:
-		log.Warning("Packet has unknown protocol: %d", pkt.Protocol)
+		log.Warningf("Packet has unknown protocol: %d", pkt.Protocol)
 		return nil
 	}
 }

@@ -31,7 +31,7 @@ func (dc *dnsCache) processDNS(pkt *nfqueue.Packet) {
 		return
 	}
 	if len(dns.question) != 1 {
-		log.Warning("Length of DNS Question section is not 1 as expected: %d", len(dns.question))
+		log.Warningf("Length of DNS Question section is not 1 as expected: %d", len(dns.question))
 		return
 	}
 	q := dns.question[0]
@@ -39,7 +39,7 @@ func (dc *dnsCache) processDNS(pkt *nfqueue.Packet) {
 		dc.processRecordA(q.Name, dns.answer)
 		return
 	}
-	log.Info("Unhandled DNS message: %v", dns)
+	log.Infof("Unhandled DNS message: %v", dns)
 
 }
 
@@ -55,10 +55,10 @@ func (dc *dnsCache) processRecordA(name string, answers []dnsRR) {
 			}
 			dc.ipMap[ip] = name
 			if !logRedact {
-				log.Info("Adding %s: %s", name, ip)
+				log.Infof("Adding %s: %s", name, ip)
 			}
 		default:
-			log.Warning("Unexpected RR type in answer section of A response: %v", rec)
+			log.Warningf("Unexpected RR type in answer section of A response: %v", rec)
 		}
 	}
 }

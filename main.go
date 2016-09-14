@@ -2,16 +2,20 @@ package main
 
 import (
 	// _ "net/http/pprof"
+	"bufio"
+	"encoding/json"
 	"os"
 	"os/signal"
-	"time"
-
-	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/op/go-logging"
-	"github.com/subgraph/fw-daemon/nfqueue"
-	"github.com/subgraph/fw-daemon/proc"
+	"regexp"
+	"strings"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
+
+	"github.com/subgraph/fw-daemon/nfqueue"
+	"github.com/subgraph/go-procsnitch"
+	"github.com/op/go-logging"
 )
 
 var log = logging.MustGetLogger("sgfw")
@@ -60,6 +64,9 @@ type Firewall struct {
 	ruleLock   sync.Mutex
 	rulesById  map[uint]*Rule
 	nextRuleId uint
+
+	reloadRulesChan chan bool
+	stopChan        chan bool
 }
 
 func (fw *Firewall) setEnabled(flag bool) {
@@ -103,6 +110,14 @@ func (fw *Firewall) getRuleById(id uint) *Rule {
 	return fw.rulesById[id]
 }
 
+func (fw *Firewall) stop() {
+	fw.stopChan <- true
+}
+
+func (fw *Firewall) reloadRules() {
+	fw.reloadRulesChan <- true
+}
+
 func (fw *Firewall) runFilter() {
 	q := nfqueue.NewNFQueue(0)
 	defer q.Destroy()
@@ -110,12 +125,6 @@ func (fw *Firewall) runFilter() {
 	q.DefaultVerdict = nfqueue.DROP
 	q.Timeout = 5 * time.Minute
 	packets := q.Process()
-
-	sigKillChan := make(chan os.Signal, 1)
-	signal.Notify(sigKillChan, os.Interrupt, os.Kill)
-
-	sigHupChan := make(chan os.Signal, 1)
-	signal.Notify(sigHupChan, syscall.SIGHUP)
 
 	for {
 		select {
@@ -125,18 +134,70 @@ func (fw *Firewall) runFilter() {
 			} else {
 				pkt.Accept()
 			}
-		case <-sigHupChan:
+		case <-fw.reloadRulesChan:
 			fw.loadRules()
-		case <-sigKillChan:
+		case <-fw.stopChan:
 			return
 		}
 	}
 }
 
+type SocksJsonConfig struct {
+	SocksListener string
+	TorSocks      string
+}
+
+var commentRegexp = regexp.MustCompile("^[ \t]*#")
+
+func loadConfiguration(configFilePath string) (*SocksJsonConfig, error) {
+	config := SocksJsonConfig{}
+	file, err := os.Open(configFilePath)
+	if err != nil {
+		return nil, err
+	}
+	scanner := bufio.NewScanner(file)
+	bs := ""
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !commentRegexp.MatchString(line) {
+			bs += line + "\n"
+		}
+	}
+	if err := json.Unmarshal([]byte(bs), &config); err != nil {
+		return nil, err
+	}
+	return &config, nil
+}
+
+func getSocksChainConfig(config *SocksJsonConfig) *socksChainConfig {
+	// XXX
+	fields := strings.Split(config.TorSocks, "|")
+	torSocksNet := fields[0]
+	torSocksAddr := fields[1]
+	fields = strings.Split(config.SocksListener, "|")
+	socksListenNet := fields[0]
+	socksListenAddr := fields[1]
+	socksConfig := socksChainConfig{
+		TargetSocksNet:  torSocksNet,
+		TargetSocksAddr: torSocksAddr,
+		ListenSocksNet:  socksListenNet,
+		ListenSocksAddr: socksListenAddr,
+	}
+	return &socksConfig
+}
+
 func main() {
+	// XXX should this really be hardcoded?
+	// or should i add a CLI to specify config file location?
+	config, err := loadConfiguration("/etc/fw-daemon-socks.json")
+	if err != nil {
+		panic(err)
+	}
+	socksConfig := getSocksChainConfig(config)
+
 	logBackend := setupLoggerBackend()
 	log.SetBackend(logBackend)
-	proc.SetLogger(log)
+	procsnitch.SetLogger(log)
 
 	if os.Geteuid() != 0 {
 		log.Error("Must be run as root")
@@ -152,11 +213,13 @@ func main() {
 	}
 
 	fw := &Firewall{
-		dbus:       ds,
-		dns:        NewDnsCache(),
-		enabled:    true,
-		logBackend: logBackend,
-		policyMap:  make(map[string]*Policy),
+		dbus:            ds,
+		dns:             NewDnsCache(),
+		enabled:         true,
+		logBackend:      logBackend,
+		policyMap:       make(map[string]*Policy),
+		reloadRulesChan: make(chan bool, 0),
+		stopChan:        make(chan bool, 0),
 	}
 	ds.fw = fw
 
@@ -168,5 +231,28 @@ func main() {
 		}()
 	*/
 
+	wg := sync.WaitGroup{}
+	chain := NewSocksChain(socksConfig, &wg, fw)
+	chain.start()
+
 	fw.runFilter()
+
+	// observe process signals and either
+	// reload rules or shutdown firewall service
+	sigKillChan := make(chan os.Signal, 1)
+	signal.Notify(sigKillChan, os.Interrupt, os.Kill)
+
+	sigHupChan := make(chan os.Signal, 1)
+	signal.Notify(sigHupChan, syscall.SIGHUP)
+
+	for {
+		select {
+		case <-sigHupChan:
+			fw.reloadRules()
+			// XXX perhaps restart SOCKS proxy chain service with new proxy config specification?
+		case <-sigKillChan:
+			fw.stop()
+			return
+		}
+	}
 }

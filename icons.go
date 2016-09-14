@@ -34,12 +34,12 @@ func initIcons() {
 	path := "/usr/share/applications"
 	dir, err := os.Open(path)
 	if err != nil {
-		log.Warning("Failed to open %s for reading: %v", path, err)
+		log.Warningf("Failed to open %s for reading: %v", path, err)
 		return
 	}
 	names, err := dir.Readdirnames(0)
 	if err != nil {
-		log.Warning("Could not read directory %s: %v", path, err)
+		log.Warningf("Could not read directory %s: %v", path, err)
 		return
 	}
 	for _, n := range names {
@@ -53,7 +53,7 @@ func initIcons() {
 func loadDesktopFile(path string) {
 	bs, err := ioutil.ReadFile(path)
 	if err != nil {
-		log.Warning("Error reading %s: %v", path, err)
+		log.Warningf("Error reading %s: %v", path, err)
 		return
 	}
 	exec := ""

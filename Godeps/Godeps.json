@@ -1,43 +1,58 @@
 {
 	"ImportPath": "github.com/subgraph/fw-daemon",
-	"GoVersion": "go1.5",
+	"GoVersion": "go1.6",
+	"GodepVersion": "v74",
 	"Packages": [
 		"./..."
 	],
 	"Deps": [
 		{
 			"ImportPath": "github.com/godbus/dbus",
-			"Comment": "v3-15-g230e4b2",
-			"Rev": "230e4b23db2fd81c53eaa0073f76659d4849ce51"
+			"Comment": "v4.0.0-5-g32c6cc2",
+			"Rev": "32c6cc29c14570de4cf6d7e7737d68fb2d01ad15"
+		},
+		{
+			"ImportPath": "github.com/godbus/dbus/introspect",
+			"Comment": "v4.0.0-5-g32c6cc2",
+			"Rev": "32c6cc29c14570de4cf6d7e7737d68fb2d01ad15"
 		},
 		{
 			"ImportPath": "github.com/gotk3/gotk3/cairo",
-			"Comment": "GOTK3_0_2_0-430-ge68c426",
-			"Rev": "e68c42636533041787e09741c5027ea670ad6f84"
+			"Comment": "GOTK3_0_2_0-467-gefaac8f",
+			"Rev": "efaac8f907aac2f965675d64fd163097db109f95"
 		},
 		{
 			"ImportPath": "github.com/gotk3/gotk3/gdk",
-			"Comment": "GOTK3_0_2_0-430-ge68c426",
-			"Rev": "e68c42636533041787e09741c5027ea670ad6f84"
+			"Comment": "GOTK3_0_2_0-467-gefaac8f",
+			"Rev": "efaac8f907aac2f965675d64fd163097db109f95"
 		},
 		{
 			"ImportPath": "github.com/gotk3/gotk3/glib",
-			"Comment": "GOTK3_0_2_0-430-ge68c426",
-			"Rev": "e68c42636533041787e09741c5027ea670ad6f84"
+			"Comment": "GOTK3_0_2_0-467-gefaac8f",
+			"Rev": "efaac8f907aac2f965675d64fd163097db109f95"
 		},
 		{
 			"ImportPath": "github.com/gotk3/gotk3/gtk",
-			"Comment": "GOTK3_0_2_0-430-ge68c426",
-			"Rev": "e68c42636533041787e09741c5027ea670ad6f84"
+			"Comment": "GOTK3_0_2_0-467-gefaac8f",
+			"Rev": "efaac8f907aac2f965675d64fd163097db109f95"
 		},
 		{
 			"ImportPath": "github.com/gotk3/gotk3/pango",
-			"Comment": "GOTK3_0_2_0-430-ge68c426",
-			"Rev": "e68c42636533041787e09741c5027ea670ad6f84"
+			"Comment": "GOTK3_0_2_0-467-gefaac8f",
+			"Rev": "efaac8f907aac2f965675d64fd163097db109f95"
 		},
 		{
 			"ImportPath": "github.com/op/go-logging",
-			"Rev": "dfaf3dff9b631bc4236201d90d41ee0de9202889"
+			"Comment": "v1-7-g970db52",
+			"Rev": "970db520ece77730c7e4724c61121037378659d9"
+		},
+		{
+			"ImportPath": "github.com/subgraph/go-procsnitch",
+			"Rev": "9ed73dde9f6f84be72aa010394902057ac26b625"
+		},
+		{
+			"ImportPath": "golang.org/x/net/proxy",
+			"Rev": "ef2e00e88c5e0a3569f0bb9df697e9cbc6215fea"
 		}
 	]
 }

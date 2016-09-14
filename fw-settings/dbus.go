@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/subgraph/fw-daemon/Godeps/_workspace/src/github.com/godbus/dbus"
+	"github.com/godbus/dbus"
 )
 
 type dbusObject struct {
