@@ -13,3 +13,5 @@ override_dh_auto_install:
 	dh_auto_install
 	rm -rf $(CURDIR)/debian/fw-daemon/usr/share/gocode
 
+override_dh_auto_test:                                                                                                                                                                         
+	@echo skipped auto test
