@@ -187,13 +187,6 @@ func getSocksChainConfig(config *SocksJsonConfig) *socksChainConfig {
 }
 
 func main() {
-	// XXX should this really be hardcoded?
-	// or should i add a CLI to specify config file location?
-	config, err := loadConfiguration("/etc/fw-daemon-socks.json")
-	if err != nil {
-		panic(err)
-	}
-	socksConfig := getSocksChainConfig(config)
 
 	logBackend := setupLoggerBackend()
 	log.SetBackend(logBackend)
@@ -232,8 +225,16 @@ func main() {
 	*/
 
 	wg := sync.WaitGroup{}
-	chain := NewSocksChain(socksConfig, &wg, fw)
-	chain.start()
+
+	config, err := loadConfiguration("/etc/fw-daemon-socks.json")
+	if err != nil && !os.IsNotExist(err) {
+		panic(err)
+	}
+	if config != nil {
+		socksConfig := getSocksChainConfig(config)
+		chain := NewSocksChain(socksConfig, &wg, fw)
+		chain.start()
+	}
 
 	fw.runFilter()
 
