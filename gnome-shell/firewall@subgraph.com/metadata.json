@@ -2,6 +2,7 @@
   "description": "Firewall Extension",
   "shell-version": ["3.18", "3.20", "3.21", "3.21.91", "3.22"],
   "uuid": "firewall@subgraph.com",
-  "name": "Firewall Extension",
+  "name": "Subgraph Firewall",
+  "description": "Gnome Shell support for the Subgraph Application Firewall.",
   "settings-schema": "com.subgraph.firewall"
 }
