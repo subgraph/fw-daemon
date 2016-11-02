@@ -1,0 +1,10 @@
+[Unit]
+Documentation=https://github.com/subgraph/fw-daemon
+Description=Subgraph Firewall Daemon
+
+[Service]
+Environment="GODEBUG=cgocheck=0"
+ExecStart=/usr/sbin/fw-daemon
+
+[Install]
+WantedBy=multi-user.target
