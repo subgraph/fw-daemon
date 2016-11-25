@@ -20,7 +20,7 @@
 // TODO(rsc):  There are enough names defined in this file that they're all
 // prefixed with dns.  Perhaps put this in its own package later.
 
-package main
+package sgfw
 
 import "net"
 

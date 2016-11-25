@@ -1,4 +1,4 @@
-package main
+package sgfw
 
 import (
 	"os"
@@ -139,7 +139,7 @@ func (fw *Firewall) runFilter() {
 
 var commentRegexp = regexp.MustCompile("^[ \t]*#")
 
-func main() {
+func Main() {
 	readConfig()
 	logBackend := setupLoggerBackend(FirewallConfig.LoggingLevel)
 	log.SetBackend(logBackend)
