@@ -104,10 +104,10 @@ const (
 )
 
 func (rl *RuleList) filterPacket(p *nfqueue.Packet, pinfo *procsnitch.Info, hostname string) FilterResult {
-	return rl.filter(p.Dst, p.DstPort, hostname, pinfo)
+	return rl.filter(p, p.Dst, p.DstPort, hostname, pinfo)
 }
 
-func (rl *RuleList) filter(dst net.IP, dstPort uint16, hostname string, pinfo *procsnitch.Info) FilterResult {
+func (rl *RuleList) filter(pkt *nfqueue.Packet, dst net.IP, dstPort uint16, hostname string, pinfo *procsnitch.Info) FilterResult {
 	if rl == nil {
 		return FILTER_PROMPT
 	}
@@ -118,7 +118,15 @@ func (rl *RuleList) filter(dst net.IP, dstPort uint16, hostname string, pinfo *p
 			if FirewallConfig.LogRedact {
 				dstStr = "[redacted]"
 			}
-			log.Infof("%s (%s -> %s:%d)", r.getString(FirewallConfig.LogRedact), pinfo.ExePath, dstStr, dstPort)
+			srcStr := "[uknown]"
+			if pkt != nil {
+				srcStr = fmt.Sprintf("%s:%d", pkt.Src, pkt.SrcPort)
+			}
+			log.Noticef("%s > %s %s %s -> %s:%d",
+				r.getString(FirewallConfig.LogRedact),
+				pinfo.ExePath, "TCP",
+				srcStr,
+				dstStr, dstPort)
 			if r.rtype == RULE_DENY {
 				return FILTER_DENY
 			} else if r.rtype == RULE_ALLOW {

@@ -63,7 +63,7 @@ func (pp *pendingPkt) drop() {
 }
 
 func (pp *pendingPkt) print() string {
-	return printPacket(pp.pkt, pp.name)
+	return printPacket(pp.pkt, pp.name, pp.pinfo)
 }
 
 type Policy struct {
@@ -203,7 +203,8 @@ func (p *Policy) filterPending(rule *Rule) {
 	remaining := []pendingConnection{}
 	for _, pc := range p.pendingQueue {
 		if rule.match(pc.dst(), pc.dstPort(), pc.hostname()) {
-			log.Infof("Also applying %s to %s", rule.getString(FirewallConfig.LogRedact), pc.print())
+			log.Infof("Adding rule for: %s", rule.getString(FirewallConfig.LogRedact))
+			log.Noticef("%s > %s", rule.getString(FirewallConfig.LogRedact), pc.print())
 			if rule.rtype == RULE_ALLOW {
 				pc.accept()
 			} else {
@@ -227,7 +228,7 @@ func (p *Policy) hasPersistentRules() bool {
 	return false
 }
 
-func printPacket(pkt *nfqueue.Packet, hostname string) string {
+func printPacket(pkt *nfqueue.Packet, hostname string, pinfo *procsnitch.Info) string {
 	proto := func() string {
 		switch pkt.Protocol {
 		case nfqueue.TCP:
@@ -246,7 +247,11 @@ func printPacket(pkt *nfqueue.Packet, hostname string) string {
 	if name == "" {
 		name = pkt.Dst.String()
 	}
-	return fmt.Sprintf("(%s %s:%d --> %s:%d)", proto, pkt.Src, pkt.SrcPort, name, pkt.DstPort)
+	if (pinfo == nil) {
+		return fmt.Sprintf("(%s %s:%d -> %s:%d)", proto, pkt.Src, pkt.SrcPort, name, pkt.DstPort)
+	} else {
+		return fmt.Sprintf("%s %s %s:%d -> %s:%d", pinfo.ExePath, proto, pkt.Src, pkt.SrcPort, name, pkt.DstPort)
+	}
 }
 
 func (fw *Firewall) filterPacket(pkt *nfqueue.Packet) {
@@ -257,7 +262,7 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.Packet) {
 	}
 	pinfo := findProcessForPacket(pkt)
 	if pinfo == nil {
-		log.Warningf("No proc found for %s", printPacket(pkt, fw.dns.Lookup(pkt.Dst)))
+		log.Warningf("No proc found for %s", printPacket(pkt, fw.dns.Lookup(pkt.Dst), nil))
 		pkt.Accept()
 		return
 	}
@@ -271,8 +276,7 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.Packet) {
 			}
 		}
 	}
-	//log.Debugf("pinfo: [%d] %s > %s", pinfo.ParentPid, pinfo.CmdLine, pinfo.ParentExePath)
-	log.Debugf("filterPacket [%s] %s", ppath, printPacket(pkt, fw.dns.Lookup(pkt.Dst)))
+	log.Debugf("filterPacket [%s] %s", ppath, printPacket(pkt, fw.dns.Lookup(pkt.Dst), nil))
 	if basicAllowPacket(pkt) {
 		pkt.Accept()
 		return
