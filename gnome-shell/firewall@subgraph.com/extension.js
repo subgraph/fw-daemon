@@ -52,6 +52,9 @@ const FirewallPromptInterface = '<node> \
         <arg type="s" direction="in" name="ip" /> \
         <arg type="s" direction="in" name="user" /> \
         <arg type="i" direction="in" name="pid" /> \
+        <arg type="b" direction="in" name="expanded" /> \
+        <arg type="b" direction="in" name="expert" /> \
+        <arg type="i" direction="in" name="action" /> \
         <arg type="i" direction="out" name="scope" /> \
         <arg type="s" direction="out" name="rule" /> \
     </method> \
@@ -83,13 +86,12 @@ const FirewallPromptHandler = new Lang.Class({
     },
 
     RequestPromptAsync: function(params, invocation) {
-        let [app, icon, path, address, port, ip, user, pid] = params;
+        let [app, icon, path, address, port, ip, user, pid, expanded, expert, action] = params;
         this._closeDialog();
         this._dialog = new Dialog.PromptDialog(invocation);
         this._invocation = invocation;
-        this._dialog.update(app, icon, path, address, port, ip, user, pid);
+        this._dialog.update(app, icon, path, address, port, ip, user, pid, "TCP", expanded, expert, action);
         this._dialog.open();
-
     },
 
     CloseAsync: function(params, invocation) {
@@ -99,7 +101,7 @@ const FirewallPromptHandler = new Lang.Class({
     TestPrompt: function(params, invocation) {
         this._closeDialog();
         this._dialog = new Dialog.PromptDialog(nil);
-        this._dialog.update("Firefox", "firefox", "/usr/bin/firefox", "242.12.111.18", "443", "linux", "2342");
+        this._dialog.update("Firefox", "firefox", "/usr/bin/firefox-esr", "242.12.111.18", "443", "linux", "2342", "TCP", true, true);
         this._dialog.open();
     }
 });

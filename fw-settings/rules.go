@@ -16,33 +16,40 @@ type ruleList struct {
 }
 
 type ruleRow struct {
-	rl           *ruleList
-	rule         *dbusRule
-	widget       *gtk.ListBoxRow
-	app_label    *gtk.Label
-	verb_label   *gtk.Label
-	target_label *gtk.Label
+	rl            *ruleList
+	rule          *dbusRule
+	widget        *gtk.ListBoxRow
+	app_label     *gtk.Label
+	verb_label    *gtk.Label
+	target_label  *gtk.Label
+	edit_button   *gtk.Button
+	save_button   *gtk.Button
+	delete_button *gtk.Button
 }
 
 func NewRuleList(dbus *dbusObject, win *gtk.Window, list *gtk.ListBox) *ruleList {
 	rl := &ruleList{dbus: dbus, win: win, list: list}
+	rl.list.SetSelectionMode(gtk.SELECTION_NONE)
 	rl.col1, _ = gtk.SizeGroupNew(gtk.SIZE_GROUP_HORIZONTAL)
 	rl.col2, _ = gtk.SizeGroupNew(gtk.SIZE_GROUP_HORIZONTAL)
 	rl.col3, _ = gtk.SizeGroupNew(gtk.SIZE_GROUP_HORIZONTAL)
 	return rl
 }
 
-func (rl *ruleList) loadRules() error {
+func (rl *ruleList) loadRules(mode uint16) error {
 	rules, err := rl.dbus.listRules()
 	if err != nil {
 		return err
 	}
-	rl.addRules(rules)
+	rl.addRules(rules, mode)
 	return nil
 }
 
-func (rl *ruleList) addRules(rules []dbusRule) {
+func (rl *ruleList) addRules(rules []dbusRule, mode uint16) {
 	for i := 0; i < len(rules); i++ {
+		if rules[i].Mode != mode {
+			continue
+		}
 		row := createWidget(&rules[i])
 		row.rl = rl
 		rl.col1.AddWidget(row.app_label)
@@ -65,9 +72,26 @@ func createWidget(rule *dbusRule) *ruleRow {
 		"app_label", &row.app_label,
 		"verb_label", &row.verb_label,
 		"target_label", &row.target_label,
+		"edit_button", &row.edit_button,
+		"save_button", &row.save_button,
+		"delete_button", &row.delete_button,
 	)
+	switch rule.Mode {
+	case RULE_MODE_SYSTEM:
+		row.edit_button.SetVisible(false)
+		row.edit_button.SetNoShowAll(true)
+		row.delete_button.SetSensitive(false)
+		row.delete_button.SetTooltipText("Cannot delete system rules")
+		break
+	case RULE_MODE_SESSION:
+		row.save_button.SetSensitive(true)
+		row.save_button.SetNoShowAll(false)
+		break
+	}
+
 	builder.ConnectSignals(map[string]interface{}{
 		"on_edit_rule":   row.onEdit,
+		"on_save_rule":   row.onSaveAsNew,
 		"on_delete_rule": row.onDelete,
 	})
 	row.widget, _ = gtk.ListBoxRowNew()
@@ -104,14 +128,18 @@ func getTargetText(rule *dbusRule) string {
 		return fmt.Sprintf("Connections to All hosts on port %s", items[1])
 	}
 	if items[1] == "*" {
-		return fmt.Sprintf("All connections to host %s")
+		return fmt.Sprintf("All connections to host %s", items[0])
 	}
 
 	return fmt.Sprintf("Connections to %s on port %s", items[0], items[1])
 }
 
+func (rr *ruleRow) onSaveAsNew() {
+	rr.runEditor(true)
+}
+
 func (rr *ruleRow) onEdit() {
-	rr.runEditor()
+	rr.runEditor(false)
 }
 
 func (rr *ruleRow) onDelete() {

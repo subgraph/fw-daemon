@@ -5,6 +5,7 @@ import (
 	"github.com/godbus/dbus"
 	"os/user"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -65,14 +66,28 @@ func (p *prompter) processNextPacket() bool {
 
 func printScope(scope int32) string {
 	switch scope {
-	case APPLY_FOREVER:
-		return "APPLY_FOREVER"
 	case APPLY_SESSION:
-		return "APPLY_SESSION"
+		return "SESSION"
 	case APPLY_ONCE:
-		return "APPLY_ONCE"
+		return "ONCE"
+	case APPLY_FOREVER:
+		return "FOREVER"
 	default:
-		return fmt.Sprintf("Unknown (%d)", scope)
+		return "SESSION"
+	}
+}
+
+func valueScope(scope string) int32 {
+	scope = strings.ToUpper(scope)
+	switch scope {
+	case "SESSION":
+		return APPLY_SESSION
+	case "ONCE":
+		return APPLY_ONCE
+	case "FOREVER":
+		return APPLY_FOREVER
+	default:
+		return APPLY_SESSION
 	}
 }
 
@@ -94,7 +109,10 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		int32(pc.dstPort()),
 		pc.dst().String(),
 		uidToUser(pc.procInfo().UID),
-		int32(pc.procInfo().Pid))
+		int32(pc.procInfo().Pid),
+		FirewallConfig.PromptExpanded,
+		FirewallConfig.PromptExpert,
+		FirewallConfig.DefaultActionId)
 	err := call.Store(&scope, &rule)
 	if err != nil {
 		log.Warningf("Error sending dbus RequestPrompt message: %v", err)
@@ -111,7 +129,7 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		return
 	}
 	if scope == APPLY_SESSION {
-		r.sessionOnly = true
+		r.mode = RULE_MODE_SESSION
 	}
 	if !policy.processNewRule(r, scope) {
 		p.lock.Lock()

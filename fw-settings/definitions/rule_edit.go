@@ -9,7 +9,7 @@ type defRuleEdit struct{}
 func (*defRuleEdit) String() string {
 	return `
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.19.0 -->
+<!-- Generated with glade 3.20.0 -->
 <interface>
   <requires lib="gtk+" version="3.16"/>
   <object class="GtkDialog" id="dialog">
@@ -44,7 +44,6 @@ func (*defRuleEdit) String() string {
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
-                <property name="yalign">0.60000002384185791</property>
               </object>
               <packing>
                 <property name="expand">True</property>
@@ -88,8 +87,8 @@ func (*defRuleEdit) String() string {
               <object class="GtkLabel" id="path_label">
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
+                <property name="halign">start</property>
                 <property name="hexpand">True</property>
-                <property name="xalign">0</property>
               </object>
               <packing>
                 <property name="left_attach">1</property>
@@ -181,10 +180,11 @@ func (*defRuleEdit) String() string {
               <object class="GtkLabel" id="label2">
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
+                <property name="halign">start</property>
                 <property name="margin_left">12</property>
                 <property name="margin_right">10</property>
+                <property name="hexpand">False</property>
                 <property name="label" translatable="yes">Path:</property>
-                <property name="xalign">1</property>
                 <attributes>
                   <attribute name="weight" value="bold"/>
                 </attributes>

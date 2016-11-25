@@ -60,6 +60,7 @@ type DbusRule struct {
 	Path   string
 	Verb   uint32
 	Target string
+	Mode   uint16
 }
 
 func newDbusServer() (*dbusServer, error) {
@@ -107,6 +108,7 @@ func createDbusRule(r *Rule) DbusRule {
 		Path:   r.policy.path,
 		Verb:   uint32(r.rtype),
 		Target: r.AddrString(false),
+		Mode:   uint16(r.mode),
 	}
 }
 
@@ -126,10 +128,14 @@ func (ds *dbusServer) DeleteRule(id uint32) *dbus.Error {
 	ds.fw.lock.Lock()
 	r := ds.fw.rulesById[uint(id)]
 	ds.fw.lock.Unlock()
+	if r.mode == RULE_MODE_SYSTEM {
+		log.Warningf("Cannot delete system rule: %s", r.String())
+		return nil
+	}
 	if r != nil {
 		r.policy.removeRule(r)
 	}
-	if !r.sessionOnly {
+	if r.mode != RULE_MODE_SESSION {
 		ds.fw.saveRules()
 	}
 	return nil
@@ -141,6 +147,10 @@ func (ds *dbusServer) UpdateRule(rule DbusRule) *dbus.Error {
 	r := ds.fw.rulesById[uint(rule.Id)]
 	ds.fw.lock.Unlock()
 	if r != nil {
+		if r.mode == RULE_MODE_SYSTEM {
+			log.Warningf("Cannot modify system rule: %s", r.String())
+			return nil
+		}
 		tmp := new(Rule)
 		tmp.addr = noAddress
 		if !tmp.parseTarget(rule.Target) {
@@ -154,8 +164,9 @@ func (ds *dbusServer) UpdateRule(rule DbusRule) *dbus.Error {
 		r.hostname = tmp.hostname
 		r.addr = tmp.addr
 		r.port = tmp.port
+		r.mode = RuleMode(rule.Mode)
 		r.policy.lock.Unlock()
-		if !r.sessionOnly {
+		if r.mode != RULE_MODE_SESSION {
 			ds.fw.saveRules()
 		}
 	}
@@ -164,21 +175,35 @@ func (ds *dbusServer) UpdateRule(rule DbusRule) *dbus.Error {
 
 func (ds *dbusServer) GetConfig() (map[string]dbus.Variant, *dbus.Error) {
 	conf := make(map[string]dbus.Variant)
-	conf["loglevel"] = dbus.MakeVariant(int32(ds.fw.logBackend.GetLevel("sgfw")))
-	conf["logredact"] = dbus.MakeVariant(logRedact)
+	conf["log_level"] = dbus.MakeVariant(int32(ds.fw.logBackend.GetLevel("sgfw")))
+	conf["log_redact"] = dbus.MakeVariant(FirewallConfig.LogRedact)
+	conf["prompt_expanded"] = dbus.MakeVariant(FirewallConfig.PromptExpanded)
+	conf["prompt_expert"] = dbus.MakeVariant(FirewallConfig.PromptExpert)
+	conf["default_action"] = dbus.MakeVariant(int32(FirewallConfig.DefaultActionId))
 	return conf, nil
 }
 
 func (ds *dbusServer) SetConfig(key string, val dbus.Variant) *dbus.Error {
 	switch key {
-	case "loglevel":
+	case "log_level":
 		l := val.Value().(int32)
 		lvl := logging.Level(l)
 		ds.fw.logBackend.SetLevel(lvl, "sgfw")
-	case "logredact":
+		FirewallConfig.LoggingLevel = lvl
+	case "log_redact":
 		flag := val.Value().(bool)
-		logRedact = flag
+		FirewallConfig.LogRedact = flag
+	case "prompt_expanded":
+		flag := val.Value().(bool)
+		FirewallConfig.PromptExpanded = flag
+	case "prompt_expert":
+		flag := val.Value().(bool)
+		FirewallConfig.PromptExpert = flag
+	case "default_action":
+		l := val.Value().(int32)
+		FirewallConfig.DefaultActionId = l
 	}
+	writeConfig()
 	return nil
 }
 

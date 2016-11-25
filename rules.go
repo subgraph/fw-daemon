@@ -23,14 +23,22 @@ const (
 const matchAny = 0
 const noAddress = uint32(0xffffffff)
 
+type RuleMode uint16
+
+const (
+	RULE_MODE_SESSION RuleMode = iota
+	RULE_MODE_PERMANENT
+	RULE_MODE_SYSTEM
+)
+
 type Rule struct {
-	id          uint
-	policy      *Policy
-	sessionOnly bool
-	rtype       int
-	hostname    string
-	addr        uint32
-	port        uint16
+	id       uint
+	policy   *Policy
+	mode     RuleMode
+	rtype    int
+	hostname string
+	addr     uint32
+	port     uint16
 }
 
 func (r *Rule) String() string {
@@ -42,8 +50,12 @@ func (r *Rule) getString(redact bool) string {
 	if r.rtype == RULE_ALLOW {
 		rtype = "ALLOW"
 	}
+	rmode := ""
+	if r.mode == RULE_MODE_SYSTEM {
+		rmode = "|SYSTEM"
+	}
 
-	return fmt.Sprintf("%s|%s", rtype, r.AddrString(redact))
+	return fmt.Sprintf("%s|%s%s", rtype, r.AddrString(redact), rmode)
 }
 
 func (r *Rule) AddrString(redact bool) string {
@@ -103,10 +115,10 @@ func (rl *RuleList) filter(dst net.IP, dstPort uint16, hostname string, pinfo *p
 	for _, r := range *rl {
 		if r.match(dst, dstPort, hostname) {
 			dstStr := dst.String()
-			if logRedact {
+			if FirewallConfig.LogRedact {
 				dstStr = "[redacted]"
 			}
-			log.Infof("%s (%s -> %s:%d)", r.getString(logRedact), pinfo.ExePath, dstStr, dstPort)
+			log.Infof("%s (%s -> %s:%d)", r.getString(FirewallConfig.LogRedact), pinfo.ExePath, dstStr, dstPort)
 			if r.rtype == RULE_DENY {
 				return FILTER_DENY
 			} else if r.rtype == RULE_ALLOW {
@@ -124,8 +136,11 @@ func parseError(s string) error {
 func (r *Rule) parse(s string) bool {
 	r.addr = noAddress
 	parts := strings.Split(s, "|")
-	if len(parts) != 2 {
+	if len(parts) < 2 {
 		return false
+	}
+	if len(parts) >= 3 && parts[2] == "SYSTEM" {
+		r.mode = RULE_MODE_SYSTEM
 	}
 	return r.parseVerb(parts[0]) && r.parseTarget(parts[1])
 }
@@ -231,7 +246,7 @@ func savePolicy(f *os.File, p *Policy) {
 		return
 	}
 	for _, r := range p.rules {
-		if !r.sessionOnly {
+		if r.mode != RULE_MODE_SESSION {
 			if !writeLine(f, r.String()) {
 				return
 			}

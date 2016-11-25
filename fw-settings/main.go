@@ -22,29 +22,52 @@ func activate(app *gtk.Application) {
 		return
 	}
 
-	var scrolled *gtk.ScrolledWindow
+	var swRulesPermanent *gtk.ScrolledWindow
+	var swRulesSession *gtk.ScrolledWindow
+	var swRulesSystem *gtk.ScrolledWindow
 
 	b := newBuilder("Dialog")
 	b.getItems(
 		"window", &win,
-		"scrolledwindow", &scrolled,
+		"swRulesPermanent", &swRulesPermanent,
+		"swRulesSession", &swRulesSession,
+		"swRulesSystem", &swRulesSystem,
 	)
-	win.SetIconName("security-high-symbolic")
+	//win.SetIconName("security-high-symbolic")
+	win.SetIconName("security-medium")
 
-	box, _ := gtk.ListBoxNew()
-	scrolled.Add(box)
+	boxPermanent, _ := gtk.ListBoxNew()
+	swRulesPermanent.Add(boxPermanent)
+
+	boxSession, _ := gtk.ListBoxNew()
+	swRulesSession.Add(boxSession)
+
+	boxSystem, _ := gtk.ListBoxNew()
+	swRulesSystem.Add(boxSystem)
 
 	dbus, err := newDbusObject()
 	if err != nil {
 		failDialog(win, "Failed to connect to dbus system bus: %v", err)
 	}
 
-	rl := NewRuleList(dbus, win, box)
-
+	rlPermanent := NewRuleList(dbus, win, boxPermanent)
 	if _, err := dbus.isEnabled(); err != nil {
 		failDialog(win, "Unable is connect to firewall daemon.  Is it running?")
 	}
-	rl.loadRules()
+	rlPermanent.loadRules(RULE_MODE_PERMANENT)
+
+	rlSession := NewRuleList(dbus, win, boxSession)
+	if _, err := dbus.isEnabled(); err != nil {
+		failDialog(win, "Unable is connect to firewall daemon.  Is it running?")
+	}
+	rlSession.loadRules(RULE_MODE_SESSION)
+
+	rlSystem := NewRuleList(dbus, win, boxSystem)
+	if _, err := dbus.isEnabled(); err != nil {
+		failDialog(win, "Unable is connect to firewall daemon.  Is it running?")
+	}
+	rlSystem.loadRules(RULE_MODE_SYSTEM)
+
 	loadConfig(win, b, dbus)
 	app.AddWindow(win)
 	win.ShowAll()

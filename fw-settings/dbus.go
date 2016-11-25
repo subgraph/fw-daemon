@@ -8,12 +8,21 @@ type dbusObject struct {
 	dbus.BusObject
 }
 
+//type RuleMode uint16
+
+const (
+	RULE_MODE_SESSION uint16 = iota
+	RULE_MODE_PERMANENT
+	RULE_MODE_SYSTEM
+)
+
 type dbusRule struct {
 	Id     uint32
 	App    string
 	Path   string
 	Verb   uint32
 	Target string
+	Mode   uint16
 }
 
 func newDbusObject() (*dbusObject, error) {

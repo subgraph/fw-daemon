@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/gotk3/gotk3/gtk"
 	"net"
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/gotk3/gotk3/gtk"
 )
 
 const (
@@ -24,7 +25,7 @@ type ruleEdit struct {
 	ok        *gtk.Button
 }
 
-func newRuleEdit(rr *ruleRow) *ruleEdit {
+func newRuleEdit(rr *ruleRow, saveasnew bool) *ruleEdit {
 	redit := &ruleEdit{row: rr}
 	b := newBuilder("RuleEdit")
 	b.getItems(
@@ -40,6 +41,9 @@ func newRuleEdit(rr *ruleRow) *ruleEdit {
 		"on_port_changed":     redit.onChanged,
 		"on_host_changed":     redit.onChanged,
 	})
+	if saveasnew {
+		redit.ok.SetLabel("Save As New")
+	}
 	return redit
 }
 
@@ -124,19 +128,25 @@ func (re *ruleEdit) updateRow() {
 	re.row.update()
 }
 
-func (re *ruleEdit) run() {
+func (re *ruleEdit) run(saveasnew bool) {
 	re.dialog.SetTransientFor(re.row.rl.win)
 	if re.dialog.Run() == editDialogOk {
+		if saveasnew {
+			re.row.rule.Mode = RULE_MODE_PERMANENT
+		}
 		re.updateRow()
 		re.row.rl.dbus.updateRule(re.row.rule)
+		if saveasnew {
+			re.row.widget.Hide()
+		}
 	}
 	re.dialog.Destroy()
 }
 
-func (rr *ruleRow) runEditor() {
-	redit := newRuleEdit(rr)
+func (rr *ruleRow) runEditor(saveasnew bool) {
+	redit := newRuleEdit(rr, saveasnew)
 	redit.updateDialogFields()
-	redit.run()
+	redit.run(saveasnew)
 }
 
 func (re *ruleEdit) onPortInsertText(entry *gtk.Entry, text string) {

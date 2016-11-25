@@ -13,9 +13,10 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/op/go-logging"
+
 	"github.com/subgraph/fw-daemon/nfqueue"
 	"github.com/subgraph/go-procsnitch"
-	"github.com/op/go-logging"
 )
 
 var log = logging.MustGetLogger("sgfw")
@@ -35,7 +36,7 @@ func isTerminal(fd int) bool {
 	return err == 0
 }
 
-func setupLoggerBackend() logging.LeveledBackend {
+func setupLoggerBackend(lvl logging.Level) logging.LeveledBackend {
 	format := logFormat
 	if isTerminal(int(os.Stderr.Fd())) {
 		format = ttyFormat
@@ -43,11 +44,9 @@ func setupLoggerBackend() logging.LeveledBackend {
 	backend := logging.NewLogBackend(os.Stderr, "", 0)
 	formatter := logging.NewBackendFormatter(backend, format)
 	leveler := logging.AddModuleLevel(formatter)
-	leveler.SetLevel(logging.NOTICE, "sgfw")
+	leveler.SetLevel(lvl, "sgfw")
 	return leveler
 }
-
-var logRedact bool
 
 type Firewall struct {
 	dbus *dbusServer
@@ -187,8 +186,8 @@ func getSocksChainConfig(config *SocksJsonConfig) *socksChainConfig {
 }
 
 func main() {
-
-	logBackend := setupLoggerBackend()
+	readConfig()
+	logBackend := setupLoggerBackend(FirewallConfig.LoggingLevel)
 	log.SetBackend(logBackend)
 	procsnitch.SetLogger(log)
 

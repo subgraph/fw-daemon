@@ -54,7 +54,7 @@ func (dc *dnsCache) processRecordA(name string, answers []dnsRR) {
 				name = name[:len(name)-1]
 			}
 			dc.ipMap[ip] = name
-			if !logRedact {
+			if !FirewallConfig.LogRedact {
 				log.Infof("Adding %s: %s", name, ip)
 			}
 		default:

@@ -9,9 +9,12 @@ import (
 
 const iptablesRule = "OUTPUT -t mangle -m conntrack --ctstate NEW -j NFQUEUE --queue-num 0 --queue-bypass"
 const dnsRule = "INPUT --protocol udp --sport 53 -j NFQUEUE --queue-num 0 --queue-bypass"
+
+//const logRule = "OUTPUT --protocol tcp -m mark --mark 1 -j LOG"
 const blockRule = "OUTPUT --protocol tcp -m mark --mark 1 -j REJECT"
 
 func setupIPTables() {
+	//	addIPTRules(iptablesRule, dnsRule, logRule, blockRule)
 	addIPTRules(iptablesRule, dnsRule, blockRule)
 }
 

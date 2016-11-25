@@ -2,12 +2,19 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/subgraph/fw-daemon/nfqueue"
 	"github.com/subgraph/go-procsnitch"
 	"net"
 )
+
+var _interpreters = []string{
+	"python",
+	"ruby",
+	"bash",
+}
 
 type pendingConnection interface {
 	policy() *Policy
@@ -98,7 +105,7 @@ func (p *Policy) processPacket(pkt *nfqueue.Packet, pinfo *procsnitch.Info) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	name := p.fw.dns.Lookup(pkt.Dst)
-	if !logRedact {
+	if !FirewallConfig.LogRedact {
 		log.Infof("Lookup(%s): %s", pkt.Dst.String(), name)
 	}
 	result := p.rules.filterPacket(pkt, pinfo, name)
@@ -165,6 +172,7 @@ func (p *Policy) processNewRule(r *Rule, scope int32) bool {
 
 func (p *Policy) parseRule(s string, add bool) (*Rule, error) {
 	r := new(Rule)
+	r.mode = RULE_MODE_PERMANENT
 	r.policy = p
 	if !r.parse(s) {
 		return nil, parseError(s)
@@ -195,7 +203,7 @@ func (p *Policy) filterPending(rule *Rule) {
 	remaining := []pendingConnection{}
 	for _, pc := range p.pendingQueue {
 		if rule.match(pc.dst(), pc.dstPort(), pc.hostname()) {
-			log.Infof("Also applying %s to %s", rule.getString(logRedact), pc.print())
+			log.Infof("Also applying %s to %s", rule.getString(FirewallConfig.LogRedact), pc.print())
 			if rule.rtype == RULE_ALLOW {
 				pc.accept()
 			} else {
@@ -212,7 +220,7 @@ func (p *Policy) filterPending(rule *Rule) {
 
 func (p *Policy) hasPersistentRules() bool {
 	for _, r := range p.rules {
-		if !r.sessionOnly {
+		if r.mode != RULE_MODE_SESSION {
 			return true
 		}
 	}
@@ -231,7 +239,7 @@ func printPacket(pkt *nfqueue.Packet, hostname string) string {
 		}
 	}()
 
-	if logRedact {
+	if FirewallConfig.LogRedact {
 		hostname = "[redacted]"
 	}
 	name := hostname
@@ -253,12 +261,23 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.Packet) {
 		pkt.Accept()
 		return
 	}
-	log.Debugf("filterPacket [%s] %s", pinfo.ExePath, printPacket(pkt, fw.dns.Lookup(pkt.Dst)))
+	ppath := pinfo.ExePath
+	cf := strings.Fields(pinfo.CmdLine)
+	if len(cf) > 1 && strings.HasPrefix(cf[1], "/") {
+		for _, intp := range _interpreters {
+			if strings.Contains(pinfo.ExePath, intp) {
+				ppath = cf[1]
+				break
+			}
+		}
+	}
+	//log.Debugf("pinfo: [%d] %s > %s", pinfo.ParentPid, pinfo.CmdLine, pinfo.ParentExePath)
+	log.Debugf("filterPacket [%s] %s", ppath, printPacket(pkt, fw.dns.Lookup(pkt.Dst)))
 	if basicAllowPacket(pkt) {
 		pkt.Accept()
 		return
 	}
-	policy := fw.PolicyForPath(pinfo.ExePath)
+	policy := fw.PolicyForPath(ppath)
 	policy.processPacket(pkt, pinfo)
 }
 

@@ -73,7 +73,15 @@ const OptionListItem = new Lang.Class({
     },
 
     setText: function(text) {
-        this._label.text = text;
+        if (text) {
+            this._label.text = text;
+            this._label.show();
+            this.actor.show();
+        } else {
+            this._label.text = "";
+            this._label.hide();
+            this.actor.hide();
+        }
     },
 
     setSelected: function(isSelected) {
@@ -154,6 +162,20 @@ const OptionList = new Lang.Class({
         default:
             log("unexpected scope value "+ this.buttonGroup._selected);
             return RuleScope.APPLY_SESSION;
+        }
+    },
+
+    scopeToIdx: function(scope) {
+        switch (scope) {
+        case RuleScope.APPLY_ONCE:
+            return 2;
+        case RuleScope.APPLY_SESSION:
+            return 1;
+        case RuleScope.APPLY_FOREVER:
+            return 0;
+        default:
+            log("unexpected scope value "+ scope);
+            return 1;
         }
     }
 
@@ -379,13 +401,15 @@ const PromptDialog = new Lang.Class({
         box.add_child(this.optionList.actor);
         this.optionList.addOptions([
             "Only PORT AND ADDRESS",
+            "Only ADDRESS",
+            "Only PORT",
             "Any Connection"]);
 
-
+        this._initialKeyFocusDestroyId = 1;
         this.setButtons([
             { label: "Allow", action: Lang.bind(this, this.onAllow) },
-            { label: "Deny", action: Lang.bind(this, this.onDeny) }]);
-
+            { label: "Deny", action: Lang.bind(this, this.onDeny) }
+        ]);
     },
 
     onAllow: function() {
@@ -417,20 +441,27 @@ const PromptDialog = new Lang.Class({
         case 0:
             return this._address + ":" + this._port;
         case 1:
+            return this._address + ":*";
+        case 2:
+            return "*:" + this._port;
+        case 3:
             return "*:*";
         }
-
     },
 
-    update: function(application, icon, path, address, port, ip, user, pid) {
+    update: function(application, icon, path, address, port, ip, user, pid, proto, expanded, expert, action) {
         this._address = address;
         this._port = port;
 
-        let port_str = "TCP Port "+ port;
+        let port_str = (proto+"").toUpperCase() + " Port "+ port;
 
         this.header.setTitle(application);
         this.header.setMessage("Wants to connect to "+ address + " on " + port_str);
 
+        if (expanded) {
+            this.details.isOpen = false;
+            this.details.activate()
+        }
         if(icon) {
             this.header.setIcon(icon);
         } else {
@@ -438,6 +469,15 @@ const PromptDialog = new Lang.Class({
         }
 
         this.optionList.setOptionText(0, "Only "+ address + " on "+ port_str);
+        if (expert) {
+            this.optionList.setOptionText(1, "Only "+ address + " on any port");
+            this.optionList.setOptionText(2, "Only "+ port_str);
+        } else {
+            this.optionList.setOptionText(1, false);
+            this.optionList.setOptionText(2, false);
+        }
+
+        this.optionList.buttonGroup._setChecked(this.optionList.scopeToIdx(action))
         this.info.setDetails(ip, path, pid, user);
     },
 });
