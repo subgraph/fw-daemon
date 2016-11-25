@@ -42,6 +42,21 @@
 			"Rev": "efaac8f907aac2f965675d64fd163097db109f95"
 		},
 		{
+			"ImportPath": "github.com/naoina/go-stringutil",
+			"Comment": "v0.1.0",
+			"Rev": "6b638e95a32d0c1131db0e7fe83775cbea4a0d0b"
+		},
+		{
+			"ImportPath": "github.com/naoina/toml",
+			"Comment": "v0.1.0",
+			"Rev": "751171607256bb66e64c9f0220c00662420c38e9"
+		},
+		{
+			"ImportPath": "github.com/naoina/toml/ast",
+			"Comment": "v0.1.0",
+			"Rev": "751171607256bb66e64c9f0220c00662420c38e9"
+		},
+		{
 			"ImportPath": "github.com/op/go-logging",
 			"Comment": "v1-7-g970db52",
 			"Rev": "970db520ece77730c7e4724c61121037378659d9"
