@@ -13,12 +13,15 @@ import (
 
 // Info is a struct containing the result of a socket proc query
 type Info struct {
-	UID       int
-	Pid       int
-	ParentPid int
-	loaded    bool
-	ExePath   string
-	CmdLine   string
+	UID           int
+	Pid           int
+	ParentPid     int
+	loaded        bool
+	ExePath       string
+	CmdLine       string
+	FirstArg      string
+	ParentCmdLine string
+	ParentExePath string
 }
 
 type pidCache struct {
@@ -126,18 +129,18 @@ func (pi *Info) loadProcessInfo() bool {
 		log.Warningf("Error reading exe link for pid %d: %v", pi.Pid, err)
 		return false
 	}
-	bs, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pi.Pid))
+	bcs, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pi.Pid))
 	if err != nil {
 		log.Warningf("Error reading cmdline for pid %d: %v", pi.Pid, err)
 		return false
 	}
-	for i, b := range bs {
+	for i, b := range bcs {
 		if b == 0 {
-			bs[i] = byte(' ')
+			bcs[i] = byte(' ')
 		}
 	}
 
-	bs, err = ioutil.ReadFile(fmt.Sprintf("/proc/%d/stat", pi.Pid))
+	bs, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/stat", pi.Pid))
 	if err != nil {
 		log.Warningf("Error reading cmdline for pid %d: %v", pi.Pid, err)
 		return false
@@ -147,6 +150,23 @@ func (pi *Info) loadProcessInfo() bool {
 		log.Warningf("Unable to parse stat for pid %d: ", pi.Pid)
 		return false
 	}
+	ppid := toPid(fs[3])
+
+	pexePath, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", ppid))
+	if err != nil {
+		log.Warningf("Error reading exe link for parent pid %d: %v", ppid, err)
+		return false
+	}
+	pbs, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/cmdline", ppid))
+	if err != nil {
+		log.Warningf("Error reading cmdline for parent pid %d: %v", ppid, err)
+		return false
+	}
+	for i, b := range pbs {
+		if b == 0 {
+			pbs[i] = byte(' ')
+		}
+	}
 
 	finfo, err := os.Stat(fmt.Sprintf("/proc/%d", pi.Pid))
 	if err != nil {
@@ -155,8 +175,11 @@ func (pi *Info) loadProcessInfo() bool {
 	}
 	sys := finfo.Sys().(*syscall.Stat_t)
 	pi.UID = int(sys.Uid)
+	pi.ParentPid = ppid
+	pi.ParentCmdLine = string(pbs)
+	pi.ParentExePath = string(pexePath)
 	pi.ExePath = exePath
-	pi.CmdLine = string(bs)
+	pi.CmdLine = string(bcs)
 	pi.loaded = true
 	return true
 }
