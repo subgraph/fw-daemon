@@ -1,13 +1,9 @@
 package main
 
 import (
-	// _ "net/http/pprof"
-	"bufio"
-	"encoding/json"
 	"os"
 	"os/signal"
 	"regexp"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -141,49 +137,7 @@ func (fw *Firewall) runFilter() {
 	}
 }
 
-type SocksJsonConfig struct {
-	SocksListener string
-	TorSocks      string
-}
-
 var commentRegexp = regexp.MustCompile("^[ \t]*#")
-
-func loadConfiguration(configFilePath string) (*SocksJsonConfig, error) {
-	config := SocksJsonConfig{}
-	file, err := os.Open(configFilePath)
-	if err != nil {
-		return nil, err
-	}
-	scanner := bufio.NewScanner(file)
-	bs := ""
-	for scanner.Scan() {
-		line := scanner.Text()
-		if !commentRegexp.MatchString(line) {
-			bs += line + "\n"
-		}
-	}
-	if err := json.Unmarshal([]byte(bs), &config); err != nil {
-		return nil, err
-	}
-	return &config, nil
-}
-
-func getSocksChainConfig(config *SocksJsonConfig) *socksChainConfig {
-	// XXX
-	fields := strings.Split(config.TorSocks, "|")
-	torSocksNet := fields[0]
-	torSocksAddr := fields[1]
-	fields = strings.Split(config.SocksListener, "|")
-	socksListenNet := fields[0]
-	socksListenAddr := fields[1]
-	socksConfig := socksChainConfig{
-		TargetSocksNet:  torSocksNet,
-		TargetSocksAddr: torSocksAddr,
-		ListenSocksNet:  socksListenNet,
-		ListenSocksAddr: socksListenAddr,
-	}
-	return &socksConfig
-}
 
 func main() {
 	readConfig()
@@ -217,24 +171,6 @@ func main() {
 
 	fw.loadRules()
 
-	/*
-		go func() {
-			http.ListenAndServe("localhost:6060", nil)
-		}()
-	*/
-
-	wg := sync.WaitGroup{}
-
-	config, err := loadConfiguration("/etc/fw-daemon-socks.json")
-	if err != nil && !os.IsNotExist(err) {
-		panic(err)
-	}
-	if config != nil {
-		socksConfig := getSocksChainConfig(config)
-		chain := NewSocksChain(socksConfig, &wg, fw)
-		chain.start()
-	}
-
 	fw.runFilter()
 
 	// observe process signals and either
@@ -249,7 +185,6 @@ func main() {
 		select {
 		case <-sigHupChan:
 			fw.reloadRules()
-			// XXX perhaps restart SOCKS proxy chain service with new proxy config specification?
 		case <-sigKillChan:
 			fw.stop()
 			return
