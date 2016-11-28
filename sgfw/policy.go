@@ -154,7 +154,7 @@ func (p *Policy) removePending(pc pendingConnection) {
 	}
 }
 
-func (p *Policy) processNewRule(r *Rule, scope int32) bool {
+func (p *Policy) processNewRule(r *Rule, scope FilterScope) bool {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -205,7 +205,7 @@ func (p *Policy) filterPending(rule *Rule) {
 		if rule.match(pc.dst(), pc.dstPort(), pc.hostname()) {
 			log.Infof("Adding rule for: %s", rule.getString(FirewallConfig.LogRedact))
 			log.Noticef("%s > %s", rule.getString(FirewallConfig.LogRedact), pc.print())
-			if rule.rtype == RULE_ALLOW {
+			if rule.rtype == RULE_ACTION_ALLOW {
 				pc.accept()
 			} else {
 				pc.drop()
@@ -241,7 +241,7 @@ func printPacket(pkt *nfqueue.Packet, hostname string, pinfo *procsnitch.Info) s
 	}()
 
 	if FirewallConfig.LogRedact {
-		hostname = "[redacted]"
+		hostname = STR_REDACTED
 	}
 	name := hostname
 	if name == "" {

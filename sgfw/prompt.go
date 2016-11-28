@@ -2,17 +2,11 @@ package sgfw
 
 import (
 	"fmt"
-	"github.com/godbus/dbus"
 	"os/user"
 	"strconv"
-	"strings"
 	"sync"
-)
 
-const (
-	APPLY_ONCE = iota
-	APPLY_SESSION
-	APPLY_FOREVER
+	"github.com/godbus/dbus"
 )
 
 func newPrompter(conn *dbus.Conn) *prompter {
@@ -64,33 +58,6 @@ func (p *prompter) processNextPacket() bool {
 	return true
 }
 
-func printScope(scope int32) string {
-	switch scope {
-	case APPLY_SESSION:
-		return "SESSION"
-	case APPLY_ONCE:
-		return "ONCE"
-	case APPLY_FOREVER:
-		return "FOREVER"
-	default:
-		return "SESSION"
-	}
-}
-
-func valueScope(scope string) int32 {
-	scope = strings.ToUpper(scope)
-	switch scope {
-	case "SESSION":
-		return APPLY_SESSION
-	case "ONCE":
-		return APPLY_ONCE
-	case "FOREVER":
-		return APPLY_FOREVER
-	default:
-		return APPLY_SESSION
-	}
-}
-
 func (p *prompter) processConnection(pc pendingConnection) {
 	var scope int32
 	var rule string
@@ -112,7 +79,7 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		int32(pc.procInfo().Pid),
 		FirewallConfig.PromptExpanded,
 		FirewallConfig.PromptExpert,
-		FirewallConfig.DefaultActionId)
+		int32(FirewallConfig.DefaultActionId))
 	err := call.Store(&scope, &rule)
 	if err != nil {
 		log.Warningf("Error sending dbus RequestPrompt message: %v", err)
@@ -128,15 +95,16 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		pc.drop()
 		return
 	}
-	if scope == APPLY_SESSION {
+	fscope := FilterScope(scope)
+	if fscope == APPLY_SESSION {
 		r.mode = RULE_MODE_SESSION
 	}
-	if !policy.processNewRule(r, scope) {
+	if !policy.processNewRule(r, fscope) {
 		p.lock.Lock()
 		defer p.lock.Unlock()
 		p.removePolicy(pc.policy())
 	}
-	if scope == APPLY_FOREVER {
+	if fscope == APPLY_FOREVER {
 		policy.fw.saveRules()
 	}
 }

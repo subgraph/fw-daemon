@@ -15,27 +15,14 @@ import (
 	"github.com/subgraph/go-procsnitch"
 )
 
-const (
-	RULE_DENY = iota
-	RULE_ALLOW
-)
-
 const matchAny = 0
 const noAddress = uint32(0xffffffff)
-
-type RuleMode uint16
-
-const (
-	RULE_MODE_SESSION RuleMode = iota
-	RULE_MODE_PERMANENT
-	RULE_MODE_SYSTEM
-)
 
 type Rule struct {
 	id       uint
 	policy   *Policy
 	mode     RuleMode
-	rtype    int
+	rtype    RuleAction
 	hostname string
 	addr     uint32
 	port     uint16
@@ -46,13 +33,13 @@ func (r *Rule) String() string {
 }
 
 func (r *Rule) getString(redact bool) string {
-	rtype := "DENY"
-	if r.rtype == RULE_ALLOW {
-		rtype = "ALLOW"
+	rtype := RuleActionString[RULE_ACTION_DENY]
+	if r.rtype == RULE_ACTION_ALLOW {
+		rtype = RuleActionString[RULE_ACTION_ALLOW]
 	}
 	rmode := ""
 	if r.mode == RULE_MODE_SYSTEM {
-		rmode = "|SYSTEM"
+		rmode = "|" + RuleModeString[RULE_MODE_SYSTEM]
 	}
 
 	return fmt.Sprintf("%s|%s%s", rtype, r.AddrString(redact), rmode)
@@ -74,7 +61,7 @@ func (r *Rule) AddrString(redact bool) string {
 	}
 
 	if redact && addr != "*" {
-		addr = "[redacted]"
+		addr = STR_REDACTED
 	}
 
 	return fmt.Sprintf("%s:%s", addr, port)
@@ -95,14 +82,6 @@ func (r *Rule) match(dst net.IP, dstPort uint16, hostname string) bool {
 	return r.addr == binary.BigEndian.Uint32(dst)
 }
 
-type FilterResult int
-
-const (
-	FILTER_DENY FilterResult = iota
-	FILTER_ALLOW
-	FILTER_PROMPT
-)
-
 func (rl *RuleList) filterPacket(p *nfqueue.Packet, pinfo *procsnitch.Info, hostname string) FilterResult {
 	return rl.filter(p, p.Dst, p.DstPort, hostname, pinfo)
 }
@@ -116,9 +95,9 @@ func (rl *RuleList) filter(pkt *nfqueue.Packet, dst net.IP, dstPort uint16, host
 		if r.match(dst, dstPort, hostname) {
 			dstStr := dst.String()
 			if FirewallConfig.LogRedact {
-				dstStr = "[redacted]"
+				dstStr = STR_REDACTED
 			}
-			srcStr := "[uknown]"
+			srcStr := STR_UNKNOWN
 			if pkt != nil {
 				srcStr = fmt.Sprintf("%s:%d", pkt.Src, pkt.SrcPort)
 			}
@@ -127,9 +106,9 @@ func (rl *RuleList) filter(pkt *nfqueue.Packet, dst net.IP, dstPort uint16, host
 				pinfo.ExePath, "TCP",
 				srcStr,
 				dstStr, dstPort)
-			if r.rtype == RULE_DENY {
+			if r.rtype == RULE_ACTION_DENY {
 				return FILTER_DENY
-			} else if r.rtype == RULE_ALLOW {
+			} else if r.rtype == RULE_ACTION_ALLOW {
 				result = FILTER_ALLOW
 			}
 		}
@@ -155,11 +134,11 @@ func (r *Rule) parse(s string) bool {
 
 func (r *Rule) parseVerb(v string) bool {
 	switch v {
-	case "ALLOW":
-		r.rtype = RULE_ALLOW
+	case RuleActionString[RULE_ACTION_ALLOW]:
+		r.rtype = RULE_ACTION_ALLOW
 		return true
-	case "DENY":
-		r.rtype = RULE_DENY
+	case RuleActionString[RULE_ACTION_DENY]:
+		r.rtype = RULE_ACTION_DENY
 		return true
 	}
 	return false

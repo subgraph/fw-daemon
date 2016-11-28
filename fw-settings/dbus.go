@@ -1,28 +1,13 @@
 package main
 
 import (
+	"github.com/subgraph/fw-daemon/sgfw"
+
 	"github.com/godbus/dbus"
 )
 
 type dbusObject struct {
 	dbus.BusObject
-}
-
-//type RuleMode uint16
-
-const (
-	RULE_MODE_SESSION uint16 = iota
-	RULE_MODE_PERMANENT
-	RULE_MODE_SYSTEM
-)
-
-type dbusRule struct {
-	Id     uint32
-	App    string
-	Path   string
-	Verb   uint32
-	Target string
-	Mode   uint16
 }
 
 func newDbusObject() (*dbusObject, error) {
@@ -41,9 +26,10 @@ func (ob *dbusObject) isEnabled() (bool, error) {
 	return flag, nil
 }
 
-func (ob *dbusObject) listRules() ([]dbusRule, error) {
-	rules := []dbusRule{}
-	if err := ob.Call("com.subgraph.Firewall.ListRules", 0).Store(&rules); err != nil {
+func (ob *dbusObject) listRules() ([]sgfw.DbusRule, error) {
+	rules := []sgfw.DbusRule{}
+	err := ob.Call("com.subgraph.Firewall.ListRules", 0).Store(&rules);
+	if err != nil {
 		return nil, err
 	}
 	return rules, nil
@@ -53,7 +39,7 @@ func (ob *dbusObject) deleteRule(id uint32) {
 	ob.Call("com.subgraph.Firewall.DeleteRule", 0, id)
 }
 
-func (ob *dbusObject) updateRule(rule *dbusRule) {
+func (ob *dbusObject) updateRule(rule *sgfw.DbusRule) {
 	ob.Call("com.subgraph.Firewall.UpdateRule", 0, rule)
 }
 

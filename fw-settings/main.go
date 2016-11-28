@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
-	"fmt"
+	"github.com/subgraph/fw-daemon/sgfw"
+
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 )
@@ -54,19 +56,19 @@ func activate(app *gtk.Application) {
 	if _, err := dbus.isEnabled(); err != nil {
 		failDialog(win, "Unable is connect to firewall daemon.  Is it running?")
 	}
-	rlPermanent.loadRules(RULE_MODE_PERMANENT)
+	rlPermanent.loadRules(sgfw.RULE_MODE_PERMANENT)
 
 	rlSession := NewRuleList(dbus, win, boxSession)
 	if _, err := dbus.isEnabled(); err != nil {
 		failDialog(win, "Unable is connect to firewall daemon.  Is it running?")
 	}
-	rlSession.loadRules(RULE_MODE_SESSION)
+	rlSession.loadRules(sgfw.RULE_MODE_SESSION)
 
 	rlSystem := NewRuleList(dbus, win, boxSystem)
 	if _, err := dbus.isEnabled(); err != nil {
 		failDialog(win, "Unable is connect to firewall daemon.  Is it running?")
 	}
-	rlSystem.loadRules(RULE_MODE_SYSTEM)
+	rlSystem.loadRules(sgfw.RULE_MODE_SYSTEM)
 
 	loadConfig(win, b, dbus)
 	app.AddWindow(win)

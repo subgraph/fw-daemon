@@ -2,8 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/gotk3/gotk3/gtk"
+	"os"
 	"strings"
+
+	"github.com/subgraph/fw-daemon/sgfw"
+
+	"github.com/gotk3/gotk3/gtk"
 )
 
 type ruleList struct {
@@ -17,7 +21,7 @@ type ruleList struct {
 
 type ruleRow struct {
 	rl            *ruleList
-	rule          *dbusRule
+	rule          *sgfw.DbusRule
 	widget        *gtk.ListBoxRow
 	app_label     *gtk.Label
 	verb_label    *gtk.Label
@@ -36,18 +40,19 @@ func NewRuleList(dbus *dbusObject, win *gtk.Window, list *gtk.ListBox) *ruleList
 	return rl
 }
 
-func (rl *ruleList) loadRules(mode uint16) error {
+func (rl *ruleList) loadRules(mode sgfw.RuleMode) error {
 	rules, err := rl.dbus.listRules()
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %+v\n", err)
 		return err
 	}
 	rl.addRules(rules, mode)
 	return nil
 }
 
-func (rl *ruleList) addRules(rules []dbusRule, mode uint16) {
+func (rl *ruleList) addRules(rules []sgfw.DbusRule, mode sgfw.RuleMode) {
 	for i := 0; i < len(rules); i++ {
-		if rules[i].Mode != mode {
+		if sgfw.RuleMode(rules[i].Mode) != mode {
 			continue
 		}
 		row := createWidget(&rules[i])
@@ -59,10 +64,7 @@ func (rl *ruleList) addRules(rules []dbusRule, mode uint16) {
 	}
 }
 
-const RULE_DENY = 0
-const RULE_ALLOW = 1
-
-func createWidget(rule *dbusRule) *ruleRow {
+func createWidget(rule *sgfw.DbusRule) *ruleRow {
 	row := &ruleRow{}
 	row.rule = rule
 	builder := newBuilder("RuleItem")
@@ -76,14 +78,14 @@ func createWidget(rule *dbusRule) *ruleRow {
 		"save_button", &row.save_button,
 		"delete_button", &row.delete_button,
 	)
-	switch rule.Mode {
-	case RULE_MODE_SYSTEM:
+	switch sgfw.RuleMode(rule.Mode) {
+	case sgfw.RULE_MODE_SYSTEM:
 		row.edit_button.SetVisible(false)
 		row.edit_button.SetNoShowAll(true)
 		row.delete_button.SetSensitive(false)
 		row.delete_button.SetTooltipText("Cannot delete system rules")
 		break
-	case RULE_MODE_SESSION:
+	case sgfw.RULE_MODE_SESSION:
 		row.save_button.SetSensitive(true)
 		row.save_button.SetNoShowAll(false)
 		break
@@ -107,14 +109,14 @@ func (rr *ruleRow) update() {
 	rr.target_label.SetText(getTargetText(rr.rule))
 }
 
-func getVerbText(rule *dbusRule) string {
-	if rule.Verb == RULE_ALLOW {
-		return "ALLOW:"
+func getVerbText(rule *sgfw.DbusRule) string {
+	if sgfw.RuleAction(rule.Verb) == sgfw.RULE_ACTION_ALLOW {
+		return sgfw.RuleActionString[sgfw.RULE_ACTION_ALLOW]+ ":"
 	}
-	return "DENY:"
+	return sgfw.RuleActionString[sgfw.RULE_ACTION_DENY]+ ":"
 }
 
-func getTargetText(rule *dbusRule) string {
+func getTargetText(rule *sgfw.DbusRule) string {
 	if rule.Target == "*:*" {
 		return "All connections"
 	}

@@ -54,15 +54,6 @@ type dbusServer struct {
 	prompter *prompter
 }
 
-type DbusRule struct {
-	Id     uint32
-	App    string
-	Path   string
-	Verb   uint32
-	Target string
-	Mode   uint16
-}
-
 func newDbusServer() (*dbusServer, error) {
 	conn, err := dbus.SystemBus()
 	if err != nil {
@@ -106,7 +97,7 @@ func createDbusRule(r *Rule) DbusRule {
 		Id:     uint32(r.id),
 		App:    path.Base(r.policy.path),
 		Path:   r.policy.path,
-		Verb:   uint32(r.rtype),
+		Verb:   uint16(r.rtype),
 		Target: r.AddrString(false),
 		Mode:   uint16(r.mode),
 	}
@@ -158,8 +149,8 @@ func (ds *dbusServer) UpdateRule(rule DbusRule) *dbus.Error {
 			return nil
 		}
 		r.policy.lock.Lock()
-		if rule.Verb == RULE_ALLOW || rule.Verb == RULE_DENY {
-			r.rtype = int(rule.Verb)
+		if RuleAction(rule.Verb) == RULE_ACTION_ALLOW || RuleAction(rule.Verb) == RULE_ACTION_DENY {
+			r.rtype = RuleAction(rule.Verb)
 		}
 		r.hostname = tmp.hostname
 		r.addr = tmp.addr
@@ -179,7 +170,7 @@ func (ds *dbusServer) GetConfig() (map[string]dbus.Variant, *dbus.Error) {
 	conf["log_redact"] = dbus.MakeVariant(FirewallConfig.LogRedact)
 	conf["prompt_expanded"] = dbus.MakeVariant(FirewallConfig.PromptExpanded)
 	conf["prompt_expert"] = dbus.MakeVariant(FirewallConfig.PromptExpert)
-	conf["default_action"] = dbus.MakeVariant(int32(FirewallConfig.DefaultActionId))
+	conf["default_action"] = dbus.MakeVariant(uint16(FirewallConfig.DefaultActionId))
 	return conf, nil
 }
 
@@ -200,8 +191,8 @@ func (ds *dbusServer) SetConfig(key string, val dbus.Variant) *dbus.Error {
 		flag := val.Value().(bool)
 		FirewallConfig.PromptExpert = flag
 	case "default_action":
-		l := val.Value().(int32)
-		FirewallConfig.DefaultActionId = l
+		l := val.Value().(uint16)
+		FirewallConfig.DefaultActionId = FilterScope(l)
 	}
 	writeConfig()
 	return nil

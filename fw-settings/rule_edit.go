@@ -7,6 +7,8 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/subgraph/fw-daemon/sgfw"
+
 	"github.com/gotk3/gotk3/gtk"
 )
 
@@ -50,7 +52,7 @@ func newRuleEdit(rr *ruleRow, saveasnew bool) *ruleEdit {
 func (re *ruleEdit) updateDialogFields() {
 	r := re.row.rule
 	re.pathLabel.SetText(r.Path)
-	if r.Verb == RULE_ALLOW {
+	if sgfw.RuleAction(r.Verb) == sgfw.RULE_ACTION_ALLOW {
 		re.verbCombo.SetActiveID("allow")
 	} else {
 		re.verbCombo.SetActiveID("deny")
@@ -118,9 +120,9 @@ func (re *ruleEdit) updateRow() {
 	r := re.row.rule
 	switch re.verbCombo.GetActiveID() {
 	case "allow":
-		r.Verb = RULE_ALLOW
+		r.Verb = uint16(sgfw.RULE_ACTION_ALLOW)
 	case "deny":
-		r.Verb = RULE_DENY
+		r.Verb = uint16(sgfw.RULE_ACTION_DENY)
 	}
 	host, _ := re.hostEntry.GetText()
 	port, _ := re.portEntry.GetText()
@@ -132,7 +134,7 @@ func (re *ruleEdit) run(saveasnew bool) {
 	re.dialog.SetTransientFor(re.row.rl.win)
 	if re.dialog.Run() == editDialogOk {
 		if saveasnew {
-			re.row.rule.Mode = RULE_MODE_PERMANENT
+			re.row.rule.Mode = uint16(sgfw.RULE_MODE_PERMANENT)
 		}
 		re.updateRow()
 		re.row.rl.dbus.updateRule(re.row.rule)
