@@ -111,9 +111,9 @@ func (rr *ruleRow) update() {
 
 func getVerbText(rule *sgfw.DbusRule) string {
 	if sgfw.RuleAction(rule.Verb) == sgfw.RULE_ACTION_ALLOW {
-		return sgfw.RuleActionString[sgfw.RULE_ACTION_ALLOW]+ ":"
+		return sgfw.RuleActionString[sgfw.RULE_ACTION_ALLOW] + ":"
 	}
-	return sgfw.RuleActionString[sgfw.RULE_ACTION_DENY]+ ":"
+	return sgfw.RuleActionString[sgfw.RULE_ACTION_DENY] + ":"
 }
 
 func getTargetText(rule *sgfw.DbusRule) string {

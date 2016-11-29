@@ -28,7 +28,7 @@ func (ob *dbusObject) isEnabled() (bool, error) {
 
 func (ob *dbusObject) listRules() ([]sgfw.DbusRule, error) {
 	rules := []sgfw.DbusRule{}
-	err := ob.Call("com.subgraph.Firewall.ListRules", 0).Store(&rules);
+	err := ob.Call("com.subgraph.Firewall.ListRules", 0).Store(&rules)
 	if err != nil {
 		return nil, err
 	}

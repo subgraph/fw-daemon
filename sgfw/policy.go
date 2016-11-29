@@ -247,7 +247,7 @@ func printPacket(pkt *nfqueue.Packet, hostname string, pinfo *procsnitch.Info) s
 	if name == "" {
 		name = pkt.Dst.String()
 	}
-	if (pinfo == nil) {
+	if pinfo == nil {
 		return fmt.Sprintf("(%s %s:%d -> %s:%d)", proto, pkt.Src, pkt.SrcPort, name, pkt.DstPort)
 	} else {
 		return fmt.Sprintf("%s %s %s:%d -> %s:%d", pinfo.ExePath, proto, pkt.Src, pkt.SrcPort, name, pkt.DstPort)
