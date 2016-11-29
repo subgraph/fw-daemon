@@ -4,75 +4,76 @@ import (
 	"strings"
 )
 
+// Static strings for various usage
 const (
 	STR_REDACTED = "[redacted]"
 	STR_UNKNOWN  = "[uknown]"
 )
 
+//RuleAction is the action to apply to a rule
 type RuleAction uint16
-
 const (
 	RULE_ACTION_DENY RuleAction = iota
 	RULE_ACTION_ALLOW
 )
-
+// RuleActionString is used to get a string from an action id
 var RuleActionString = map[RuleAction]string{
 	RULE_ACTION_DENY:  "DENY",
 	RULE_ACTION_ALLOW: "ALLOW",
 }
-
+// RuleActionValue is used to get an action id using the action string
 var RuleActionValue = map[string]RuleAction{
-	"DENY":  RULE_ACTION_DENY,
-	"ALLOW": RULE_ACTION_ALLOW,
+	RuleActionString[RULE_ACTION_DENY]:  RULE_ACTION_DENY,
+	RuleActionString[RULE_ACTION_ALLOW]: RULE_ACTION_ALLOW,
 }
 
+//RuleMode contains the time scope of a rule
 type RuleMode uint16
-
 const (
 	RULE_MODE_SESSION RuleMode = iota
 	RULE_MODE_PERMANENT
 	RULE_MODE_SYSTEM
 )
-
+// RuleModeString is used to get a rule mode string from its id
 var RuleModeString = map[RuleMode]string{
 	RULE_MODE_SESSION:   "SESSION",
 	RULE_MODE_PERMANENT: "PERMANENT",
 	RULE_MODE_SYSTEM:    "SYSTEM",
 }
-
+// RuleModeValue converts a mode string to its id
 var RuleModeValue = map[string]RuleMode{
-	"SESSION":   RULE_MODE_SESSION,
-	"PERMANENT": RULE_MODE_PERMANENT,
-	"SYSTEM":    RULE_MODE_SYSTEM,
+	RuleModeString[RULE_MODE_SESSION]:   RULE_MODE_SESSION,
+	RuleModeString[RULE_MODE_PERMANENT]: RULE_MODE_PERMANENT,
+	RuleModeString[RULE_MODE_SYSTEM]:    RULE_MODE_SYSTEM,
 }
 
+//FilterScope contains a filter's time scope
 type FilterScope uint16
-
 const (
 	APPLY_ONCE FilterScope = iota
 	APPLY_SESSION
 	APPLY_FOREVER
 )
-
+// FilterScopeString converts a filter scope ID to its string
 var FilterScopeString = map[FilterScope]string{
 	APPLY_ONCE:    "ONCE",
 	APPLY_SESSION: "SESSION",
 	APPLY_FOREVER: "FOREVER",
 }
-
+// FilterScopeString converts a filter scope string to its ID
 var FilterScopeValue = map[string]FilterScope{
-	"ONCE":    APPLY_ONCE,
-	"SESSION": APPLY_SESSION,
-	"FOREVER": APPLY_FOREVER,
+	FilterScopeString[APPLY_ONCE]:    APPLY_ONCE,
+	FilterScopeString[APPLY_SESSION]: APPLY_SESSION,
+	FilterScopeString[APPLY_FOREVER]: APPLY_FOREVER,
 }
-
+// GetFilterScopeString is used to safely return a filter scope string
 func GetFilterScopeString(scope FilterScope) string {
 	if val, ok := FilterScopeString[scope]; ok {
 		return val
 	}
 	return FilterScopeString[APPLY_SESSION]
 }
-
+// GetFilterScopeValue is used to safely return a filter scope ID
 func GetFilterScopeValue(scope string) FilterScope {
 	scope = strings.ToUpper(scope)
 	if val, ok := FilterScopeValue[scope]; ok {
@@ -81,26 +82,27 @@ func GetFilterScopeValue(scope string) FilterScope {
 	return APPLY_SESSION
 }
 
+//FilterResult contains the filtering resulting action
 type FilterResult uint16
-
 const (
 	FILTER_DENY FilterResult = iota
 	FILTER_ALLOW
 	FILTER_PROMPT
 )
-
+// FilterResultString converts a filter value ID to its string
 var FilterResultString = map[FilterResult]string{
 	FILTER_DENY:   "DENY",
 	FILTER_ALLOW:  "ALLOW",
 	FILTER_PROMPT: "PROMPT",
 }
-
+// FilterResultValue converts a filter value string to its ID
 var FilterResultValue = map[string]FilterResult{
-	"DENY":   FILTER_DENY,
-	"ALLOW":  FILTER_ALLOW,
-	"PROMPT": FILTER_PROMPT,
+	FilterResultString[FILTER_DENY]:   FILTER_DENY,
+	FilterResultString[FILTER_ALLOW]:  FILTER_ALLOW,
+	FilterResultString[FILTER_PROMPT]: FILTER_PROMPT,
 }
 
+// DbusRule struct of the rule passed to the dbus interface
 type DbusRule struct {
 	ID     uint32
 	App    string
