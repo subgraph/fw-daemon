@@ -8,7 +8,8 @@ import (
 	"github.com/op/go-logging"
 )
 
-var LevelToId = map[int32]string{
+// Log level conversion map
+var LevelToID = map[int32]string{
 	int32(logging.ERROR):   "error",
 	int32(logging.WARNING): "warning",
 	int32(logging.NOTICE):  "notice",
@@ -16,9 +17,10 @@ var LevelToId = map[int32]string{
 	int32(logging.DEBUG):   "debug",
 }
 
-var IdToLevel = func() map[string]int32 {
+// Log level string conversion
+var IDToLevel = func() map[string]int32 {
 	m := make(map[string]int32)
-	for k, v := range LevelToId {
+	for k, v := range LevelToID {
 		m[v] = k
 	}
 	return m

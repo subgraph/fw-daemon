@@ -130,7 +130,7 @@ func Main() {
 
 	fw := &Firewall{
 		dbus:            ds,
-		dns:             NewDnsCache(),
+		dns:             newDnsCache(),
 		enabled:         true,
 		logBackend:      logBackend,
 		policyMap:       make(map[string]*Policy),

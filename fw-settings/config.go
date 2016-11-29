@@ -27,7 +27,7 @@ func loadConfig(win *gtk.Window, b *builder, dbus *dbusObject) {
 	}
 
 	if lvl, ok := conf["log_level"].(int32); ok {
-		if id, ok := sgfw.LevelToId[lvl]; ok {
+		if id, ok := sgfw.LevelToID[lvl]; ok {
 			levelCombo.SetActiveID(id)
 		}
 	}
@@ -45,7 +45,7 @@ func loadConfig(win *gtk.Window, b *builder, dbus *dbusObject) {
 	}
 	b.ConnectSignals(map[string]interface{}{
 		"on_level_combo_changed": func() {
-			if lvl, ok := sgfw.IdToLevel[levelCombo.GetActiveID()]; ok {
+			if lvl, ok := sgfw.IDToLevel[levelCombo.GetActiveID()]; ok {
 				dbus.setConfig("log_level", lvl)
 			}
 		},

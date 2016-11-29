@@ -14,7 +14,7 @@ type dnsCache struct {
 	done  chan struct{}
 }
 
-func NewDnsCache() *dnsCache {
+func newDnsCache() *dnsCache {
 	return &dnsCache{
 		ipMap: make(map[string]string),
 		done:  make(chan struct{}),
