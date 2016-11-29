@@ -173,5 +173,5 @@ func (rl *ruleList) remove(rr *ruleRow) {
 
 func (rr *ruleRow) delete() {
 	rr.rl.remove(rr)
-	rr.rl.dbus.deleteRule(rr.rule.Id)
+	rr.rl.dbus.deleteRule(rr.rule.ID)
 }

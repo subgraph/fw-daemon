@@ -27,8 +27,8 @@ type Firewall struct {
 	policies  []*Policy
 
 	ruleLock   sync.Mutex
-	rulesById  map[uint]*Rule
-	nextRuleId uint
+	rulesByID  map[uint]*Rule
+	nextRuleID uint
 
 	reloadRulesChan chan bool
 	stopChan        chan bool
@@ -49,30 +49,30 @@ func (fw *Firewall) isEnabled() bool {
 func (fw *Firewall) clearRules() {
 	fw.ruleLock.Lock()
 	defer fw.ruleLock.Unlock()
-	fw.rulesById = nil
-	fw.nextRuleId = 0
+	fw.rulesByID = nil
+	fw.nextRuleID = 0
 }
 
 func (fw *Firewall) addRule(r *Rule) {
 	fw.ruleLock.Lock()
 	defer fw.ruleLock.Unlock()
 
-	r.id = fw.nextRuleId
-	fw.nextRuleId += 1
-	if fw.rulesById == nil {
-		fw.rulesById = make(map[uint]*Rule)
+	r.id = fw.nextRuleID
+	fw.nextRuleID++
+	if fw.rulesByID == nil {
+		fw.rulesByID = make(map[uint]*Rule)
 	}
-	fw.rulesById[r.id] = r
+	fw.rulesByID[r.id] = r
 }
 
-func (fw *Firewall) getRuleById(id uint) *Rule {
+func (fw *Firewall) getRuleByID(id uint) *Rule {
 	fw.ruleLock.Lock()
 	defer fw.ruleLock.Unlock()
 
-	if fw.rulesById == nil {
+	if fw.rulesByID == nil {
 		return nil
 	}
-	return fw.rulesById[id]
+	return fw.rulesByID[id]
 }
 
 func (fw *Firewall) stop() {
@@ -130,7 +130,7 @@ func Main() {
 
 	fw := &Firewall{
 		dbus:            ds,
-		dns:             newDnsCache(),
+		dns:             newDNSCache(),
 		enabled:         true,
 		logBackend:      logBackend,
 		policyMap:       make(map[string]*Policy),

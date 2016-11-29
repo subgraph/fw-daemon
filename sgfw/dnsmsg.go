@@ -86,13 +86,13 @@ type dnsStruct interface {
 
 // The wire format for the DNS packet header.
 type dnsHeader struct {
-	Id                                 uint16
+	ID                                 uint16
 	Bits                               uint16
 	Qdcount, Ancount, Nscount, Arcount uint16
 }
 
 func (h *dnsHeader) Walk(f func(v interface{}, name, tag string) bool) bool {
-	return f(&h.Id, "Id", "") &&
+	return f(&h.ID, "Id", "") &&
 		f(&h.Bits, "Bits", "") &&
 		f(&h.Qdcount, "Qdcount", "") &&
 		f(&h.Ancount, "Ancount", "") &&
@@ -129,7 +129,7 @@ type dnsRR_Header struct {
 	Name     string `net:"domain-name"`
 	Rrtype   uint16
 	Class    uint16
-	Ttl      uint32
+	TTL      uint32
 	Rdlength uint16 // length of data after header
 }
 
@@ -141,7 +141,7 @@ func (h *dnsRR_Header) Walk(f func(v interface{}, name, tag string) bool) bool {
 	return f(&h.Name, "Name", "domain") &&
 		f(&h.Rrtype, "Rrtype", "") &&
 		f(&h.Class, "Class", "") &&
-		f(&h.Ttl, "Ttl", "") &&
+		f(&h.TTL, "Ttl", "") &&
 		f(&h.Rdlength, "Rdlength", "")
 }
 
@@ -167,8 +167,8 @@ func (rr *dnsRR_CNAME) Walk(f func(v interface{}, name, tag string) bool) bool {
 
 type dnsRR_HINFO struct {
 	Hdr dnsRR_Header
-	Cpu string
-	Os  string
+	CPU string
+	OS  string
 }
 
 func (rr *dnsRR_HINFO) Header() *dnsRR_Header {
@@ -176,7 +176,7 @@ func (rr *dnsRR_HINFO) Header() *dnsRR_Header {
 }
 
 func (rr *dnsRR_HINFO) Walk(f func(v interface{}, name, tag string) bool) bool {
-	return rr.Hdr.Walk(f) && f(&rr.Cpu, "Cpu", "") && f(&rr.Os, "Os", "")
+	return rr.Hdr.Walk(f) && f(&rr.CPU, "Cpu", "") && f(&rr.OS, "Os", "")
 }
 
 type dnsRR_MB struct {
@@ -311,7 +311,7 @@ func (rr *dnsRR_TXT) Walk(f func(v interface{}, name, tag string) bool) bool {
 	if !rr.Hdr.Walk(f) {
 		return false
 	}
-	var n uint16 = 0
+	var n uint16
 	for n < rr.Hdr.Rdlength {
 		var txt string
 		if !f(&txt, "Txt", "") {
@@ -763,8 +763,8 @@ type dnsMsgHdr struct {
 	opcode              int
 	authoritative       bool
 	truncated           bool
-	recursion_desired   bool
-	recursion_available bool
+	recursionDesired    bool
+	recursionAvailable  bool
 	rcode               int
 }
 
@@ -774,8 +774,8 @@ func (h *dnsMsgHdr) Walk(f func(v interface{}, name, tag string) bool) bool {
 		f(&h.opcode, "opcode", "") &&
 		f(&h.authoritative, "authoritative", "") &&
 		f(&h.truncated, "truncated", "") &&
-		f(&h.recursion_desired, "recursion_desired", "") &&
-		f(&h.recursion_available, "recursion_available", "") &&
+		f(&h.recursionDesired, "recursion_desired", "") &&
+		f(&h.recursionAvailable, "recursion_available", "") &&
 		f(&h.rcode, "rcode", "")
 }
 
@@ -791,12 +791,12 @@ func (dns *dnsMsg) Pack() (msg []byte, ok bool) {
 	var dh dnsHeader
 
 	// Convert convenient dnsMsg into wire-like dnsHeader.
-	dh.Id = dns.id
+	dh.ID = dns.id
 	dh.Bits = uint16(dns.opcode)<<11 | uint16(dns.rcode)
-	if dns.recursion_available {
+	if dns.recursionAvailable {
 		dh.Bits |= _RA
 	}
-	if dns.recursion_desired {
+	if dns.recursionDesired {
 		dh.Bits |= _RD
 	}
 	if dns.truncated {
@@ -854,13 +854,13 @@ func (dns *dnsMsg) Unpack(msg []byte) bool {
 	if off, ok = unpackStruct(&dh, msg, off); !ok {
 		return false
 	}
-	dns.id = dh.Id
+	dns.id = dh.ID
 	dns.response = (dh.Bits & _QR) != 0
 	dns.opcode = int(dh.Bits>>11) & 0xF
 	dns.authoritative = (dh.Bits & _AA) != 0
 	dns.truncated = (dh.Bits & _TC) != 0
-	dns.recursion_desired = (dh.Bits & _RD) != 0
-	dns.recursion_available = (dh.Bits & _RA) != 0
+	dns.recursionDesired = (dh.Bits & _RD) != 0
+	dns.recursionAvailable = (dh.Bits & _RA) != 0
 	dns.rcode = int(dh.Bits & 0xF)
 
 	// Arrays.

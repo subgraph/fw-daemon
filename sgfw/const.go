@@ -102,7 +102,7 @@ var FilterResultValue = map[string]FilterResult{
 }
 
 type DbusRule struct {
-	Id     uint32
+	ID     uint32
 	App    string
 	Path   string
 	Verb   uint16

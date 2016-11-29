@@ -79,7 +79,7 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		int32(pc.procInfo().Pid),
 		FirewallConfig.PromptExpanded,
 		FirewallConfig.PromptExpert,
-		int32(FirewallConfig.DefaultActionId))
+		int32(FirewallConfig.DefaultActionID))
 	err := call.Store(&scope, &rule)
 	if err != nil {
 		log.Warningf("Error sending dbus RequestPrompt message: %v", err)

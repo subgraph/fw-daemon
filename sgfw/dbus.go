@@ -9,7 +9,7 @@ import (
 	"github.com/op/go-logging"
 )
 
-const introspectXml = `
+const introspectXML = `
 <node>
   <interface name="com.subgraph.Firewall">
     <method name="SetEnabled">
@@ -72,7 +72,7 @@ func newDbusServer() (*dbusServer, error) {
 	if err := conn.Export(ds, objectPath, interfaceName); err != nil {
 		return nil, err
 	}
-	if err := conn.Export(introspect.Introspectable(introspectXml), objectPath, "org.freedesktop.DBus.Introspectable"); err != nil {
+	if err := conn.Export(introspect.Introspectable(introspectXML), objectPath, "org.freedesktop.DBus.Introspectable"); err != nil {
 		return nil, err
 	}
 
@@ -94,7 +94,7 @@ func (ds *dbusServer) IsEnabled() (bool, *dbus.Error) {
 
 func createDbusRule(r *Rule) DbusRule {
 	return DbusRule{
-		Id:     uint32(r.id),
+		ID:     uint32(r.id),
 		App:    path.Base(r.policy.path),
 		Path:   r.policy.path,
 		Verb:   uint16(r.rtype),
@@ -117,7 +117,7 @@ func (ds *dbusServer) ListRules() ([]DbusRule, *dbus.Error) {
 
 func (ds *dbusServer) DeleteRule(id uint32) *dbus.Error {
 	ds.fw.lock.Lock()
-	r := ds.fw.rulesById[uint(id)]
+	r := ds.fw.rulesByID[uint(id)]
 	ds.fw.lock.Unlock()
 	if r.mode == RULE_MODE_SYSTEM {
 		log.Warningf("Cannot delete system rule: %s", r.String())
@@ -135,7 +135,7 @@ func (ds *dbusServer) DeleteRule(id uint32) *dbus.Error {
 func (ds *dbusServer) UpdateRule(rule DbusRule) *dbus.Error {
 	log.Debugf("UpdateRule %v", rule)
 	ds.fw.lock.Lock()
-	r := ds.fw.rulesById[uint(rule.Id)]
+	r := ds.fw.rulesByID[uint(rule.ID)]
 	ds.fw.lock.Unlock()
 	if r != nil {
 		if r.mode == RULE_MODE_SYSTEM {
@@ -170,7 +170,7 @@ func (ds *dbusServer) GetConfig() (map[string]dbus.Variant, *dbus.Error) {
 	conf["log_redact"] = dbus.MakeVariant(FirewallConfig.LogRedact)
 	conf["prompt_expanded"] = dbus.MakeVariant(FirewallConfig.PromptExpanded)
 	conf["prompt_expert"] = dbus.MakeVariant(FirewallConfig.PromptExpert)
-	conf["default_action"] = dbus.MakeVariant(uint16(FirewallConfig.DefaultActionId))
+	conf["default_action"] = dbus.MakeVariant(uint16(FirewallConfig.DefaultActionID))
 	return conf, nil
 }
 
@@ -192,7 +192,7 @@ func (ds *dbusServer) SetConfig(key string, val dbus.Variant) *dbus.Error {
 		FirewallConfig.PromptExpert = flag
 	case "default_action":
 		l := val.Value().(uint16)
-		FirewallConfig.DefaultActionId = FilterScope(l)
+		FirewallConfig.DefaultActionID = FilterScope(l)
 	}
 	writeConfig()
 	return nil

@@ -21,7 +21,7 @@ type FirewallConfigs struct {
 	PromptExpanded  bool
 	PromptExpert    bool
 	DefaultAction   string
-	DefaultActionId FilterScope `toml:"-"`
+	DefaultActionID FilterScope `toml:"-"`
 }
 
 var FirewallConfig FirewallConfigs
@@ -52,7 +52,7 @@ func readConfig() {
 		PromptExpanded:  false,
 		PromptExpert:    false,
 		DefaultAction:   "SESSION",
-		DefaultActionId: 1,
+		DefaultActionID: 1,
 	}
 
 	if len(buf) > 0 {
@@ -62,12 +62,12 @@ func readConfig() {
 		}
 	}
 	FirewallConfig.LoggingLevel, _ = logging.LogLevel(FirewallConfig.LogLevel)
-	FirewallConfig.DefaultActionId = GetFilterScopeValue(FirewallConfig.DefaultAction)
+	FirewallConfig.DefaultActionID = GetFilterScopeValue(FirewallConfig.DefaultAction)
 }
 
 func writeConfig() {
 	FirewallConfig.LogLevel = FirewallConfig.LoggingLevel.String()
-	FirewallConfig.DefaultAction = GetFilterScopeString(FirewallConfig.DefaultActionId)
+	FirewallConfig.DefaultAction = GetFilterScopeString(FirewallConfig.DefaultActionID)
 
 	if _, err := os.Stat(path.Dir(configDefaultPath)); err != nil && os.IsNotExist(err) {
 		if err := os.MkdirAll(path.Dir(configDefaultPath), 0755); err != nil {
