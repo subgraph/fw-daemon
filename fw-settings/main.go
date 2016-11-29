@@ -52,19 +52,19 @@ func activate(app *gtk.Application) {
 		failDialog(win, "Failed to connect to dbus system bus: %v", err)
 	}
 
-	rlPermanent := NewRuleList(dbus, win, boxPermanent)
+	rlPermanent := newRuleList(dbus, win, boxPermanent)
 	if _, err := dbus.isEnabled(); err != nil {
 		failDialog(win, "Unable is connect to firewall daemon.  Is it running?")
 	}
 	rlPermanent.loadRules(sgfw.RULE_MODE_PERMANENT)
 
-	rlSession := NewRuleList(dbus, win, boxSession)
+	rlSession := newRuleList(dbus, win, boxSession)
 	if _, err := dbus.isEnabled(); err != nil {
 		failDialog(win, "Unable is connect to firewall daemon.  Is it running?")
 	}
 	rlSession.loadRules(sgfw.RULE_MODE_SESSION)
 
-	rlSystem := NewRuleList(dbus, win, boxSystem)
+	rlSystem := newRuleList(dbus, win, boxSystem)
 	if _, err := dbus.isEnabled(); err != nil {
 		failDialog(win, "Unable is connect to firewall daemon.  Is it running?")
 	}

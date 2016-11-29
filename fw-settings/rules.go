@@ -20,18 +20,18 @@ type ruleList struct {
 }
 
 type ruleRow struct {
-	rl            *ruleList
-	rule          *sgfw.DbusRule
-	widget        *gtk.ListBoxRow
-	app_label     *gtk.Label
-	verb_label    *gtk.Label
-	target_label  *gtk.Label
-	edit_button   *gtk.Button
-	save_button   *gtk.Button
-	delete_button *gtk.Button
+	rl              *ruleList
+	rule            *sgfw.DbusRule
+	widget          *gtk.ListBoxRow
+	gtkLabelApp     *gtk.Label
+	gtkLabelVerb    *gtk.Label
+	gtkLabelTarget  *gtk.Label
+	gtkButtonEdit   *gtk.Button
+	gtkButtonSave   *gtk.Button
+	gtkButtonDelete *gtk.Button
 }
 
-func NewRuleList(dbus *dbusObject, win *gtk.Window, list *gtk.ListBox) *ruleList {
+func newRuleList(dbus *dbusObject, win *gtk.Window, list *gtk.ListBox) *ruleList {
 	rl := &ruleList{dbus: dbus, win: win, list: list}
 	rl.list.SetSelectionMode(gtk.SELECTION_NONE)
 	rl.col1, _ = gtk.SizeGroupNew(gtk.SIZE_GROUP_HORIZONTAL)
@@ -57,9 +57,9 @@ func (rl *ruleList) addRules(rules []sgfw.DbusRule, mode sgfw.RuleMode) {
 		}
 		row := createWidget(&rules[i])
 		row.rl = rl
-		rl.col1.AddWidget(row.app_label)
-		rl.col2.AddWidget(row.verb_label)
-		rl.col3.AddWidget(row.target_label)
+		rl.col1.AddWidget(row.gtkLabelApp)
+		rl.col2.AddWidget(row.gtkLabelVerb)
+		rl.col3.AddWidget(row.gtkLabelTarget)
 		rl.list.Add(row.widget)
 	}
 }
@@ -71,23 +71,23 @@ func createWidget(rule *sgfw.DbusRule) *ruleRow {
 	var grid *gtk.Grid
 	builder.getItems(
 		"grid", &grid,
-		"app_label", &row.app_label,
-		"verb_label", &row.verb_label,
-		"target_label", &row.target_label,
-		"edit_button", &row.edit_button,
-		"save_button", &row.save_button,
-		"delete_button", &row.delete_button,
+		"app_label", &row.gtkLabelApp,
+		"verb_label", &row.gtkLabelVerb,
+		"target_label", &row.gtkLabelTarget,
+		"edit_button", &row.gtkButtonEdit,
+		"save_button", &row.gtkButtonSave,
+		"delete_button", &row.gtkButtonDelete,
 	)
 	switch sgfw.RuleMode(rule.Mode) {
 	case sgfw.RULE_MODE_SYSTEM:
-		row.edit_button.SetVisible(false)
-		row.edit_button.SetNoShowAll(true)
-		row.delete_button.SetSensitive(false)
-		row.delete_button.SetTooltipText("Cannot delete system rules")
+		row.gtkButtonEdit.SetVisible(false)
+		row.gtkButtonEdit.SetNoShowAll(true)
+		row.gtkButtonDelete.SetSensitive(false)
+		row.gtkButtonDelete.SetTooltipText("Cannot delete system rules")
 		break
 	case sgfw.RULE_MODE_SESSION:
-		row.save_button.SetSensitive(true)
-		row.save_button.SetNoShowAll(false)
+		row.gtkButtonSave.SetSensitive(true)
+		row.gtkButtonSave.SetNoShowAll(false)
 		break
 	}
 
@@ -103,10 +103,10 @@ func createWidget(rule *sgfw.DbusRule) *ruleRow {
 }
 
 func (rr *ruleRow) update() {
-	rr.app_label.SetText(rr.rule.App)
-	rr.app_label.SetTooltipText(rr.rule.Path)
-	rr.verb_label.SetText(getVerbText(rr.rule))
-	rr.target_label.SetText(getTargetText(rr.rule))
+	rr.gtkLabelApp.SetText(rr.rule.App)
+	rr.gtkLabelApp.SetTooltipText(rr.rule.Path)
+	rr.gtkLabelVerb.SetText(getVerbText(rr.rule))
+	rr.gtkLabelTarget.SetText(getTargetText(rr.rule))
 }
 
 func getVerbText(rule *sgfw.DbusRule) string {
@@ -165,9 +165,9 @@ func (rr *ruleRow) onDelete() {
 }
 
 func (rl *ruleList) remove(rr *ruleRow) {
-	rl.col1.RemoveWidget(rr.app_label)
-	rl.col2.RemoveWidget(rr.verb_label)
-	rl.col3.RemoveWidget(rr.target_label)
+	rl.col1.RemoveWidget(rr.gtkLabelApp)
+	rl.col2.RemoveWidget(rr.gtkLabelVerb)
+	rl.col3.RemoveWidget(rr.gtkLabelTarget)
 	rl.list.Remove(rr.widget)
 }
 
