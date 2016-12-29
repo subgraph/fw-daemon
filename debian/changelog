@@ -1,3 +1,13 @@
+fw-daemon (0.0.5-1) unstable; urgency=low
+
+  * FIX: Prompt no longer has focus to accidentally trigger
+  * NEW: Standardized logging
+  * NEW: Persistant configurations
+  * NEW: Inhenced rules listings
+  * NEW: Configurable prompt defaults
+
+ -- Subgraph <info@subgraph.com>  Thu, 29 Dec 2016 17:45:00 +0000
+
 fw-daemon (0.0.4-2) unstable; urgency=low
 
   * Migrating package to gbp overlay.
