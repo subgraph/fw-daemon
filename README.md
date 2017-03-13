@@ -20,21 +20,21 @@ _Application firewalls_ cannot prevent all malicious code from connecting to the
 Sophisticated malicious code can subvert the _allowed_ connections to bypass the firewall.
 However, the firewall may alert the user of connection attempts by less sophisticated malicious code.
 
-View more documentation in the [Subgraph OS Handbook](https://subgraph.com/sgos-handbook/sgos_handbook.shtml#monitoring-outgoing-connections-with-subgraph-firewall).
+Read more in the [Subgraph OS Handbook](https://subgraph.com/sgos-handbook/sgos_handbook.shtml#monitoring-outgoing-connections-with-subgraph-firewall).
 
 
 ## Building
 
 
 ```
-	# To build the Debian package:
-	git clone -b debian https://github.com/subgraph/fw-daemon.git
-	cd fw-daemon
-	# To build from stable
-	gbp buildpackage -us -uc
-	# To buiild the latest tag
-	gbp buildpackage -us -uc --git-upstream-tree=master
-	# Install the package
-	dpkg -i /tmp/build-area/fw-daemon{,-gnome}-*.deb
-	# Refresh your gnome-shell session 'alt-r' type 'r' hit enter.
+# To build the Debian package:
+git clone -b debian https://github.com/subgraph/fw-daemon.git
+cd fw-daemon
+## To build from stable
+gbp buildpackage -us -uc
+## To build from head
+gbp buildpackage -us -uc --git-upstream-tree=master
+## Install the package
+dpkg -i /tmp/build-area/fw-daemon{,-gnome}-*.deb
+## Refresh your gnome-shell session 'alt-r' type 'r' hit enter.
 ```
