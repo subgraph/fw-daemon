@@ -1,0 +1,10 @@
+[Desktop Entry]
+Encoding=UTF-8
+Name=Subgraph Firewall Settings
+Comment=Launch the Subgraph Firewall Settings
+TryExec=fw-settings
+Exec=fw-settings
+Terminal=false
+Type=Application
+Icon=security-medium
+Categories=Network;Admin;
