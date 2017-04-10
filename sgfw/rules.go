@@ -79,7 +79,7 @@ func (r *Rule) match(dst net.IP, dstPort uint16, hostname string) bool {
 	if r.hostname != "" {
 		return r.hostname == hostname
 	}
-	return r.addr == binary.BigEndian.Uint32(dst)
+	return r.addr == binary.BigEndian.Uint32(dst.To4())
 }
 
 func (rl *RuleList) filterPacket(p *nfqueue.Packet, pinfo *procsnitch.Info, hostname string) FilterResult {

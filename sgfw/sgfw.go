@@ -7,6 +7,9 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"bufio"
+	"encoding/json"
+	"strings"
 
 	"github.com/op/go-logging"
 
@@ -107,7 +110,54 @@ func (fw *Firewall) runFilter() {
 	}
 }
 
+type SocksJsonConfig struct {
+	SocksListener string
+	TorSocks      string
+}
+
 var commentRegexp = regexp.MustCompile("^[ \t]*#")
+
+const defaultSocksCfgPath = "/etc/fw-daemon-socks.json"
+
+func loadSocksConfiguration(configFilePath string) (*SocksJsonConfig, error) {
+	config := SocksJsonConfig{}
+	file, err := os.Open(configFilePath)
+	if err != nil {
+		return nil, err
+	}
+	scanner := bufio.NewScanner(file)
+	bs := ""
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !commentRegexp.MatchString(line) {
+			bs += line + "\n"
+		}
+	}
+	if err := json.Unmarshal([]byte(bs), &config); err != nil {
+		return nil, err
+	}
+	return &config, nil
+}
+
+func getSocksChainConfig(config *SocksJsonConfig) *socksChainConfig {
+	// XXX
+	fields := strings.Split(config.TorSocks, "|")
+	torSocksNet := fields[0]
+	torSocksAddr := fields[1]
+	fields = strings.Split(config.SocksListener, "|")
+	socksListenNet := fields[0]
+	socksListenAddr := fields[1]
+	socksConfig := socksChainConfig{
+		TargetSocksNet:  torSocksNet,
+		TargetSocksAddr: torSocksAddr,
+		ListenSocksNet:  socksListenNet,
+		ListenSocksAddr: socksListenAddr,
+	}
+	log.Notice("Loaded Socks chain config:")
+	log.Notice(socksConfig)
+	return &socksConfig
+}
+
 
 func Main() {
 	readConfig()
@@ -140,6 +190,26 @@ func Main() {
 	ds.fw = fw
 
 	fw.loadRules()
+
+       /*
+                go func() {
+                        http.ListenAndServe("localhost:6060", nil)
+                }()
+        */
+
+        wg := sync.WaitGroup{}
+
+        config, err := loadSocksConfiguration(defaultSocksCfgPath)
+        if err != nil && !os.IsNotExist(err) {
+                panic(err)
+        }
+        if config != nil {
+                socksConfig := getSocksChainConfig(config)
+                chain := NewSocksChain(socksConfig, &wg, fw)
+                chain.start()
+        } else {
+		log.Notice("Did not find SOCKS5 configuration file at", defaultSocksCfgPath, "; ignoring subsystem...")
+	}
 
 	fw.runFilter()
 
