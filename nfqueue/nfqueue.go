@@ -42,7 +42,7 @@ func NewNFQueue(qid uint16) (nfq *nfQueue) {
 }
 
 /*
-This returns a channel that will recieve packets,
+This returns a channel that will receive packets,
 the user then must call pkt.Accept() or pkt.Drop()
 */
 func (this *nfQueue) Process() <-chan *Packet {

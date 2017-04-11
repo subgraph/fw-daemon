@@ -28,6 +28,7 @@ const DetailSection = new Lang.Class({
         this.ipAddr = this._addDetails("IP Address:");
         this.path = this._addDetails("Path:");
         this.pid = this._addDetails("Process ID:");
+	this.origin = this._addDetails("Origin:");
         this.user = this._addDetails("User:");
     },
 
@@ -39,10 +40,11 @@ const DetailSection = new Lang.Class({
         return msg;
     },
 
-    setDetails: function(ip, path, pid, user) {
+    setDetails: function(ip, path, pid, user, origin) {
         this.ipAddr.text = ip;
         this.path.text = path;
         this.pid.text = pid.toString();
+	this.origin.text = origin;
         this.user.text = user;
     }
 });
@@ -449,7 +451,7 @@ const PromptDialog = new Lang.Class({
         }
     },
 
-    update: function(application, icon, path, address, port, ip, user, pid, proto, expanded, expert, action) {
+    update: function(application, icon, path, address, port, ip, origin, user, pid, proto, expanded, expert, action) {
         this._address = address;
         this._port = port;
 
@@ -478,6 +480,6 @@ const PromptDialog = new Lang.Class({
         }
 
         this.optionList.buttonGroup._setChecked(this.optionList.scopeToIdx(action))
-        this.info.setDetails(ip, path, pid, user);
+        this.info.setDetails(ip, path, pid, user, origin);
     },
 });

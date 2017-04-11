@@ -75,6 +75,7 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		addr,
 		int32(pc.dstPort()),
 		pc.dst().String(),
+		"---",
 		uidToUser(pc.procInfo().UID),
 		int32(pc.procInfo().Pid),
 		FirewallConfig.PromptExpanded,
