@@ -11,7 +11,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/subgraph/fw-daemon/nfqueue"
+	nfqueue "github.com/subgraph/go-nfnetlink/nfqueue"
+//	"github.com/subgraph/go-nfnetlink"
 	"github.com/subgraph/go-procsnitch"
 )
 
@@ -82,11 +83,13 @@ func (r *Rule) match(dst net.IP, dstPort uint16, hostname string) bool {
 	return r.addr == binary.BigEndian.Uint32(dst.To4())
 }
 
-func (rl *RuleList) filterPacket(p *nfqueue.Packet, pinfo *procsnitch.Info, hostname string) FilterResult {
-	return rl.filter(p, p.Dst, p.DstPort, hostname, pinfo)
+func (rl *RuleList) filterPacket(p *nfqueue.NFQPacket, pinfo *procsnitch.Info, hostname string) FilterResult {
+	_, dstip := getPacketIP4Addrs(p)
+	_, dstp := getPacketPorts(p)
+	return rl.filter(p, dstip, dstp, hostname, pinfo)
 }
 
-func (rl *RuleList) filter(pkt *nfqueue.Packet, dst net.IP, dstPort uint16, hostname string, pinfo *procsnitch.Info) FilterResult {
+func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, dst net.IP, dstPort uint16, hostname string, pinfo *procsnitch.Info) FilterResult {
 	if rl == nil {
 		return FILTER_PROMPT
 	}
@@ -99,7 +102,9 @@ func (rl *RuleList) filter(pkt *nfqueue.Packet, dst net.IP, dstPort uint16, host
 			}
 			srcStr := STR_UNKNOWN
 			if pkt != nil {
-				srcStr = fmt.Sprintf("%s:%d", pkt.Src, pkt.SrcPort)
+				srcip, _ := getPacketIP4Addrs(pkt)
+				srcp, _ := getPacketPorts(pkt)
+				srcStr = fmt.Sprintf("%s:%d", srcip, srcp)
 			}
 			log.Noticef("%s > %s %s %s -> %s:%d",
 				r.getString(FirewallConfig.LogRedact),

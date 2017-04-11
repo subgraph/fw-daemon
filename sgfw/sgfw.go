@@ -6,14 +6,14 @@ import (
 	"regexp"
 	"sync"
 	"syscall"
-	"time"
+//	"time"
 	"bufio"
 	"encoding/json"
 	"strings"
 
 	"github.com/op/go-logging"
-
-	"github.com/subgraph/fw-daemon/nfqueue"
+	nfqueue "github.com/subgraph/go-nfnetlink/nfqueue"
+//	"github.com/subgraph/go-nfnetlink"
 	"github.com/subgraph/go-procsnitch"
 )
 
@@ -88,20 +88,31 @@ func (fw *Firewall) reloadRules() {
 
 func (fw *Firewall) runFilter() {
 	q := nfqueue.NewNFQueue(0)
-	defer q.Destroy()
 
-	q.DefaultVerdict = nfqueue.DROP
-	q.Timeout = 5 * time.Minute
-	packets := q.Process()
+	// XXX: need to implement this
+//	q.DefaultVerdict = nfqueue.DROP
+	// XXX: need this as well
+//	q.Timeout = 5 * time.Minute
+
+	ps, err := q.Open()
+
+	if err != nil {
+		log.Fatal("Error opening NFQueue:", err)
+	}
+	defer q.Close()
+
+	go func() {
+		for p := range ps {
+			if fw.isEnabled() {
+				fw.filterPacket(p)
+			} else {
+				p.Accept()
+			}
+		}
+	}()
 
 	for {
 		select {
-		case pkt := <-packets:
-			if fw.isEnabled() {
-				fw.filterPacket(pkt)
-			} else {
-				pkt.Accept()
-			}
 		case <-fw.reloadRulesChan:
 			fw.loadRules()
 		case <-fw.stopChan:

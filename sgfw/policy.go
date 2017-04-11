@@ -5,7 +5,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/subgraph/fw-daemon/nfqueue"
+//	"encoding/binary"
+
+//	nfnetlink "github.com/subgraph/go-nfnetlink"
+	nfqueue "github.com/subgraph/go-nfnetlink/nfqueue"
+//	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 	"github.com/subgraph/go-procsnitch"
 	"net"
 )
@@ -30,7 +35,7 @@ type pendingConnection interface {
 type pendingPkt struct {
 	pol   *Policy
 	name  string
-	pkt   *nfqueue.Packet
+	pkt   *nfqueue.NFQPacket
 	pinfo *procsnitch.Info
 }
 
@@ -46,11 +51,27 @@ func (pp *pendingPkt) hostname() string {
 	return pp.name
 }
 func (pp *pendingPkt) dst() net.IP {
-	return pp.pkt.Dst
+	dst := pp.pkt.Packet.NetworkLayer().NetworkFlow().Dst()
+
+	if dst.EndpointType() != layers.EndpointIPv4 {
+		return nil
+	}
+
+	return dst.Raw()
+//	pp.pkt.NetworkLayer().Layer
 }
 
 func (pp *pendingPkt) dstPort() uint16 {
-	return pp.pkt.DstPort
+/*	dst := pp.pkt.Packet.TransportLayer().TransportFlow().Dst()
+
+	if dst.EndpointType() != layers.EndpointTCPPort {
+		return 0
+	}
+
+	return binary.BigEndian.Uint16(dst.Raw()) */
+	_, dstp := getPacketTCPPorts(pp.pkt)
+	return dstp
+//	return pp.pkt.DstPort
 }
 
 func (pp *pendingPkt) accept() {
@@ -58,7 +79,8 @@ func (pp *pendingPkt) accept() {
 }
 
 func (pp *pendingPkt) drop() {
-	pp.pkt.Mark = 1
+// XXX: This needs to be fixed
+//	pp.pkt.Mark = 1
 	pp.pkt.Accept()
 }
 
@@ -101,17 +123,21 @@ func (fw *Firewall) policyForPath(path string) *Policy {
 	return fw.policyMap[path]
 }
 
-func (p *Policy) processPacket(pkt *nfqueue.Packet, pinfo *procsnitch.Info) {
+func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	name := p.fw.dns.Lookup(pkt.Dst)
+	dstb := pkt.Packet.NetworkLayer().NetworkFlow().Dst().Raw()
+	dstip := net.IP(dstb)
+	name := p.fw.dns.Lookup(dstip)
+//	name := p.fw.dns.Lookup(pkt.Dst)
 	if !FirewallConfig.LogRedact {
-		log.Infof("Lookup(%s): %s", pkt.Dst.String(), name)
+		log.Infof("Lookup(%s): %s", dstip.String(), name)
 	}
 	result := p.rules.filterPacket(pkt, pinfo, name)
 	switch result {
 	case FILTER_DENY:
-		pkt.Mark = 1
+// XXX: this needs to be fixed
+//		pkt.Mark = 1
 		pkt.Accept()
 	case FILTER_ALLOW:
 		pkt.Accept()
@@ -228,41 +254,54 @@ func (p *Policy) hasPersistentRules() bool {
 	return false
 }
 
-func printPacket(pkt *nfqueue.Packet, hostname string, pinfo *procsnitch.Info) string {
-	proto := func() string {
-		switch pkt.Protocol {
-		case nfqueue.TCP:
-			return "TCP"
-		case nfqueue.UDP:
-			return "UDP"
+func printPacket(pkt *nfqueue.NFQPacket, hostname string, pinfo *procsnitch.Info) string {
+	proto := "???"
+	SrcPort, DstPort := uint16(0), uint16(0)
+	SrcIp, DstIp := getPacketIP4Addrs(pkt)
+
+	switch pkt.Packet.TransportLayer().TransportFlow().EndpointType() {
+		case 4:
+			proto = "TCP"
+		case 5:
+			proto = "UDP"
 		default:
-			return "???"
-		}
-	}()
+	}
+
+	if proto == "TCP" {
+		SrcPort, DstPort = getPacketTCPPorts(pkt)
+	} else if proto == "UDP" {
+		SrcPort, DstPort = getPacketUDPPorts(pkt)
+	}
 
 	if FirewallConfig.LogRedact {
 		hostname = STR_REDACTED
 	}
 	name := hostname
 	if name == "" {
-		name = pkt.Dst.String()
+		name = DstIp.String()
 	}
 	if pinfo == nil {
-		return fmt.Sprintf("(%s %s:%d -> %s:%d)", proto, pkt.Src, pkt.SrcPort, name, pkt.DstPort)
+		return fmt.Sprintf("(%s %s:%d -> %s:%d)", proto, SrcIp, SrcPort, name, DstPort)
 	}
-	
-	return fmt.Sprintf("%s %s %s:%d -> %s:%d", pinfo.ExePath, proto, pkt.Src, pkt.SrcPort, name, pkt.DstPort)
+
+	return fmt.Sprintf("%s %s %s:%d -> %s:%d", pinfo.ExePath, proto, SrcIp, SrcPort, name, DstPort)
 }
 
-func (fw *Firewall) filterPacket(pkt *nfqueue.Packet) {
-	if pkt.Protocol == nfqueue.UDP && pkt.SrcPort == 53 {
-		pkt.Accept()
-		fw.dns.processDNS(pkt)
-		return
+func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
+	if pkt.Packet.Layer(layers.LayerTypeUDP) != nil {
+		srcport, _ := getPacketUDPPorts(pkt)
+
+		if srcport == 53 {
+			pkt.Accept()
+			fw.dns.processDNS(pkt.Packet)
+			return
+		}
+
 	}
+	_, dstip := getPacketIP4Addrs(pkt)
 	pinfo := findProcessForPacket(pkt)
 	if pinfo == nil {
-		log.Warningf("No proc found for %s", printPacket(pkt, fw.dns.Lookup(pkt.Dst), nil))
+		log.Warningf("No proc found for %s", printPacket(pkt, fw.dns.Lookup(dstip), nil))
 		pkt.Accept()
 		return
 	}
@@ -276,7 +315,7 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.Packet) {
 			}
 		}
 	}
-	log.Debugf("filterPacket [%s] %s", ppath, printPacket(pkt, fw.dns.Lookup(pkt.Dst), nil))
+	log.Debugf("filterPacket [%s] %s", ppath, printPacket(pkt, fw.dns.Lookup(dstip), nil))
 	if basicAllowPacket(pkt) {
 		pkt.Accept()
 		return
@@ -285,20 +324,68 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.Packet) {
 	policy.processPacket(pkt, pinfo)
 }
 
-func findProcessForPacket(pkt *nfqueue.Packet) *procsnitch.Info {
-	switch pkt.Protocol {
-	case nfqueue.TCP:
-		return procsnitch.LookupTCPSocketProcess(pkt.SrcPort, pkt.Dst, pkt.DstPort)
-	case nfqueue.UDP:
-		return procsnitch.LookupUDPSocketProcess(pkt.SrcPort)
-	default:
-		log.Warningf("Packet has unknown protocol: %d", pkt.Protocol)
-		return nil
+func findProcessForPacket(pkt *nfqueue.NFQPacket) *procsnitch.Info {
+	_, dstip := getPacketIP4Addrs(pkt)
+	srcp, dstp := getPacketPorts(pkt)
+
+	if pkt.Packet.Layer(layers.LayerTypeTCP) != nil {
+		return procsnitch.LookupTCPSocketProcess(srcp, dstip, dstp)
+	} else if pkt.Packet.Layer(layers.LayerTypeUDP) != nil {
+		return procsnitch.LookupUDPSocketProcess(srcp)
 	}
+
+	log.Warningf("Packet has unknown protocol: %d", pkt.Packet.NetworkLayer().LayerType())
+	//log.Warningf("Packet has unknown protocol: %d", pkt.Protocol)
+	return nil
 }
 
-func basicAllowPacket(pkt *nfqueue.Packet) bool {
-	return pkt.Dst.IsLoopback() ||
-		pkt.Dst.IsLinkLocalMulticast() ||
-		pkt.Protocol != nfqueue.TCP
+func basicAllowPacket(pkt *nfqueue.NFQPacket) bool {
+	_, dstip := getPacketIP4Addrs(pkt)
+	return dstip.IsLoopback() ||
+		dstip.IsLinkLocalMulticast() ||
+		pkt.Packet.Layer(layers.LayerTypeTCP) == nil
+//		pkt.Protocol != nfqueue.TCP
+}
+
+func getPacketIP4Addrs(pkt *nfqueue.NFQPacket) (net.IP, net.IP) {
+	ipLayer := pkt.Packet.Layer(layers.LayerTypeIPv4)
+
+	if ipLayer == nil {
+		return net.IP{0,0,0,0}, net.IP{0,0,0,0}
+	}
+
+	ip, _ := ipLayer.(*layers.IPv4)
+	return ip.SrcIP, ip.DstIP
+}
+
+func getPacketTCPPorts(pkt *nfqueue.NFQPacket) (uint16, uint16) {
+	tcpLayer := pkt.Packet.Layer(layers.LayerTypeTCP)
+
+	if tcpLayer == nil {
+		return 0, 0
+	}
+
+	tcp, _ := tcpLayer.(*layers.TCP)
+	return uint16(tcp.SrcPort), uint16(tcp.DstPort)
+}
+
+func getPacketUDPPorts(pkt *nfqueue.NFQPacket) (uint16, uint16) {
+	udpLayer := pkt.Packet.Layer(layers.LayerTypeUDP)
+
+	if udpLayer == nil {
+		return 0, 0
+	}
+
+	udp, _ := udpLayer.(*layers.UDP)
+	return uint16(udp.SrcPort), uint16(udp.DstPort)
+}
+
+func getPacketPorts(pkt *nfqueue.NFQPacket) (uint16, uint16) {
+	s, d := getPacketTCPPorts(pkt)
+
+	if s == 0 && d == 0 {
+		s, d = getPacketUDPPorts(pkt)
+	}
+
+	return s, d
 }

@@ -5,7 +5,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/subgraph/fw-daemon/nfqueue"
+//	"github.com/subgraph/go-nfnetlink"
+	"github.com/google/gopacket"
 )
 
 type dnsCache struct {
@@ -21,9 +22,9 @@ func newDNSCache() *dnsCache {
 	}
 }
 
-func (dc *dnsCache) processDNS(pkt *nfqueue.Packet) {
+func (dc *dnsCache) processDNS(pkt gopacket.Packet) {
 	dns := &dnsMsg{}
-	if !dns.Unpack(pkt.Payload) {
+	if !dns.Unpack(pkt.ApplicationLayer().Payload()) {
 		log.Warning("Failed to Unpack DNS message")
 		return
 	}
