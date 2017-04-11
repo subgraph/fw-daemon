@@ -259,12 +259,13 @@ func printPacket(pkt *nfqueue.NFQPacket, hostname string, pinfo *procsnitch.Info
 	SrcPort, DstPort := uint16(0), uint16(0)
 	SrcIp, DstIp := getPacketIP4Addrs(pkt)
 
-	switch pkt.Packet.TransportLayer().TransportFlow().EndpointType() {
-		case 4:
-			proto = "TCP"
-		case 5:
-			proto = "UDP"
-		default:
+//	switch pkt.Packet.TransportLayer().TransportFlow().EndpointType() {
+	if pkt.Packet.Layer(layers.LayerTypeTCP) != nil {
+//		case 4:
+		proto = "TCP"
+	} else if pkt.Packet.Layer(layers.LayerTypeUDP) != nil {
+//		case 5:
+		proto = "UDP"
 	}
 
 	if proto == "TCP" {
