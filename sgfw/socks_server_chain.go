@@ -44,6 +44,7 @@ const (
 type pendingSocksConnection struct {
 	pol      *Policy
 	hname    string
+	srcIP   net.IP
 	destIP   net.IP
 	destPort uint16
 	pinfo    *procsnitch.Info
@@ -67,6 +68,10 @@ func (sc *pendingSocksConnection) dst() net.IP {
 }
 func (sc *pendingSocksConnection) dstPort() uint16 {
 	return sc.destPort
+}
+
+func (sc *pendingSocksConnection) src() net.IP {
+	return sc.srcIP
 }
 
 func (sc *pendingSocksConnection) deliverVerdict(v int) {
@@ -178,7 +183,7 @@ func (c *socksChainSession) addressDetails() (string, net.IP, uint16) {
 func (c *socksChainSession) filterConnect() bool {
 	pinfo := procsnitch.FindProcessForConnection(c.clientConn, c.procInfo)
 	if pinfo == nil {
-		log.Warningf("No proc found for connection from: %s", c.clientConn.RemoteAddr())
+		log.Warningf("No proc found for [socks5] connection from: %s", c.clientConn.RemoteAddr())
 		return false
 	}
 
@@ -199,6 +204,7 @@ func (c *socksChainSession) filterConnect() bool {
 			pol:      policy,
 			hname:    hostname,
 			destIP:   ip,
+			srcIP:    net.IP{0,0,0,0},
 			destPort: port,
 			pinfo:    pinfo,
 			verdict:  make(chan int),

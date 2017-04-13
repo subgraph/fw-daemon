@@ -111,3 +111,9 @@ type DbusRule struct {
 	Target string
 	Mode   uint16
 }
+
+const (
+	OZ_FWRULE_WHITELIST = iota
+	OZ_FWRULE_BLACKLIST
+	OZ_FWRULE_NONE
+)

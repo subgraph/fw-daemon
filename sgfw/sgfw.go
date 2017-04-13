@@ -99,6 +99,7 @@ func (fw *Firewall) runFilter() {
 	if err != nil {
 		log.Fatal("Error opening NFQueue:", err)
 	}
+	q.EnableHWTrace()
 	defer q.Close()
 
 	go func() {
@@ -221,6 +222,8 @@ func Main() {
         } else {
 		log.Notice("Did not find SOCKS5 configuration file at", defaultSocksCfgPath, "; ignoring subsystem...")
 	}
+
+	go OzReceiver()
 
 	fw.runFilter()
 

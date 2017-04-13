@@ -21,10 +21,22 @@ var _interpreters = []string{
 	"bash",
 }
 
+type sandboxRule struct {
+	SrcIf net.IP
+	DstIP net.IP
+	DstPort uint16
+	Whitelist bool
+}
+
+var sandboxRules = []sandboxRule {
+	{ net.IP{172,16,1,42}, net.IP{140,211,166,134}, 21, false },
+}
+
 type pendingConnection interface {
 	policy() *Policy
 	procInfo() *procsnitch.Info
 	hostname() string
+	src() net.IP
 	dst() net.IP
 	dstPort() uint16
 	accept()
@@ -50,14 +62,22 @@ func (pp *pendingPkt) procInfo() *procsnitch.Info {
 func (pp *pendingPkt) hostname() string {
 	return pp.name
 }
+
+func (pp *pendingPkt) src() net.IP {
+	src, _ := getPacketIP4Addrs(pp.pkt)
+	return src
+}
+
 func (pp *pendingPkt) dst() net.IP {
-	dst := pp.pkt.Packet.NetworkLayer().NetworkFlow().Dst()
+	_, dst := getPacketIP4Addrs(pp.pkt)
+	return dst
+/*	dst := pp.pkt.Packet.NetworkLayer().NetworkFlow().Dst()
 
 	if dst.EndpointType() != layers.EndpointIPv4 {
 		return nil
 	}
 
-	return dst.Raw()
+	return dst.Raw() */
 //	pp.pkt.NetworkLayer().Layer
 }
 
@@ -79,8 +99,7 @@ func (pp *pendingPkt) accept() {
 }
 
 func (pp *pendingPkt) drop() {
-// XXX: This needs to be fixed
-//	pp.pkt.Mark = 1
+	pp.pkt.SetMark(1)
 	pp.pkt.Accept()
 }
 
@@ -124,20 +143,27 @@ func (fw *Firewall) policyForPath(path string) *Policy {
 }
 
 func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info) {
+
+/*	hbytes, err := pkt.GetHWAddr()
+	if err != nil {
+		log.Notice("Failed to get HW address underlying packet: ", err)
+	} else { log.Notice("got hwaddr: ", hbytes) } */
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	dstb := pkt.Packet.NetworkLayer().NetworkFlow().Dst().Raw()
 	dstip := net.IP(dstb)
+	srcip := net.IP(pkt.Packet.NetworkLayer().NetworkFlow().Src().Raw())
+	_, dstp := getPacketPorts(pkt)
 	name := p.fw.dns.Lookup(dstip)
-//	name := p.fw.dns.Lookup(pkt.Dst)
 	if !FirewallConfig.LogRedact {
 		log.Infof("Lookup(%s): %s", dstip.String(), name)
 	}
+	fwo := matchAgainstOzRules(srcip, dstip, dstp)
+log.Notice("XXX: Attempting to filter packet on rules -> ", fwo)
 	result := p.rules.filterPacket(pkt, pinfo, name)
 	switch result {
 	case FILTER_DENY:
-// XXX: this needs to be fixed
-//		pkt.Mark = 1
+		pkt.SetMark(1)
 		pkt.Accept()
 	case FILTER_ALLOW:
 		pkt.Accept()
@@ -299,7 +325,24 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 		}
 
 	}
-	_, dstip := getPacketIP4Addrs(pkt)
+	srcip, dstip := getPacketIP4Addrs(pkt)
+	_, dstp := getPacketPorts(pkt)
+	fwo := matchAgainstOzRules(srcip, dstip, dstp)
+	log.Notice("XXX: Attempting [2] to filter packet on rules -> ", fwo)
+
+	if fwo == OZ_FWRULE_WHITELIST {
+		log.Noticef("Automatically passed through whitelisted sandbox traffic from %s to %s:%d\n", srcip, dstip, dstp)
+		pkt.Accept()
+		return
+	} else if fwo == OZ_FWRULE_BLACKLIST {
+		log.Noticef("Automatically blocking blacklisted sandbox traffic from %s to %s:%d\n", srcip, dstip, dstp)
+		pkt.SetMark(1)
+		pkt.Accept()
+		return
+	}
+
+
+
 	pinfo := findProcessForPacket(pkt)
 	if pinfo == nil {
 		log.Warningf("No proc found for %s", printPacket(pkt, fw.dns.Lookup(dstip), nil))
@@ -389,4 +432,22 @@ func getPacketPorts(pkt *nfqueue.NFQPacket) (uint16, uint16) {
 	}
 
 	return s, d
+}
+
+func matchAgainstOzRules(srci, dsti net.IP, dstp uint16) int {
+
+	for i := 0; i < len(sandboxRules); i++ {
+
+	log.Notice("XXX: Attempting to match: ", srci, " / ", dsti, " / ", dstp, " | ", sandboxRules[i])
+
+		if sandboxRules[i].SrcIf.Equal(srci) && sandboxRules[i].DstIP.Equal(dsti) && sandboxRules[i].DstPort == dstp {
+			if sandboxRules[i].Whitelist {
+				return OZ_FWRULE_WHITELIST
+			}
+			return OZ_FWRULE_BLACKLIST
+		}
+
+	}
+
+	return OZ_FWRULE_NONE
 }

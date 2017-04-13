@@ -7,6 +7,7 @@ import (
 
 //	"github.com/subgraph/go-nfnetlink"
 	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 )
 
 type dnsCache struct {
@@ -24,7 +25,7 @@ func newDNSCache() *dnsCache {
 
 func (dc *dnsCache) processDNS(pkt gopacket.Packet) {
 	dns := &dnsMsg{}
-	if !dns.Unpack(pkt.ApplicationLayer().Payload()) {
+	if !dns.Unpack(pkt.Layer(layers.LayerTypeDNS).LayerContents()) {
 		log.Warning("Failed to Unpack DNS message")
 		return
 	}
