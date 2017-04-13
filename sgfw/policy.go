@@ -51,11 +51,26 @@ type pendingPkt struct {
 	pinfo *procsnitch.Info
 }
 
+func getEmptyPInfo() *procsnitch.Info {
+	pinfo := procsnitch.Info{}
+	pinfo.UID, pinfo.Pid, pinfo.ParentPid = 0, 0, 0
+	pinfo.ExePath = "[unknown-exe]"
+	pinfo.CmdLine = "[unknown-cmdline]"
+	pinfo.FirstArg = "[unknown-arg]"
+	pinfo.ParentCmdLine = "[unknown-pcmdline]"
+	pinfo.ParentExePath = "[unknown-pexe]"
+	return &pinfo
+}
+
 func (pp *pendingPkt) policy() *Policy {
 	return pp.pol
 }
 
 func (pp *pendingPkt) procInfo() *procsnitch.Info {
+	if pp.pinfo == nil {
+		return getEmptyPInfo()
+	}
+
 	return pp.pinfo
 }
 
@@ -342,20 +357,23 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 	}
 
 
+	ppath := "*"
 
 	pinfo := findProcessForPacket(pkt)
 	if pinfo == nil {
+		pinfo = getEmptyPInfo()
 		log.Warningf("No proc found for %s", printPacket(pkt, fw.dns.Lookup(dstip), nil))
-		pkt.Accept()
-		return
-	}
-	ppath := pinfo.ExePath
-	cf := strings.Fields(pinfo.CmdLine)
-	if len(cf) > 1 && strings.HasPrefix(cf[1], "/") {
-		for _, intp := range _interpreters {
-			if strings.Contains(pinfo.ExePath, intp) {
-				ppath = cf[1]
-				break
+//		pkt.Accept()
+//		return
+	} else {
+		ppath = pinfo.ExePath
+		cf := strings.Fields(pinfo.CmdLine)
+		if len(cf) > 1 && strings.HasPrefix(cf[1], "/") {
+			for _, intp := range _interpreters {
+				if strings.Contains(pinfo.ExePath, intp) {
+					ppath = cf[1]
+					break
+				}
 			}
 		}
 	}
