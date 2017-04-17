@@ -1,4 +1,4 @@
-fw-daemon (0.0.5-1) unstable; urgency=low
+fw-daemon (0.0.6-1) unstable; urgency=low
 
   * NEW: Added .desktop launcher for fw-settings
 
