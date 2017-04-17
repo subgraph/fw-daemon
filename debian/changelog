@@ -1,5 +1,11 @@
 fw-daemon (0.0.5-1) unstable; urgency=low
 
+  * NEW: Added .desktop launcher for fw-settings
+
+ -- Subgraph <info@subgraph.com>  Mon, 17 Apr 2017 15:30:00 +0000
+
+fw-daemon (0.0.5-1) unstable; urgency=low
+
   * FIX: Prompt no longer has focus to accidentally trigger
   * NEW: Standardized logging
   * NEW: Persistant configurations
