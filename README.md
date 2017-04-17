@@ -40,3 +40,14 @@ gbp buildpackage -us -uc --git-upstream-tree=master
 dpkg -i /tmp/build-area/fw-daemon{,-gnome}-*.deb
 ## Refresh your gnome-shell session 'alt-r' type 'r' hit enter.
 ```
+
+You will be left to install the matching iptables rules. While this may vary depending on your environment, pre-existing ruleset
+and preferred mechanism; something like the following needs to be added:
+
+```
+iptables -t mangle -A OUTPUT -m conntrack --ctstate NEW -j NFQUEUE --queue-num 0 --queue-bypass
+iptables -A INPUT -p udp -m udp --sport 53 -j NFQUEUE --queue-num 0 --queue-bypass
+iptables -A OUTPUT -p tcp -m mark --mark 0x1 -j LOG
+iptables -A OUTPUT -p tcp -m mark --mark 0x1 -j REJECT --reject-with icmp-port-unreachable
+
+```
