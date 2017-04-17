@@ -27,6 +27,8 @@ Read more in the [Subgraph OS Handbook](https://subgraph.com/sgos-handbook/sgos_
 
 
 ```
+# First install the build dependencies
+apt install debhelper dh-golang dh-systemd golang-go libcairo2-dev libglib2.0-dev libgtk-3-dev libnetfilter-queue-dev
 # To build the Debian package:
 git clone -b debian https://github.com/subgraph/fw-daemon.git
 cd fw-daemon
