@@ -193,7 +193,7 @@ func (c *socksChainSession) filterConnect() bool {
 	if ip == nil && hostname == "" {
 		return false
 	}
-	result := policy.rules.filter(nil, ip, port, hostname, pinfo)
+	result := policy.rules.filter(nil, nil, ip, port, hostname, pinfo)
 	switch result {
 	case FILTER_DENY:
 		return false

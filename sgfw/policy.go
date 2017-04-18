@@ -29,7 +29,7 @@ type sandboxRule struct {
 }
 
 var sandboxRules = []sandboxRule {
-	{ net.IP{172,16,1,42}, net.IP{140,211,166,134}, 21, false },
+//	{ net.IP{172,16,1,42}, net.IP{140,211,166,134}, 21, false },
 }
 
 type pendingConnection interface {
@@ -168,14 +168,22 @@ func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info) {
 	dstb := pkt.Packet.NetworkLayer().NetworkFlow().Dst().Raw()
 	dstip := net.IP(dstb)
 	srcip := net.IP(pkt.Packet.NetworkLayer().NetworkFlow().Src().Raw())
-	_, dstp := getPacketPorts(pkt)
+//	_, dstp := getPacketPorts(pkt)
 	name := p.fw.dns.Lookup(dstip)
 	if !FirewallConfig.LogRedact {
 		log.Infof("Lookup(%s): %s", dstip.String(), name)
 	}
-	fwo := matchAgainstOzRules(srcip, dstip, dstp)
-log.Notice("XXX: Attempting to filter packet on rules -> ", fwo)
-	result := p.rules.filterPacket(pkt, pinfo, name)
+//	fwo := matchAgainstOzRules(srcip, dstip, dstp)
+
+if name == "" {
+/*	log.Notice("XXXXXXXXXXXXx trying better rev lookup:")
+	net.LookupAddr(dstip.String())
+	name = p.fw.dns.Lookup(dstip)
+	log.Notice("NOW ITS: ", name) */
+}
+
+//log.Notice("XXX: Attempting to filter packet on rules -> ", fwo, " / rev lookup = ", name)
+	result := p.rules.filterPacket(pkt, pinfo, srcip, name)
 	switch result {
 	case FILTER_DENY:
 		pkt.SetMark(1)
@@ -238,6 +246,7 @@ func (p *Policy) processNewRule(r *Rule, scope FilterScope) bool {
 }
 
 func (p *Policy) parseRule(s string, add bool) (*Rule, error) {
+log.Noticef("XXX: attempt to parse rule: |%s|\n", s)
 	r := new(Rule)
 	r.mode = RULE_MODE_PERMANENT
 	r.policy = p
@@ -269,7 +278,7 @@ func (p *Policy) removeRule(r *Rule) {
 func (p *Policy) filterPending(rule *Rule) {
 	remaining := []pendingConnection{}
 	for _, pc := range p.pendingQueue {
-		if rule.match(pc.dst(), pc.dstPort(), pc.hostname()) {
+		if rule.match(pc.src(), pc.dst(), pc.dstPort(), pc.hostname()) {
 			log.Infof("Adding rule for: %s", rule.getString(FirewallConfig.LogRedact))
 			log.Noticef("%s > %s", rule.getString(FirewallConfig.LogRedact), pc.print())
 			if rule.rtype == RULE_ACTION_ALLOW {
@@ -340,8 +349,8 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 		}
 
 	}
-	srcip, dstip := getPacketIP4Addrs(pkt)
-	_, dstp := getPacketPorts(pkt)
+	_, dstip := getPacketIP4Addrs(pkt)
+/*	_, dstp := getPacketPorts(pkt)
 	fwo := matchAgainstOzRules(srcip, dstip, dstp)
 	log.Notice("XXX: Attempting [2] to filter packet on rules -> ", fwo)
 
@@ -354,7 +363,7 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 		pkt.SetMark(1)
 		pkt.Accept()
 		return
-	}
+	} */
 
 
 	ppath := "*"
@@ -380,9 +389,11 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 	log.Debugf("filterPacket [%s] %s", ppath, printPacket(pkt, fw.dns.Lookup(dstip), nil))
 	if basicAllowPacket(pkt) {
 		pkt.Accept()
+//log.Notice("XXX: passed basicallowpacket")
 		return
 	}
 	policy := fw.PolicyForPath(ppath)
+//log.Notice("XXX: flunked basicallowpacket; policy = ", policy)
 	policy.processPacket(pkt, pinfo)
 }
 
@@ -452,7 +463,7 @@ func getPacketPorts(pkt *nfqueue.NFQPacket) (uint16, uint16) {
 	return s, d
 }
 
-func matchAgainstOzRules(srci, dsti net.IP, dstp uint16) int {
+/*func matchAgainstOzRules(srci, dsti net.IP, dstp uint16) int {
 
 	for i := 0; i < len(sandboxRules); i++ {
 
@@ -468,4 +479,4 @@ func matchAgainstOzRules(srci, dsti net.IP, dstp uint16) int {
 	}
 
 	return OZ_FWRULE_NONE
-}
+} */

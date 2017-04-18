@@ -89,6 +89,10 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		return
 	}
 
+	if pc.src() != nil {
+		rule += "|" + pc.src().String()
+	}
+
 	r, err := policy.parseRule(rule, false)
 	if err != nil {
 		log.Warningf("Error parsing rule string returned from dbus RequestPrompt: %v", err)

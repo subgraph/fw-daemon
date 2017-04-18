@@ -26,6 +26,7 @@ type Rule struct {
 	rtype    RuleAction
 	hostname string
 	addr     uint32
+	saddr    net.IP
 	port     uint16
 }
 
@@ -70,7 +71,11 @@ func (r *Rule) AddrString(redact bool) string {
 
 type RuleList []*Rule
 
-func (r *Rule) match(dst net.IP, dstPort uint16, hostname string) bool {
+func (r *Rule) match(src net.IP, dst net.IP, dstPort uint16, hostname string) bool {
+
+xip := make(net.IP, 4)
+binary.BigEndian.PutUint32(xip, r.addr)
+log.Notice("comparison: ", hostname, " / ", dst, " : ", dstPort, " -> ", xip, " : ", r.port)
 	if r.port != matchAny && r.port != dstPort {
 		return false
 	}
@@ -83,19 +88,29 @@ func (r *Rule) match(dst net.IP, dstPort uint16, hostname string) bool {
 	return r.addr == binary.BigEndian.Uint32(dst.To4())
 }
 
-func (rl *RuleList) filterPacket(p *nfqueue.NFQPacket, pinfo *procsnitch.Info, hostname string) FilterResult {
+func (rl *RuleList) filterPacket(p *nfqueue.NFQPacket, pinfo *procsnitch.Info, srcip net.IP, hostname string) FilterResult {
 	_, dstip := getPacketIP4Addrs(p)
 	_, dstp := getPacketPorts(p)
-	return rl.filter(p, dstip, dstp, hostname, pinfo)
+	return rl.filter(p, srcip, dstip, dstp, hostname, pinfo)
 }
 
-func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, dst net.IP, dstPort uint16, hostname string, pinfo *procsnitch.Info) FilterResult {
+func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint16, hostname string, pinfo *procsnitch.Info) FilterResult {
 	if rl == nil {
 		return FILTER_PROMPT
 	}
 	result := FILTER_PROMPT
+//	saddr_ip := make(net.IP, 4)
+//	binary.BigEndian.PutUint32(saddr_ip, r.saddr)
 	for _, r := range *rl {
-		if r.match(dst, dstPort, hostname) {
+log.Notice("------------ trying match of src ", src, " against: ", r, " | ", r.saddr)
+		if r.saddr == nil && src != nil {
+log.Notice("! Skipping comparison against incompatible rule types: rule src = ", r.saddr, " / packet src = ", src)
+			continue
+		} else if r.saddr != nil && !r.saddr.Equal(src) {
+log.Notice("! Skipping comparison of mismatching source ips")
+		}
+		if r.match(src, dst, dstPort, hostname) {
+log.Notice("+ MATCH SUCCEEDED")
 			dstStr := dst.String()
 			if FirewallConfig.LogRedact {
 				dstStr = STR_REDACTED
@@ -116,8 +131,9 @@ func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, dst net.IP, dstPort uint16, h
 			} else if r.rtype == RULE_ACTION_ALLOW {
 				result = FILTER_ALLOW
 			}
-		}
+		} else { log.Notice("+ MATCH FAILED") }
 	}
+log.Notice("--- RESULT = ", result)
 	return result
 }
 
@@ -127,13 +143,24 @@ func parseError(s string) error {
 
 func (r *Rule) parse(s string) bool {
 	r.addr = noAddress
+	r.saddr = nil
 	parts := strings.Split(s, "|")
 	if len(parts) < 2 {
 		return false
 	}
 	if len(parts) >= 3 && parts[2] == "SYSTEM" {
 		r.mode = RULE_MODE_SYSTEM
+
+		if len(parts) > 4 {
+			r.saddr = net.ParseIP(parts[3])
+		}
+
+	} else if len(parts) > 3 {
+			r.saddr = net.ParseIP(parts[3])
+	} else if len(parts) > 2 {
+			r.saddr = net.ParseIP(parts[2])
 	}
+	fmt.Println("----- rule parser: srcip = ", r.saddr)
 	return r.parseVerb(parts[0]) && r.parseTarget(parts[1])
 }
 

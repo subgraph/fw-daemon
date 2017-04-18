@@ -38,7 +38,23 @@ func ruleExists(rule sandboxRule) int {
 	return -1
 }
 
-func ReceiverLoop(c net.Conn) {
+func addFWRule(fw *Firewall, whitelist bool, srchost, dsthost string, dstport uint16) error {
+	policy := fw.PolicyForPath("*")
+	rulestr := ""
+
+	if whitelist {
+		rulestr += "ALLOW"
+	} else {
+		rulestr += "DENY"
+	}
+
+	rulestr += "|" + dsthost + ":" + strconv.Itoa(int(dstport)) + "|SESSION|" + srchost
+	_, err := policy.parseRule(rulestr, true)
+
+	return err
+}
+
+func ReceiverLoop(fw *Firewall, c net.Conn) {
 	defer c.Close()
 	bio := bufio.NewReader(c)
 
@@ -104,21 +120,16 @@ func ReceiverLoop(c net.Conn) {
 				w = false
 			}
 
-			srcip := net.ParseIP(tokens[2])
+			srchost := tokens[2]
+			dsthost := tokens[3]
+			srcip := net.ParseIP(srchost)
 
 			if srcip == nil {
-				log.Notice("IPC received invalid source host: ", tokens[2])
-				c.Write([]byte("Bad command: source host address was invalid"))
-				return
+				log.Notice("IP conversion failed: ", srchost)
+				srcip = net.IP{0,0,0,0}
 			}
 
-			dstip := net.ParseIP(tokens[3])
-
-			if dstip == nil {
-				log.Notice("IPC received invalid destination host: ", tokens[3])
-				c.Write([]byte("Bad command: dst host address was invalid"))
-				return
-			}
+			dstip := net.IP{0,0,0,0}
 
 			dstport, err := strconv.Atoi(tokens[4])
 
@@ -151,6 +162,12 @@ func ReceiverLoop(c net.Conn) {
 			if add {
 				log.Notice("Adding new rule to oz sandbox/fw: ", rule)
 				sandboxRules = append(sandboxRules, rule)
+				err := addFWRule(fw, w, srchost, dsthost, uint16(dstport))
+				if err != nil {
+					log.Error("Error adding dynamic OZ firewall rule to fw-daemon: ", err)
+				} else {
+					log.Notice("XXX: rule also successfully added to fw-daemon")
+				}
 			} else {
 				log.Notice("Removing new rule from oz sandbox/fw: ", rule)
 				sandboxRules = append(sandboxRules[:exists], sandboxRules[exists+1:]...)
@@ -167,7 +184,7 @@ func ReceiverLoop(c net.Conn) {
 
 }
 
-func OzReceiver() {
+func OzReceiver(fw *Firewall) {
 	log.Notice("XXX: dispatching oz receiver...")
 	os.Remove(ReceiverSocketPath)
 	lfd, err := net.Listen("unix", ReceiverSocketPath)
@@ -181,7 +198,7 @@ func OzReceiver() {
 			log.Fatal("Could not accept receiver client:", err)
 		}
 
-		go ReceiverLoop(fd)
+		go ReceiverLoop(fw, fd)
         }
 
 }

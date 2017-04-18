@@ -223,7 +223,7 @@ func Main() {
 		log.Notice("Did not find SOCKS5 configuration file at", defaultSocksCfgPath, "; ignoring subsystem...")
 	}
 
-	go OzReceiver()
+	go OzReceiver(fw)
 
 	fw.runFilter()
 

@@ -55,6 +55,7 @@ func (dc *dnsCache) processRecordA(name string, answers []dnsRR) {
 			if strings.HasSuffix(name, ".") {
 				name = name[:len(name)-1]
 			}
+				log.Notice("______ Adding to dns map: %s: %s", name, ip)
 			dc.ipMap[ip] = name
 			if !FirewallConfig.LogRedact {
 				log.Infof("Adding %s: %s", name, ip)
