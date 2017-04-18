@@ -7,36 +7,11 @@ import (
 	"bufio"
 	"strings"
 	"strconv"
+	"encoding/binary"
 )
 
 const ReceiverSocketPath = "/tmp/fwoz.sock"
 
-
-func canAddRule(rule sandboxRule) bool {
-
-	for i := 0; i < len(sandboxRules); i++ {
-
-		if rule.SrcIf.Equal(sandboxRules[i].SrcIf) && rule.Whitelist != sandboxRules[i].Whitelist {
-			return false
-		}
-
-	}
-
-	return true
-}
-
-func ruleExists(rule sandboxRule) int {
-
-	for i := 0; i < len(sandboxRules); i++ {
-
-		if rule.Whitelist == sandboxRules[i].Whitelist && rule.SrcIf.Equal(sandboxRules[i].SrcIf) && rule.DstIP.Equal(sandboxRules[i].DstIP) && rule.DstPort == sandboxRules[i].DstPort {
-			return i
-		}
-
-	}
-
-	return -1
-}
 
 func addFWRule(fw *Firewall, whitelist bool, srchost, dsthost string, dstport uint16) error {
 	policy := fw.PolicyForPath("*")
@@ -74,10 +49,34 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 
 		if data == "dump" {
 			log.Notice("Dumping oz-firewall rule set to client...")
-			banner := fmt.Sprintf("There are a total of %d rule(s).\n", len(sandboxRules))
+			rl := fw.PolicyForPath("*").rules
+
+			totalIRules := 0
+
+			for r := 0; r < len(rl); r++ {
+				if rl[r].saddr != nil {
+					totalIRules++
+				}
+			}
+
+			banner := fmt.Sprintf("There are a total of %d rule(s).\n", totalIRules)
+
 			c.Write([]byte(banner))
 
-			for i := 0; i < len(sandboxRules); i++ {
+			for r := 0; r < len(rl); r++ {
+				ip := make([]byte, 4)
+		                binary.BigEndian.PutUint32(ip, rl[r].addr)
+				hostname := ""
+
+				if rl[r].hostname != "" {
+					hostname = " (" + rl[r].hostname + ") "
+				}
+
+				ruledesc := fmt.Sprintf("id %v, %v | %v, src:%v -> %v%v: %v\n", rl[r].id, RuleModeString[rl[r].mode], RuleActionString[rl[r].rtype], rl[r].saddr, net.IP(ip), hostname, rl[r].port)
+				c.Write([]byte(ruledesc))
+			}
+
+/*			for i := 0; i < len(sandboxRules); i++ {
 				rulestr := ""
 
 				if sandboxRules[i].Whitelist {
@@ -88,7 +87,7 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 
 				rulestr += " " + sandboxRules[i].SrcIf.String() + " -> " + sandboxRules[i].DstIP.String() + " : " + strconv.Itoa(int(sandboxRules[i].DstPort)) + "\n"
 				c.Write([]byte(rulestr))
-			}
+			} */
 
 			return
 		} else {
@@ -129,8 +128,6 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 				srcip = net.IP{0,0,0,0}
 			}
 
-			dstip := net.IP{0,0,0,0}
-
 			dstport, err := strconv.Atoi(tokens[4])
 
 			if err != nil || dstport <= 0  || dstport > 65535 {
@@ -139,29 +136,8 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 				return
 			}
 
-			rule := sandboxRule { srcip, dstip, uint16(dstport), w }
-
-			if add && !canAddRule(rule) {
-				log.Notice("Could not add rule of mismatching type: ", rule)
-				c.Write([]byte("Error: cannot add rule that would result in mixed whitelist and blacklist"))
-				return
-			}
-
-			exists := ruleExists(rule)
-
-			if add && exists != -1 {
-				log.Notice("IP received request to add existing rule: ", rule)
-				c.Write([]byte("Error: cannot add already existing rule"))
-				return
-			} else if !add && exists == -1 {
-				log.Notice("IP received request to remove non-existent rule: ", rule)
-				c.Write([]byte("Error: could not remove non-existent rule"))
-				return
-			}
-
 			if add {
-				log.Notice("Adding new rule to oz sandbox/fw: ", rule)
-				sandboxRules = append(sandboxRules, rule)
+				log.Noticef("Adding new rule to oz sandbox/fw: %v / %v -> %v : %v", w, srchost, dsthost, dstport)
 				err := addFWRule(fw, w, srchost, dsthost, uint16(dstport))
 				if err != nil {
 					log.Error("Error adding dynamic OZ firewall rule to fw-daemon: ", err)
@@ -169,8 +145,7 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 					log.Notice("XXX: rule also successfully added to fw-daemon")
 				}
 			} else {
-				log.Notice("Removing new rule from oz sandbox/fw: ", rule)
-				sandboxRules = append(sandboxRules[:exists], sandboxRules[exists+1:]...)
+				log.Notice("Removing new rule from oz sandbox/fw... ")
 			}
 
 
