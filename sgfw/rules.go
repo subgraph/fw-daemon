@@ -108,6 +108,7 @@ log.Notice("! Skipping comparison against incompatible rule types: rule src = ",
 			continue
 		} else if r.saddr != nil && !r.saddr.Equal(src) {
 log.Notice("! Skipping comparison of mismatching source ips")
+			continue
 		}
 		if r.match(src, dst, dstPort, hostname) {
 log.Notice("+ MATCH SUCCEEDED")
@@ -130,6 +131,10 @@ log.Notice("+ MATCH SUCCEEDED")
 				return FILTER_DENY
 			} else if r.rtype == RULE_ACTION_ALLOW {
 				result = FILTER_ALLOW
+
+				if r.saddr != nil {
+					return result
+				}
 			}
 		} else { log.Notice("+ MATCH FAILED") }
 	}

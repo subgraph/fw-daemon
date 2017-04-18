@@ -13,7 +13,7 @@ import (
 const ReceiverSocketPath = "/tmp/fwoz.sock"
 
 
-func addFWRule(fw *Firewall, whitelist bool, srchost, dsthost string, dstport uint16) error {
+func addFWRule(fw *Firewall, whitelist bool, srchost, dsthost, dstport string) error {
 	policy := fw.PolicyForPath("*")
 	rulestr := ""
 
@@ -23,7 +23,7 @@ func addFWRule(fw *Firewall, whitelist bool, srchost, dsthost string, dstport ui
 		rulestr += "DENY"
 	}
 
-	rulestr += "|" + dsthost + ":" + strconv.Itoa(int(dstport)) + "|SESSION|" + srchost
+	rulestr += "|" + dsthost + ":" + dstport + "|SESSION|" + srchost
 	_, err := policy.parseRule(rulestr, true)
 
 	return err
@@ -98,7 +98,13 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 					hostname = " (" + rl[r].hostname + ") "
 				}
 
-				ruledesc := fmt.Sprintf("id %v, %v | %v, src:%v -> %v%v: %v\n", rl[r].id, RuleModeString[rl[r].mode], RuleActionString[rl[r].rtype], rl[r].saddr, net.IP(ip), hostname, rl[r].port)
+				portstr := strconv.Itoa(int(rl[r].port))
+
+				if rl[r].port == 0 {
+					portstr = "*"
+				}
+
+				ruledesc := fmt.Sprintf("id %v, %v | %v, src:%v -> %v%v: %v\n", rl[r].id, RuleModeString[rl[r].mode], RuleActionString[rl[r].rtype], rl[r].saddr, net.IP(ip), hostname, portstr)
 				c.Write([]byte(ruledesc))
 			}
 
@@ -160,9 +166,10 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 				srcip = net.IP{0,0,0,0}
 			}
 
-			dstport, err := strconv.Atoi(tokens[4])
+			dstport := tokens[4]
+			dstp, err := strconv.Atoi(dstport)
 
-			if err != nil || dstport <= 0  || dstport > 65535 {
+			if dstport != "*" && (err != nil || dstp < 0  || dstp > 65535) {
 				log.Notice("IPC received invalid destination port: ", tokens[4])
 				c.Write([]byte("Bad command: dst port was invalid"))
 				return
@@ -170,7 +177,7 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 
 			if add {
 				log.Noticef("Adding new rule to oz sandbox/fw: %v / %v -> %v : %v", w, srchost, dsthost, dstport)
-				err := addFWRule(fw, w, srchost, dsthost, uint16(dstport))
+				err := addFWRule(fw, w, srchost, dsthost, dstport)
 				if err != nil {
 					log.Error("Error adding dynamic OZ firewall rule to fw-daemon: ", err)
 				} else {
