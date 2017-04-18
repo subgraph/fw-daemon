@@ -29,6 +29,32 @@ func addFWRule(fw *Firewall, whitelist bool, srchost, dsthost string, dstport ui
 	return err
 }
 
+func removeAllByIP(fw *Firewall, srcip string) bool {
+log.Notice("XXX: Attempting to remove all rules associated with Oz interface: ", srcip)
+	saddr := net.ParseIP(srcip)
+
+	if saddr == nil {
+		return false
+	}
+
+	policy := fw.PolicyForPath("*")
+	nrm := 0
+
+        for _, rr := range policy.rules {
+		if rr.saddr != nil && rr.saddr.Equal(saddr) {
+			log.Notice("XXX: removing ephemeral rules by Oz interface ", srcip, ": ", rr)
+			policy.removeRule(rr)
+			nrm++
+		}
+        }
+
+	if nrm == 0 {
+		log.Notice("XXX: did not remove any rules for interface")
+	}
+
+	return true
+}
+
 func ReceiverLoop(fw *Firewall, c net.Conn) {
 	defer c.Close()
 	bio := bufio.NewReader(c)
@@ -92,6 +118,12 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 			return
 		} else {
 			tokens := strings.Split(data, " ")
+
+			if len(tokens) == 2 && tokens[0] == "removeall" {
+				log.Notice("Attempting to remove all: ", tokens[1])
+				removeAllByIP(fw, tokens[1])
+				return
+			}
 
 			if len(tokens) != 5 {
 				log.Notice("IPC received invalid command: " + data)
