@@ -13,6 +13,29 @@ import (
 const ReceiverSocketPath = "/tmp/fwoz.sock"
 
 
+var OzInitPids []int = []int{}
+
+
+func addInitPid(pid int) {
+	fmt.Println("::::::::::: init pid added: ", pid)
+	for i := 0; i < len(OzInitPids); i++ {
+		if OzInitPids[i] == pid {
+			return
+		}
+	}
+
+	OzInitPids = append(OzInitPids, pid)
+}
+
+func removeInitPid(pid int) {
+	for i := 0; i < len(OzInitPids); i++ {
+		if OzInitPids[i] == pid {
+			OzInitPids = append(OzInitPids[:i], OzInitPids[i+1:])
+			return
+		}
+	}
+}
+
 func addFWRule(fw *Firewall, whitelist bool, srchost, dsthost, dstport string) error {
 	policy := fw.PolicyForPath("*")
 	rulestr := ""
@@ -131,7 +154,22 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 				return
 			}
 
-			if len(tokens) != 5 {
+			if tokens[0] == "register-init" && len(tokens) == 2 {
+				initp := tokens[1]
+				initpid, err := strconv.Atoi(initp)
+
+				if err != nil {
+					log.Notice("IPC received invalid oz-init pid: ", initp)
+					c.Write([]byte("Bad command: init pid was invalid"))
+					return
+				}
+
+				addInitPid(initpid)
+				c.Write([]byte("OK.\n"))
+				return
+			}
+
+			if len(tokens) != 6 {
 				log.Notice("IPC received invalid command: " + data)
 				c.Write([]byte("Received bad number of parameters.\n"))
 				return
@@ -175,8 +213,18 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 				return
 			}
 
+/*			initp := tokens[5]
+			initpid, err := strconv.Atoi(initp)
+
+			if err != nil {
+				log.Notice("IPC received invalid oz-init pid: ", initp)
+				c.Write([]byte("Bad command: init pid was invalid"))
+				return
+			} */
+
 			if add {
 				log.Noticef("Adding new rule to oz sandbox/fw: %v / %v -> %v : %v", w, srchost, dsthost, dstport)
+//				addInitPid(initpid)
 				err := addFWRule(fw, w, srchost, dsthost, dstport)
 				if err != nil {
 					log.Error("Error adding dynamic OZ firewall rule to fw-daemon: ", err)
@@ -200,6 +248,24 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 
 func OzReceiver(fw *Firewall) {
 	log.Notice("XXX: dispatching oz receiver...")
+
+	sboxes, err := getSandboxes()
+
+	if err != nil {
+		log.Warning("Error retrieving list of running Oz sandbox init processes: ", err)
+	} else {
+
+		if len(sboxes) > 0 {
+			log.Warning("Adding existing Oz sandbox init pids...")
+			for s := 0; s < len(sboxes); s++ {
+				addInitPid(sboxes[s].InitPid)
+			}
+		} else {
+			log.Warning("It does not appear there were any Oz sandboxed processes already launched.")
+		}
+
+	}
+
 	os.Remove(ReceiverSocketPath)
 	lfd, err := net.Listen("unix", ReceiverSocketPath)
 	if err != nil {

@@ -90,6 +90,20 @@ func findTCPSocket(srcPort uint16, dstAddr net.IP, dstPort uint16) *socketStatus
 	})
 }
 
+func findTCPSocketAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort uint16, custdata []string) *socketStatus {
+	found := findSocket("tcp", func(ss socketStatus) bool {
+		return ss.remote.port == dstPort && ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
+	})
+
+	if found != nil || custdata == nil {
+		return found
+	}
+
+	return findSocketCustom("tcp", custdata, func(ss socketStatus) bool {
+		return ss.remote.port == dstPort && ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
+	})
+}
+
 func findUNIXSocket(socketFile string) *socketStatus {
 	proto := "unix"
 
@@ -121,6 +135,24 @@ func findUNIXSocket(socketFile string) *socketStatus {
 		if ok {
 			ss := socketStatus{}
 			ss.inode = remoteInode
+			return &ss
+		}
+	}
+	return nil
+}
+
+func findSocketCustom(proto string, sockdata []string, matcher func(socketStatus) bool) *socketStatus {
+	var ss socketStatus
+	for _, line := range sockdata {
+		if len(line) == 0 {
+			continue
+		}
+		if err := ss.parseLine(line); err != nil {
+			log.Warningf("Unable to parse line from custom data source/%s [%s]: %v", proto, line, err)
+			continue
+		}
+		if matcher(ss) {
+			ss.line = line
 			return &ss
 		}
 	}

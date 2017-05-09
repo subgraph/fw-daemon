@@ -13,6 +13,8 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/subgraph/go-procsnitch"
 	"net"
+	"syscall"
+	"unsafe"
 )
 
 var _interpreters = []string{
@@ -397,12 +399,93 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 	policy.processPacket(pkt, pinfo)
 }
 
+func readFileDirect(filename string) ([]byte, error) {
+	bfilename, err := syscall.BytePtrFromString(filename)
+
+	if err != nil {
+		return nil, err
+	}
+
+	res, _, err := syscall.Syscall(syscall.SYS_OPEN, uintptr(unsafe.Pointer(bfilename)), syscall.O_RDONLY, 0)
+	fdlong := int64(res)
+
+	if fdlong < 0 {
+		return nil, err
+	}
+
+	fd := int(res)
+	data := make([]byte, 65535)
+
+	val, err := syscall.Read(fd, data)
+
+	if err != nil {
+		return nil, err
+	}
+
+	syscall.Close(fd)
+
+	if val < 65535 {
+		data = data[0:val]
+	}
+
+	return data, nil
+}
+
+func getAllProcNetDataLocal() ([]string, error) {
+	data := ""
+
+	for i := 0; i < len(OzInitPids); i++ {
+		fname := fmt.Sprintf("/proc/%d/net/tcp", OzInitPids[i])
+fmt.Println("XXX: opening: ", fname)
+		bdata, err := readFileDirect(fname)
+
+		if err != nil {
+			fmt.Println("Error reading proc data from ", fname, ": ", err)
+		} else {
+			data += string(bdata)
+		}
+
+	}
+
+	lines := strings.Split(data, "\n")
+	rlines := make([]string, 0)
+	ctr := 1
+
+	for l := 0; l < len(lines); l++ {
+		lines[l] = strings.TrimSpace(lines[l])
+		ssplit := strings.Split(lines[l], ":")
+
+		if len(ssplit) != 6 {
+			continue
+		}
+
+		ssplit[0] = fmt.Sprintf("%d", ctr)
+		ctr++
+		rlines = append(rlines, strings.Join(ssplit, ":"))
+	}
+
+	return rlines, nil
+}
+
 func findProcessForPacket(pkt *nfqueue.NFQPacket) *procsnitch.Info {
-	_, dstip := getPacketIP4Addrs(pkt)
+	srcip, dstip := getPacketIP4Addrs(pkt)
 	srcp, dstp := getPacketPorts(pkt)
 
 	if pkt.Packet.Layer(layers.LayerTypeTCP) != nil {
-		return procsnitch.LookupTCPSocketProcess(srcp, dstip, dstp)
+		// Try normal way first, before the more resource intensive/invasive way.
+		res := procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, nil)
+
+		if res == nil {
+			extdata, err := getAllProcNetDataLocal()
+
+			if err != nil {
+				log.Warningf("Error looking up sandboxed /proc/net data: %v", err)
+			} else {
+				res = procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, extdata)
+			}
+		}
+
+		return res
 	} else if pkt.Packet.Layer(layers.LayerTypeUDP) != nil {
 		return procsnitch.LookupUDPSocketProcess(srcp)
 	}
