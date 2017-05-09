@@ -30,6 +30,7 @@ const DetailSection = new Lang.Class({
         this.pid = this._addDetails("Process ID:");
 	this.origin = this._addDetails("Origin:");
         this.user = this._addDetails("User:");
+        this.optstring = this._addDetails("");
     },
 
     _addDetails: function(text) {
@@ -40,12 +41,19 @@ const DetailSection = new Lang.Class({
         return msg;
     },
 
-    setDetails: function(ip, path, pid, user, origin) {
+    setDetails: function(ip, path, pid, user, origin, optstring) {
         this.ipAddr.text = ip;
         this.path.text = path;
-        this.pid.text = pid.toString();
+
+	if (pid == -1) {
+		this.pid.text = '[unknown]';
+	} else {
+		this.pid.text = pid.toString();
+	}
+
 	this.origin.text = origin;
         this.user.text = user;
+	this.optstring.text = optstring
     }
 });
 
@@ -451,7 +459,7 @@ const PromptDialog = new Lang.Class({
         }
     },
 
-    update: function(application, icon, path, address, port, ip, origin, user, pid, proto, expanded, expert, action) {
+    update: function(application, icon, path, address, port, ip, origin, user, pid, proto, optstring, expanded, expert, action) {
         this._address = address;
         this._port = port;
 
@@ -480,6 +488,6 @@ const PromptDialog = new Lang.Class({
         }
 
         this.optionList.buttonGroup._setChecked(this.optionList.scopeToIdx(action))
-        this.info.setDetails(ip, path, pid, user, origin);
+        this.info.setDetails(ip, path, pid, user, origin, optstring);
     },
 });

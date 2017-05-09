@@ -38,6 +38,7 @@ type pendingConnection interface {
 	policy() *Policy
 	procInfo() *procsnitch.Info
 	hostname() string
+	getOptString() string
 	src() net.IP
 	dst() net.IP
 	dstPort() uint16
@@ -51,11 +52,12 @@ type pendingPkt struct {
 	name  string
 	pkt   *nfqueue.NFQPacket
 	pinfo *procsnitch.Info
+	optstring string
 }
 
 func getEmptyPInfo() *procsnitch.Info {
 	pinfo := procsnitch.Info{}
-	pinfo.UID, pinfo.Pid, pinfo.ParentPid = 0, 0, 0
+	pinfo.UID, pinfo.Pid, pinfo.ParentPid = -1, -1, -1
 	pinfo.ExePath = "[unknown-exe]"
 	pinfo.CmdLine = "[unknown-cmdline]"
 	pinfo.FirstArg = "[unknown-arg]"
@@ -74,6 +76,10 @@ func (pp *pendingPkt) procInfo() *procsnitch.Info {
 	}
 
 	return pp.pinfo
+}
+
+func (pp *pendingPkt) getOptString() string {
+	return pp.optstring
 }
 
 func (pp *pendingPkt) hostname() string {
@@ -159,7 +165,7 @@ func (fw *Firewall) policyForPath(path string) *Policy {
 	return fw.policyMap[path]
 }
 
-func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info) {
+func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info, optstr string) {
 
 /*	hbytes, err := pkt.GetHWAddr()
 	if err != nil {
@@ -193,7 +199,7 @@ if name == "" {
 	case FILTER_ALLOW:
 		pkt.Accept()
 	case FILTER_PROMPT:
-		p.processPromptResult(&pendingPkt{pol: p, name: name, pkt: pkt, pinfo: pinfo})
+		p.processPromptResult(&pendingPkt{pol: p, name: name, pkt: pkt, pinfo: pinfo, optstring: optstr})
 	default:
 		log.Warningf("Unexpected filter result: %d", result)
 	}
@@ -370,9 +376,11 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 
 	ppath := "*"
 
-	pinfo := findProcessForPacket(pkt)
+	pinfo, optstring := findProcessForPacket(pkt)
 	if pinfo == nil {
 		pinfo = getEmptyPInfo()
+		ppath = "[unknown]"
+		optstring = "[Connection could not be mapped]"
 		log.Warningf("No proc found for %s", printPacket(pkt, fw.dns.Lookup(dstip), nil))
 //		pkt.Accept()
 //		return
@@ -396,7 +404,7 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 	}
 	policy := fw.PolicyForPath(ppath)
 //log.Notice("XXX: flunked basicallowpacket; policy = ", policy)
-	policy.processPacket(pkt, pinfo)
+	policy.processPacket(pkt, pinfo, optstring)
 }
 
 func readFileDirect(filename string) ([]byte, error) {
@@ -467,9 +475,10 @@ fmt.Println("XXX: opening: ", fname)
 	return rlines, nil
 }
 
-func findProcessForPacket(pkt *nfqueue.NFQPacket) *procsnitch.Info {
+func findProcessForPacket(pkt *nfqueue.NFQPacket) (*procsnitch.Info, string) {
 	srcip, dstip := getPacketIP4Addrs(pkt)
 	srcp, dstp := getPacketPorts(pkt)
+	optstr := ""
 
 	if pkt.Packet.Layer(layers.LayerTypeTCP) != nil {
 		// Try normal way first, before the more resource intensive/invasive way.
@@ -482,17 +491,18 @@ func findProcessForPacket(pkt *nfqueue.NFQPacket) *procsnitch.Info {
 				log.Warningf("Error looking up sandboxed /proc/net data: %v", err)
 			} else {
 				res = procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, extdata)
+				optstr = "[Sandboxed application]"
 			}
 		}
 
-		return res
+		return res, optstr
 	} else if pkt.Packet.Layer(layers.LayerTypeUDP) != nil {
-		return procsnitch.LookupUDPSocketProcess(srcp)
+		return procsnitch.LookupUDPSocketProcess(srcp), optstr
 	}
 
 	log.Warningf("Packet has unknown protocol: %d", pkt.Packet.NetworkLayer().LayerType())
 	//log.Warningf("Packet has unknown protocol: %d", pkt.Protocol)
-	return nil
+	return nil, optstr
 }
 
 func basicAllowPacket(pkt *nfqueue.NFQPacket) bool {

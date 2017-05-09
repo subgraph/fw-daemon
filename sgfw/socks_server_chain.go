@@ -59,6 +59,10 @@ func (sc *pendingSocksConnection) procInfo() *procsnitch.Info {
 	return sc.pinfo
 }
 
+func (sc *pendingSocksConnection) getOptString() string {
+	return ""
+}
+
 func (sc *pendingSocksConnection) hostname() string {
 	return sc.hname
 }

@@ -30,7 +30,7 @@ func addInitPid(pid int) {
 func removeInitPid(pid int) {
 	for i := 0; i < len(OzInitPids); i++ {
 		if OzInitPids[i] == pid {
-			OzInitPids = append(OzInitPids[:i], OzInitPids[i+1:])
+			OzInitPids = append(OzInitPids[:i], OzInitPids[i+1:]...)
 			return
 		}
 	}

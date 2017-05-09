@@ -78,6 +78,7 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		pc.src().String(),
 		uidToUser(pc.procInfo().UID),
 		int32(pc.procInfo().Pid),
+		pc.getOptString(),
 		FirewallConfig.PromptExpanded,
 		FirewallConfig.PromptExpert,
 		int32(FirewallConfig.DefaultActionID))
@@ -143,6 +144,9 @@ func (p *prompter) removePolicy(policy *Policy) {
 var userMap = make(map[int]string)
 
 func lookupUser(uid int) string {
+	if uid == -1 {
+		return "[unknown]"
+	}
 	u, err := user.LookupId(strconv.Itoa(uid))
 	if err != nil {
 		return fmt.Sprintf("%d", uid)
