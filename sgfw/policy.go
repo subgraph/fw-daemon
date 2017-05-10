@@ -192,7 +192,7 @@ if name == "" {
 }
 
 //log.Notice("XXX: Attempting to filter packet on rules -> ", fwo, " / rev lookup = ", name)
-	result := p.rules.filterPacket(pkt, pinfo, srcip, name)
+	result := p.rules.filterPacket(pkt, pinfo, srcip, name, optstr)
 	switch result {
 	case FILTER_DENY:
 		pkt.SetMark(1)

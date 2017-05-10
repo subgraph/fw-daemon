@@ -88,22 +88,21 @@ log.Notice("comparison: ", hostname, " / ", dst, " : ", dstPort, " -> ", xip, " 
 	return r.addr == binary.BigEndian.Uint32(dst.To4())
 }
 
-func (rl *RuleList) filterPacket(p *nfqueue.NFQPacket, pinfo *procsnitch.Info, srcip net.IP, hostname string) FilterResult {
+func (rl *RuleList) filterPacket(p *nfqueue.NFQPacket, pinfo *procsnitch.Info, srcip net.IP, hostname, optstr string) FilterResult {
 	_, dstip := getPacketIP4Addrs(p)
 	_, dstp := getPacketPorts(p)
-	return rl.filter(p, srcip, dstip, dstp, hostname, pinfo)
+	return rl.filter(p, srcip, dstip, dstp, hostname, pinfo, optstr)
 }
 
-func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint16, hostname string, pinfo *procsnitch.Info) FilterResult {
+func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint16, hostname string, pinfo *procsnitch.Info, optstr string) FilterResult {
 	if rl == nil {
 		return FILTER_PROMPT
 	}
 	result := FILTER_PROMPT
-//	saddr_ip := make(net.IP, 4)
-//	binary.BigEndian.PutUint32(saddr_ip, r.saddr)
+	sandboxed := strings.HasPrefix(optstr, "Sandbox")
 	for _, r := range *rl {
-log.Notice("------------ trying match of src ", src, " against: ", r, " | ", r.saddr)
-		if r.saddr == nil && src != nil {
+log.Notice("------------ trying match of src ", src, " against: ", r, " | ", r.saddr, " / optstr = ", optstr)
+		if r.saddr == nil && src != nil && sandboxed {
 log.Notice("! Skipping comparison against incompatible rule types: rule src = ", r.saddr, " / packet src = ", src)
 			continue
 		} else if r.saddr != nil && !r.saddr.Equal(src) {
