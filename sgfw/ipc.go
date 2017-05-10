@@ -22,7 +22,7 @@ var OzInitPids []OzInitProc = []OzInitProc{}
 
 
 func addInitPid(pid int, name string) {
-	fmt.Println("::::::::::: init pid added: ", pid, " -> ", name)
+fmt.Println("::::::::::: init pid added: ", pid, " -> ", name)
 	for i := 0; i < len(OzInitPids); i++ {
 		if OzInitPids[i].Pid == pid {
 			return
@@ -34,6 +34,7 @@ func addInitPid(pid int, name string) {
 }
 
 func removeInitPid(pid int) {
+fmt.Println("::::::::::: removing PID: ", pid)
 	for i := 0; i < len(OzInitPids); i++ {
 		if OzInitPids[i].Pid == pid {
 			OzInitPids = append(OzInitPids[:i], OzInitPids[i+1:]...)
@@ -174,6 +175,18 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 				addInitPid(initpid, ozname)
 				c.Write([]byte("OK.\n"))
 				return
+			} else if tokens[0] == "unregister-init" && len(tokens) == 2 {
+				initp := tokens[1]
+				initpid, err := strconv.Atoi(initp)
+
+				if err != nil {
+					log.Notice("IPC received invalid oz-init pid: ", initp)
+					c.Write([]byte("Bad command: init pid was invalid"))
+					return
+				}
+
+				removeInitPid(initpid)
+				c.Write([]byte("OK.\n"))
 			}
 
 			if len(tokens) != 6 {

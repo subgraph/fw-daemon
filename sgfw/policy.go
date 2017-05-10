@@ -502,6 +502,7 @@ func findProcessForPacket(pkt *nfqueue.NFQPacket) (*procsnitch.Info, string) {
 		res := procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, nil)
 
 		if res == nil {
+			removePids := make([]int, 0)
 
 			for i := 0; i < len(OzInitPids); i++ {
 				data := ""
@@ -511,6 +512,11 @@ fmt.Println("XXX: opening: ", fname)
 
 				if err != nil {
 					fmt.Println("Error reading proc data from ", fname, ": ", err)
+
+					if err == syscall.ENOENT {
+						removePids = append(removePids, OzInitPids[i].Pid)
+					}
+
 					continue
 				} else {
 					data = string(bdata)
@@ -538,6 +544,11 @@ fmt.Println("XXX: opening: ", fname)
 				}
 
 			}
+
+			for _, p := range removePids {
+				removeInitPid(p)
+			}
+
 		}
 
 		return res, optstr
