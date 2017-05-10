@@ -505,7 +505,7 @@ func findProcessForPacket(pkt *nfqueue.NFQPacket) (*procsnitch.Info, string) {
 
 			for i := 0; i < len(OzInitPids); i++ {
 				data := ""
-				fname := fmt.Sprintf("/proc/%d/net/tcp", OzInitPids[i])
+				fname := fmt.Sprintf("/proc/%d/net/tcp", OzInitPids[i].Pid)
 fmt.Println("XXX: opening: ", fname)
 				bdata, err := readFileDirect(fname)
 
@@ -531,8 +531,8 @@ fmt.Println("XXX: opening: ", fname)
 					res = procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, rlines)
 
 					if res != nil {
-						optstr = "[Sandboxed application]"
-						res.ExePath = getRealRoot(res.ExePath, OzInitPids[i])
+						optstr = "Sandbox: " + OzInitPids[i].Name
+						res.ExePath = getRealRoot(res.ExePath, OzInitPids[i].Pid)
 						break
 					}
 				}

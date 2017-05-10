@@ -30,7 +30,6 @@ var ozCtrlFactory = ipc.NewMsgFactory(
 func getSandboxes() ([]SandboxInfo, error) {
 	c, err := ipc.Connect(socketPath, ozCtrlFactory, nil)
 	if err != nil {
-		log.Fatal("Error connecting to oz control socket: ", err)
 		return nil, err
 	}
 

@@ -13,23 +13,29 @@ import (
 const ReceiverSocketPath = "/tmp/fwoz.sock"
 
 
-var OzInitPids []int = []int{}
+type OzInitProc struct {
+	Name string
+	Pid int
+}
+
+var OzInitPids []OzInitProc = []OzInitProc{}
 
 
-func addInitPid(pid int) {
-	fmt.Println("::::::::::: init pid added: ", pid)
+func addInitPid(pid int, name string) {
+	fmt.Println("::::::::::: init pid added: ", pid, " -> ", name)
 	for i := 0; i < len(OzInitPids); i++ {
-		if OzInitPids[i] == pid {
+		if OzInitPids[i].Pid == pid {
 			return
 		}
 	}
 
-	OzInitPids = append(OzInitPids, pid)
+	ozi := OzInitProc{Name: name, Pid: pid}
+	OzInitPids = append(OzInitPids, ozi)
 }
 
 func removeInitPid(pid int) {
 	for i := 0; i < len(OzInitPids); i++ {
-		if OzInitPids[i] == pid {
+		if OzInitPids[i].Pid == pid {
 			OzInitPids = append(OzInitPids[:i], OzInitPids[i+1:]...)
 			return
 		}
@@ -154,7 +160,7 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 				return
 			}
 
-			if tokens[0] == "register-init" && len(tokens) == 2 {
+			if tokens[0] == "register-init" && len(tokens) >= 3 {
 				initp := tokens[1]
 				initpid, err := strconv.Atoi(initp)
 
@@ -164,7 +170,8 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 					return
 				}
 
-				addInitPid(initpid)
+				ozname := strings.Join(tokens[2:], " ")
+				addInitPid(initpid, ozname)
 				c.Write([]byte("OK.\n"))
 				return
 			}
@@ -258,7 +265,8 @@ func OzReceiver(fw *Firewall) {
 		if len(sboxes) > 0 {
 			log.Warning("Adding existing Oz sandbox init pids...")
 			for s := 0; s < len(sboxes); s++ {
-				addInitPid(sboxes[s].InitPid)
+				profname := fmt.Sprintf("%s (%d)", sboxes[s].Profile, sboxes[s].Id)
+				addInitPid(sboxes[s].InitPid, profname)
 			}
 		} else {
 			log.Warning("It does not appear there were any Oz sandboxed processes already launched.")
