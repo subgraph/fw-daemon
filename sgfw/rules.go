@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"regexp"
 
 	nfqueue "github.com/subgraph/go-nfnetlink/nfqueue"
 //	"github.com/subgraph/go-nfnetlink"
@@ -75,7 +76,7 @@ func (r *Rule) match(src net.IP, dst net.IP, dstPort uint16, hostname string) bo
 
 xip := make(net.IP, 4)
 binary.BigEndian.PutUint32(xip, r.addr)
-log.Notice("comparison: ", hostname, " / ", dst, " : ", dstPort, " -> ", xip, " : ", r.port)
+log.Notice("comparison: ", hostname, " / ", dst, " : ", dstPort, " -> ", xip, " / ", r.hostname, " : ", r.port)
 	if r.port != matchAny && r.port != dstPort {
 		return false
 	}
@@ -83,6 +84,16 @@ log.Notice("comparison: ", hostname, " / ", dst, " : ", dstPort, " -> ", xip, " 
 		return true
 	}
 	if r.hostname != "" {
+		if strings.ContainsAny(r.hostname, "*") {
+			regstr := strings.Replace(r.hostname, "*", ".?", -1)
+			match, err := regexp.MatchString(regstr, hostname)
+
+			if err != nil {
+				log.Errorf("Error comparing hostname against mask %s: %v", regstr, err)
+			} else {
+				return match
+			}
+		}
 		return r.hostname == hostname
 	}
 	return r.addr == binary.BigEndian.Uint32(dst.To4())
