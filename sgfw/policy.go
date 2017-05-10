@@ -15,6 +15,7 @@ import (
 	"net"
 	"syscall"
 	"unsafe"
+	"os"
 )
 
 var _interpreters = []string{
@@ -475,6 +476,22 @@ fmt.Println("XXX: opening: ", fname)
 	return rlines, nil
 }
 
+func getRealRoot(pathname string, pid int) string {
+	pfname := fmt.Sprintf("/proc/%d/root", pid)
+	lnk, err := os.Readlink(pfname)
+
+	if err != nil {
+		fmt.Printf("Error reading link at %s: %v", pfname, err)
+		return pathname
+	}
+
+	if strings.HasPrefix(pathname, lnk) {
+		return pathname[len(lnk):]
+	}
+
+	return pathname
+}
+
 func findProcessForPacket(pkt *nfqueue.NFQPacket) (*procsnitch.Info, string) {
 	srcip, dstip := getPacketIP4Addrs(pkt)
 	srcp, dstp := getPacketPorts(pkt)
@@ -485,13 +502,41 @@ func findProcessForPacket(pkt *nfqueue.NFQPacket) (*procsnitch.Info, string) {
 		res := procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, nil)
 
 		if res == nil {
-			extdata, err := getAllProcNetDataLocal()
 
-			if err != nil {
-				log.Warningf("Error looking up sandboxed /proc/net data: %v", err)
-			} else {
-				res = procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, extdata)
-				optstr = "[Sandboxed application]"
+			for i := 0; i < len(OzInitPids); i++ {
+				data := ""
+				fname := fmt.Sprintf("/proc/%d/net/tcp", OzInitPids[i])
+fmt.Println("XXX: opening: ", fname)
+				bdata, err := readFileDirect(fname)
+
+				if err != nil {
+					fmt.Println("Error reading proc data from ", fname, ": ", err)
+					continue
+				} else {
+					data = string(bdata)
+					lines := strings.Split(data, "\n")
+					rlines := make([]string, 0)
+
+					for l := 0; l < len(lines); l++ {
+						lines[l] = strings.TrimSpace(lines[l])
+						ssplit := strings.Split(lines[l], ":")
+
+						if len(ssplit) != 6 {
+							continue
+						}
+
+						rlines = append(rlines, strings.Join(ssplit, ":"))
+					}
+
+					res = procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, rlines)
+
+					if res != nil {
+						optstr = "[Sandboxed application]"
+						res.ExePath = getRealRoot(res.ExePath, OzInitPids[i])
+						break
+					}
+				}
+
 			}
 		}
 
