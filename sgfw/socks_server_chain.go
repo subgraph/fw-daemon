@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/subgraph/go-procsnitch"
+	"strings"
 	"strconv"
 )
 
@@ -46,6 +47,7 @@ type pendingSocksConnection struct {
 	hname    string
 	srcIP   net.IP
 	destIP   net.IP
+	sourcePort uint16
 	destPort uint16
 	pinfo    *procsnitch.Info
 	verdict  chan int
@@ -69,6 +71,9 @@ func (sc *pendingSocksConnection) hostname() string {
 
 func (sc *pendingSocksConnection) dst() net.IP {
 	return sc.destIP
+}
+func (sc *pendingSocksConnection) srcPort() uint16 {
+	return sc.sourcePort
 }
 func (sc *pendingSocksConnection) dstPort() uint16 {
 	return sc.destPort
@@ -204,14 +209,41 @@ func (c *socksChainSession) filterConnect() bool {
 	case FILTER_ALLOW:
 		return true
 	case FILTER_PROMPT:
+		caddr := c.clientConn.RemoteAddr().String()
+		caddrt := strings.Split(caddr, ":")
+		caddrIP := net.IP{0,0,0,0}
+		caddrPort := uint16(0)
+
+		if len(caddrt) != 2 {
+			log.Errorf("Error reading peer information from SOCKS client connection")
+		} else {
+			srcp, err := strconv.Atoi(caddrt[1])
+
+			if err != nil || srcp <= 0 || srcp > 65535 {
+				log.Errorf("Error getting port of SOCKS client connection")
+			} else {
+				caddrPort = uint16(srcp)
+				ip := net.ParseIP(caddrt[0])
+
+				if ip == nil {
+					log.Errorf("Error getting host IP of SOCKS5 client connection: %v", err)
+				} else {
+					caddrIP = ip
+				}
+
+			}
+
+		}
+
 		pending := &pendingSocksConnection{
-			pol:      policy,
-			hname:    hostname,
-			destIP:   ip,
-			srcIP:    net.IP{0,0,0,0},
-			destPort: port,
-			pinfo:    pinfo,
-			verdict:  make(chan int),
+			pol:        policy,
+			hname:      hostname,
+			destIP:     ip,
+			srcIP:      caddrIP,
+			sourcePort: caddrPort,
+			destPort:   port,
+			pinfo:      pinfo,
+			verdict:    make(chan int),
 		}
 		policy.processPromptResult(pending)
 		v := <-pending.verdict

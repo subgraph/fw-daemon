@@ -127,6 +127,10 @@ log.Notice("+ MATCH SUCCEEDED")
 				srcStr,
 				dstStr, dstPort)
 			if r.rtype == RULE_ACTION_DENY {
+			log.Warningf("DENIED outgoing connection attempt by %s from %s %s -> %s:%d",
+				pinfo.ExePath, "TCP",
+				srcStr,
+				dstStr, dstPort)
 				return FILTER_DENY
 			} else if r.rtype == RULE_ACTION_ALLOW {
 				result = FILTER_ALLOW

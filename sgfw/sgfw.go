@@ -173,8 +173,14 @@ func getSocksChainConfig(config *SocksJsonConfig) *socksChainConfig {
 
 func Main() {
 	readConfig()
-	logBackend := setupLoggerBackend(FirewallConfig.LoggingLevel)
-	log.SetBackend(logBackend)
+	logBackend, logBackend2 := setupLoggerBackend(FirewallConfig.LoggingLevel)
+
+	if logBackend2 == nil {
+		logging.SetBackend(logBackend)
+	} else {
+		logging.SetBackend(logBackend, logBackend2)
+	}
+
 	procsnitch.SetLogger(log)
 
 	if os.Geteuid() != 0 {

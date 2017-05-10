@@ -3,6 +3,7 @@ package sgfw
 import (
 	"fmt"
 	"strings"
+	"strconv"
 	"sync"
 
 //	"encoding/binary"
@@ -41,6 +42,7 @@ type pendingConnection interface {
 	hostname() string
 	getOptString() string
 	src() net.IP
+	srcPort() uint16
 	dst() net.IP
 	dstPort() uint16
 	accept()
@@ -103,6 +105,11 @@ func (pp *pendingPkt) dst() net.IP {
 
 	return dst.Raw() */
 //	pp.pkt.NetworkLayer().Layer
+}
+
+func (pp *pendingPkt) srcPort() uint16 {
+	srcp, _ := getPacketTCPPorts(pp.pkt)
+	return srcp
 }
 
 func (pp *pendingPkt) dstPort() uint16 {
@@ -293,6 +300,9 @@ func (p *Policy) filterPending(rule *Rule) {
 			if rule.rtype == RULE_ACTION_ALLOW {
 				pc.accept()
 			} else {
+				srcs := pc.src().String() + ":" + strconv.Itoa(int(pc.srcPort()))
+				log.Warningf("DENIED outgoing connection attempt by %s from %s %s -> %s:%d (user prompt)",
+                                pc.procInfo().ExePath, "TCP", srcs, pc.dst(), pc.dstPort)
 				pc.drop()
 			}
 		} else {
