@@ -93,8 +93,14 @@ func (ds *dbusServer) IsEnabled() (bool, *dbus.Error) {
 }
 
 func createDbusRule(r *Rule) DbusRule {
+// XXX: Uncommenting will require fw-settings upgrade.
+/*	netstr := ""
+	if r.network != nil {
+		netstr = r.network.String()
+	} */
 	return DbusRule{
 		ID:     uint32(r.id),
+//		Net:    netstr,
 		App:    path.Base(r.policy.path),
 		Path:   r.policy.path,
 		Verb:   uint16(r.rtype),

@@ -26,6 +26,7 @@ type Rule struct {
 	mode     RuleMode
 	rtype    RuleAction
 	hostname string
+	network  *net.IPNet
 	addr     uint32
 	saddr    net.IP
 	port     uint16
@@ -53,6 +54,8 @@ func (r *Rule) AddrString(redact bool) string {
 	port := "*"
 	if r.hostname != "" {
 		addr = r.hostname
+	} else if r.network != nil {
+		addr = r.network.String()
 	} else if r.addr != matchAny && r.addr != noAddress {
 		bs := make([]byte, 4)
 		binary.BigEndian.PutUint32(bs, r.addr)
@@ -95,6 +98,9 @@ log.Notice("comparison: ", hostname, " / ", dst, " : ", dstPort, " -> ", xip, " 
 			}
 		}
 		return r.hostname == hostname
+	}
+	if r.network != nil && r.network.Contains(dst) {
+		return true
 	}
 	return r.addr == binary.BigEndian.Uint32(dst.To4())
 }
@@ -179,7 +185,7 @@ func (r *Rule) parse(s string) bool {
 	} else if len(parts) > 2 {
 			r.saddr = net.ParseIP(parts[2])
 	}
-	fmt.Println("----- rule parser: srcip = ", r.saddr)
+
 	return r.parseVerb(parts[0]) && r.parseTarget(parts[1])
 }
 
@@ -200,6 +206,7 @@ func (r *Rule) parseTarget(t string) bool {
 	if len(addrPort) != 2 {
 		return false
 	}
+
 	return r.parseAddr(addrPort[0]) && r.parsePort(addrPort[1])
 }
 
@@ -213,10 +220,12 @@ func (r *Rule) parseAddr(a string) bool {
 		r.hostname = a
 		return true
 	}
-	ip := net.ParseIP(a)
-	if ip == nil {
+//	ip := net.ParseIP(a)
+	ip, ipnet, err := net.ParseCIDR(a)
+	if err != nil || ip == nil {
 		return false
 	}
+	r.network = ipnet
 	r.addr = binary.BigEndian.Uint32(ip.To4())
 	return true
 }
