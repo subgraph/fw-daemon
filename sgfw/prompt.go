@@ -120,6 +120,7 @@ func (p *prompter) processConnection(pc pendingConnection) {
 	if fscope == APPLY_FOREVER {
 		policy.fw.saveRules()
 	}
+	dbusp.alertRule("sgfw prompt added new rule")
 }
 
 func (p *prompter) nextConnection() pendingConnection {

@@ -10,12 +10,15 @@ import (
 	"bufio"
 	"encoding/json"
 	"strings"
+	"fmt"
 
 	"github.com/op/go-logging"
 	nfqueue "github.com/subgraph/go-nfnetlink/nfqueue"
 //	"github.com/subgraph/go-nfnetlink"
 	"github.com/subgraph/go-procsnitch"
 )
+
+var dbusp *dbusObjectP = nil
 
 type Firewall struct {
 	dbus *dbusServer
@@ -228,6 +231,13 @@ func Main() {
         } else {
 		log.Notice("Did not find SOCKS5 configuration file at", defaultSocksCfgPath, "; ignoring subsystem...")
 	}
+
+	dbusp, err = newDbusObjectPrompt()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to connect to dbus system bus for sgfw prompt events: %v", err))
+	}
+
+	dbusp.alertRule("fw-daemon initialization")
 
 	go OzReceiver(fw)
 

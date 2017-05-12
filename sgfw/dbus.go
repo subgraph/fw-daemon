@@ -49,6 +49,19 @@ const busName = "com.subgraph.Firewall"
 const objectPath = "/com/subgraph/Firewall"
 const interfaceName = "com.subgraph.Firewall"
 
+type dbusObjectP struct {
+	dbus.BusObject
+}
+
+func newDbusObjectPrompt() (*dbusObjectP, error) {
+	conn, err := dbus.SystemBus()
+	if err != nil {
+		return nil, err
+	}
+	return &dbusObjectP{conn.Object("com.subgraph.fwprompt.EventNotifier", "/com/subgraph/fwprompt/EventNotifier")}, nil
+}
+
+
 type dbusServer struct {
 	fw       *Firewall
 	conn     *dbus.Conn
@@ -225,4 +238,8 @@ func (ds *dbusServer) SetConfig(key string, val dbus.Variant) *dbus.Error {
 func (ds *dbusServer) prompt(p *Policy) {
 	log.Info("prompting...")
 	ds.prompter.prompt(p)
+}
+
+func (ob *dbusObjectP) alertRule(data string) {
+	ob.Call("com.subgraph.fwprompt.EventNotifier.Alert", 0, data)
 }
