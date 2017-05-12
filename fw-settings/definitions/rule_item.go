@@ -42,6 +42,30 @@ func (*defRuleItem) String() string {
       </packing>
     </child>
     <child>
+      <object class="GtkLabel" id="origin_label">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+        <property name="halign">start</property>
+        <property name="margin_right">10</property>
+      </object>
+      <packing>
+        <property name="left_attach">2</property>
+        <property name="top_attach">0</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkLabel" id="privs_label">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+        <property name="halign">start</property>
+        <property name="margin_right">10</property>
+      </object>
+      <packing>
+        <property name="left_attach">3</property>
+        <property name="top_attach">0</property>
+      </packing>
+    </child>
+    <child>
       <object class="GtkLabel" id="target_label">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
@@ -49,7 +73,7 @@ func (*defRuleItem) String() string {
         <property name="hexpand">True</property>
       </object>
       <packing>
-        <property name="left_attach">2</property>
+        <property name="left_attach">4</property>
         <property name="top_attach">0</property>
       </packing>
     </child>
@@ -70,7 +94,7 @@ func (*defRuleItem) String() string {
         </child>
       </object>
       <packing>
-        <property name="left_attach">3</property>
+        <property name="left_attach">5</property>
         <property name="top_attach">0</property>
       </packing>
     </child>
@@ -91,7 +115,7 @@ func (*defRuleItem) String() string {
         </child>
       </object>
       <packing>
-        <property name="left_attach">5</property>
+        <property name="left_attach">7</property>
         <property name="top_attach">0</property>
       </packing>
     </child>
@@ -113,7 +137,7 @@ func (*defRuleItem) String() string {
         </child>
       </object>
       <packing>
-        <property name="left_attach">4</property>
+        <property name="left_attach">6</property>
         <property name="top_attach">0</property>
       </packing>
     </child>

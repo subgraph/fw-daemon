@@ -105,7 +105,9 @@ var FilterResultValue = map[string]FilterResult{
 // DbusRule struct of the rule passed to the dbus interface
 type DbusRule struct {
 	ID     uint32
-//	Net    string
+	Net    string
+	Origin string
+	Privs  string
 	App    string
 	Path   string
 	Verb   uint16

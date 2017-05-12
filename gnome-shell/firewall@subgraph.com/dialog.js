@@ -30,6 +30,7 @@ const DetailSection = new Lang.Class({
         this.pid = this._addDetails("Process ID:");
 	this.origin = this._addDetails("Origin:");
         this.user = this._addDetails("User:");
+        this.group = this._addDetails("Group:");
         this.optstring = this._addDetails("");
     },
 
@@ -41,7 +42,7 @@ const DetailSection = new Lang.Class({
         return msg;
     },
 
-    setDetails: function(ip, path, pid, user, origin, optstring) {
+    setDetails: function(ip, path, pid, uid, gid, user, group, origin, optstring) {
         this.ipAddr.text = ip;
         this.path.text = path;
 
@@ -52,7 +53,19 @@ const DetailSection = new Lang.Class({
 	}
 
 	this.origin.text = origin;
-        this.user.text = user;
+
+	if (user != "") {
+		this.user.text = user + " (" + uid.toString() + ")";
+	} else {
+		this.user.text = "uid:" + uid.toString();
+	}
+
+	if (group != "") {
+		this.group.text = group + " (" + gid.toString() + ")";
+	} else {
+		this.group.text = "gid:" + gid.toString();
+	}
+
 	this.optstring.text = optstring
     }
 });
@@ -459,7 +472,7 @@ const PromptDialog = new Lang.Class({
         }
     },
 
-    update: function(application, icon, path, address, port, ip, origin, user, pid, proto, optstring, expanded, expert, action) {
+    update: function(application, icon, path, address, port, ip, origin, uid, gid, user, group, pid, proto, optstring, expanded, expert, action) {
         this._address = address;
         this._port = port;
 
@@ -488,6 +501,6 @@ const PromptDialog = new Lang.Class({
         }
 
         this.optionList.buttonGroup._setChecked(this.optionList.scopeToIdx(action))
-        this.info.setDetails(ip, path, pid, user, origin, optstring);
+        this.info.setDetails(ip, path, pid, uid, gid, user, group, origin, optstring);
     },
 });

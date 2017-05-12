@@ -3,6 +3,7 @@ package sgfw
 import (
 	"errors"
 	"path"
+	"strconv"
 
 	"github.com/godbus/dbus"
 	"github.com/godbus/dbus/introspect"
@@ -93,14 +94,31 @@ func (ds *dbusServer) IsEnabled() (bool, *dbus.Error) {
 }
 
 func createDbusRule(r *Rule) DbusRule {
-// XXX: Uncommenting will require fw-settings upgrade.
-/*	netstr := ""
+	netstr := ""
 	if r.network != nil {
 		netstr = r.network.String()
-	} */
+	}
+	ostr := ""
+	if r.saddr != nil {
+		ostr = r.saddr.String()
+	}
+	pstr := ""
+
+	if r.uname != "" {
+		pstr = r.uname
+	} else if r.uid >= 0 {
+		pstr = strconv.Itoa(r.uid)
+	}
+	if r.gname != "" {
+		pstr += ":" + r.gname
+	} else if r.gid >= 0 {
+		pstr += ":" + strconv.Itoa(r.gid)
+	}
 	return DbusRule{
 		ID:     uint32(r.id),
-//		Net:    netstr,
+		Net:    netstr,
+		Origin: ostr,
+		Privs:  pstr,
 		App:    path.Base(r.policy.path),
 		Path:   r.policy.path,
 		Verb:   uint16(r.rtype),

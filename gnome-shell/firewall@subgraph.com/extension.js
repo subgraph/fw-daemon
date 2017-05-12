@@ -51,7 +51,10 @@ const FirewallPromptInterface = '<node> \
         <arg type="i" direction="in" name="port" /> \
         <arg type="s" direction="in" name="ip" /> \
         <arg type="s" direction="in" name="origin" /> \
+        <arg type="i" direction="in" name="uid" /> \
+        <arg type="i" direction="in" name="gid" /> \
         <arg type="s" direction="in" name="user" /> \
+        <arg type="s" direction="in" name="group" /> \
         <arg type="i" direction="in" name="pid" /> \
         <arg type="s" direction="in" name="optstring" /> \
         <arg type="b" direction="in" name="expanded" /> \
@@ -88,11 +91,11 @@ const FirewallPromptHandler = new Lang.Class({
     },
 
     RequestPromptAsync: function(params, invocation) {
-        let [app, icon, path, address, port, ip, origin, user, pid, optstring, expanded, expert, action] = params;
+        let [app, icon, path, address, port, ip, origin, uid, gid, user, group, pid, optstring, expanded, expert, action] = params;
         this._closeDialog();
         this._dialog = new Dialog.PromptDialog(invocation);
         this._invocation = invocation;
-        this._dialog.update(app, icon, path, address, port, ip, origin, user, pid, "TCP", optstring, expanded, expert, action);
+        this._dialog.update(app, icon, path, address, port, ip, origin, uid, gid, user, group, pid, "TCP", optstring, expanded, expert, action);
         this._dialog.open();
     },
 

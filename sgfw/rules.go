@@ -30,6 +30,10 @@ type Rule struct {
 	addr     uint32
 	saddr    net.IP
 	port     uint16
+	uid      int
+	gid      int
+	uname    string
+	gname    string
 }
 
 func (r *Rule) String() string {
@@ -75,7 +79,16 @@ func (r *Rule) AddrString(redact bool) string {
 
 type RuleList []*Rule
 
-func (r *Rule) match(src net.IP, dst net.IP, dstPort uint16, hostname string) bool {
+func (r *Rule) match(src net.IP, dst net.IP, dstPort uint16, hostname string, uid, gid int, uname, gname string) bool {
+	if r.uid != -1 && r.uid != uid {
+		return false
+	} else if r.gid != -1 && r.gid != gid {
+		return false
+	} else if r.uname != "" && r.uname != uname {
+		return false
+	} else if r.gname != "" && r.gname != gname {
+		return false
+	}
 
 xip := make(net.IP, 4)
 binary.BigEndian.PutUint32(xip, r.addr)
@@ -126,7 +139,7 @@ log.Notice("! Skipping comparison against incompatible rule types: rule src = ",
 log.Notice("! Skipping comparison of mismatching source ips")
 			continue
 		}
-		if r.match(src, dst, dstPort, hostname) {
+		if r.match(src, dst, dstPort, hostname, pinfo.UID, pinfo.GID, uidToUser(pinfo.UID), gidToGroup(pinfo.GID)) {
 log.Notice("+ MATCH SUCCEEDED")
 			dstStr := dst.String()
 			if FirewallConfig.LogRedact {
@@ -170,23 +183,64 @@ func (r *Rule) parse(s string) bool {
 	r.addr = noAddress
 	r.saddr = nil
 	parts := strings.Split(s, "|")
-	if len(parts) < 2 {
+	if len(parts) < 4 || len(parts) > 5 {
 		return false
 	}
-	if len(parts) >= 3 && parts[2] == "SYSTEM" {
+	if parts[2] == "SYSTEM" {
 		r.mode = RULE_MODE_SYSTEM
+	} else if parts[2] != "" {
+		return false
+	}
 
-		if len(parts) > 4 {
-			r.saddr = net.ParseIP(parts[3])
+	if  !r.parsePrivs(parts[3]) {
+		return false
+	}
+
+//fmt.Printf("uid = %v, gid = %v, user = %v, group = %v, hostname = %v\n", r.uid, r.gid, r.uname, r.gname, r.hostname)
+
+	if len(parts) == 5 && len(strings.TrimSpace(parts[4])) > 0 {
+		r.saddr = net.ParseIP(parts[4])
+
+		if r.saddr == nil {
+			return false
 		}
 
-	} else if len(parts) > 3 {
-			r.saddr = net.ParseIP(parts[3])
-	} else if len(parts) > 2 {
-			r.saddr = net.ParseIP(parts[2])
 	}
 
 	return r.parseVerb(parts[0]) && r.parseTarget(parts[1])
+}
+
+func (r *Rule) parsePrivs(p string) bool {
+	toks := strings.Split(p, ":")
+	if len(toks) > 2 {
+		return false
+	}
+	r.uid, r.gid = -1, -1
+	r.uname, r.gname = "", ""
+	ustr := toks[0]
+
+	uid, err := strconv.Atoi(ustr)
+
+	if err != nil {
+		r.uname = ustr
+	} else {
+		r.uid = uid
+	}
+
+	if len(toks) > 1 {
+		gstr := toks[1]
+
+		gid, err := strconv.Atoi(gstr)
+
+		if err != nil {
+			r.gname = gstr
+		} else {
+			r.gid = gid
+		}
+
+	}
+
+	return true
 }
 
 func (r *Rule) parseVerb(v string) bool {
@@ -223,9 +277,14 @@ func (r *Rule) parseAddr(a string) bool {
 //	ip := net.ParseIP(a)
 	ip, ipnet, err := net.ParseCIDR(a)
 	if err != nil || ip == nil {
-		return false
+		ip = net.ParseIP(a)
+
+		if ip == nil {
+			return false
+		}
+	} else {
+		r.network = ipnet
 	}
-	r.network = ipnet
 	r.addr = binary.BigEndian.Uint32(ip.To4())
 	return true
 }
@@ -332,8 +391,11 @@ func (fw *Firewall) loadRules() {
 	for _, line := range strings.Split(string(bs), "\n") {
 		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
 			policy = fw.processPathLine(line)
-		} else if len(strings.TrimSpace(line)) > 0 {
-			processRuleLine(policy, line)
+		} else {
+			trimmed := strings.TrimSpace(line)
+			if len(trimmed) > 0 && trimmed[:1] != "#" {
+				processRuleLine(policy, trimmed)
+			}
 		}
 	}
 }

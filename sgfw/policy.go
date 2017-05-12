@@ -60,7 +60,7 @@ type pendingPkt struct {
 
 func getEmptyPInfo() *procsnitch.Info {
 	pinfo := procsnitch.Info{}
-	pinfo.UID, pinfo.Pid, pinfo.ParentPid = -1, -1, -1
+	pinfo.UID, pinfo.GID, pinfo.Pid, pinfo.ParentPid = -1, -1, -1, -1
 	pinfo.ExePath = "[unknown-exe]"
 	pinfo.CmdLine = "[unknown-cmdline]"
 	pinfo.FirstArg = "[unknown-arg]"
@@ -294,7 +294,7 @@ func (p *Policy) removeRule(r *Rule) {
 func (p *Policy) filterPending(rule *Rule) {
 	remaining := []pendingConnection{}
 	for _, pc := range p.pendingQueue {
-		if rule.match(pc.src(), pc.dst(), pc.dstPort(), pc.hostname()) {
+		if rule.match(pc.src(), pc.dst(), pc.dstPort(), pc.hostname(), pc.procInfo().UID, pc.procInfo().GID, uidToUser(pc.procInfo().UID), gidToGroup(pc.procInfo().GID)) {
 			log.Infof("Adding rule for: %s", rule.getString(FirewallConfig.LogRedact))
 			log.Noticef("%s > %s", rule.getString(FirewallConfig.LogRedact), pc.print())
 			if rule.rtype == RULE_ACTION_ALLOW {

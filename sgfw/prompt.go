@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/user"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/godbus/dbus"
@@ -76,7 +77,10 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		int32(pc.dstPort()),
 		pc.dst().String(),
 		pc.src().String(),
+		int32(pc.procInfo().UID),
+		int32(pc.procInfo().GID),
 		uidToUser(pc.procInfo().UID),
+		gidToGroup(pc.procInfo().GID),
 		int32(pc.procInfo().Pid),
 		pc.getOptString(),
 		FirewallConfig.PromptExpanded,
@@ -91,7 +95,10 @@ func (p *prompter) processConnection(pc pendingConnection) {
 	}
 
 	if pc.src() != nil {
-		rule += "|" + pc.src().String()
+		if !strings.HasSuffix(rule, "SYSTEM") && !strings.HasSuffix(rule, "||") {
+			rule += "|"
+		}
+		rule += "||" + pc.src().String()
 	}
 
 	r, err := policy.parseRule(rule, false)
@@ -142,6 +149,7 @@ func (p *prompter) removePolicy(policy *Policy) {
 }
 
 var userMap = make(map[int]string)
+var groupMap = make(map[int]string)
 
 func lookupUser(uid int) string {
 	if uid == -1 {
@@ -151,7 +159,18 @@ func lookupUser(uid int) string {
 	if err != nil {
 		return fmt.Sprintf("%d", uid)
 	}
-	return u.Name
+	return u.Username
+}
+
+func lookupGroup(gid int) string {
+	if gid == -1 {
+		return "[unknown]"
+	}
+	g, err := user.LookupGroupId(strconv.Itoa(gid))
+	if err != nil {
+		return fmt.Sprintf("%d", gid)
+	}
+	return g.Name
 }
 
 func uidToUser(uid int) string {
@@ -162,4 +181,14 @@ func uidToUser(uid int) string {
 	uname = lookupUser(uid)
 	userMap[uid] = uname
 	return uname
+}
+
+func gidToGroup(gid int) string {
+	gname, ok := groupMap[gid]
+	if ok {
+		return gname
+	}
+	gname = lookupGroup(gid)
+	groupMap[gid] = gname
+	return gname
 }
