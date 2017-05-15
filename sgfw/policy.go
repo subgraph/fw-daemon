@@ -41,6 +41,7 @@ type pendingConnection interface {
 	procInfo() *procsnitch.Info
 	hostname() string
 	getOptString() string
+	proto() string
 	src() net.IP
 	srcPort() uint16
 	dst() net.IP
@@ -107,22 +108,40 @@ func (pp *pendingPkt) dst() net.IP {
 //	pp.pkt.NetworkLayer().Layer
 }
 
+func getNFQProto(pkt *nfqueue.NFQPacket) string {
+	if pkt.Packet.Layer(layers.LayerTypeTCP) != nil {
+		return "tcp"
+	} else if pkt.Packet.Layer(layers.LayerTypeUDP) != nil {
+		return "udp"
+	} else if pkt.Packet.Layer(layers.LayerTypeICMPv4) != nil {
+		return "icmp"
+	}
+
+	return "[unknown]"
+}
+
+func (pp *pendingPkt) proto() string {
+	return getNFQProto(pp.pkt)
+}
+
 func (pp *pendingPkt) srcPort() uint16 {
 	srcp, _ := getPacketTCPPorts(pp.pkt)
 	return srcp
 }
 
 func (pp *pendingPkt) dstPort() uint16 {
-/*	dst := pp.pkt.Packet.TransportLayer().TransportFlow().Dst()
-
-	if dst.EndpointType() != layers.EndpointTCPPort {
-		return 0
+	if pp.proto() == "tcp" {
+		_, dstp := getPacketTCPPorts(pp.pkt)
+		return dstp
+	} else if pp.proto() == "udp" {
+		_, dstp := getPacketUDPPorts(pp.pkt)
+		return dstp
+	} else if pp.proto() == "icmp" {
+		code, _ := getpacketICMPCode(pp.pkt)
+		return uint16(code)
 	}
 
-	return binary.BigEndian.Uint16(dst.Raw()) */
-	_, dstp := getPacketTCPPorts(pp.pkt)
-	return dstp
-//	return pp.pkt.DstPort
+	return 0
 }
 
 func (pp *pendingPkt) accept() {
@@ -294,7 +313,7 @@ func (p *Policy) removeRule(r *Rule) {
 func (p *Policy) filterPending(rule *Rule) {
 	remaining := []pendingConnection{}
 	for _, pc := range p.pendingQueue {
-		if rule.match(pc.src(), pc.dst(), pc.dstPort(), pc.hostname(), pc.procInfo().UID, pc.procInfo().GID, uidToUser(pc.procInfo().UID), gidToGroup(pc.procInfo().GID)) {
+		if rule.match(pc.src(), pc.dst(), pc.dstPort(), pc.hostname(), pc.proto(), pc.procInfo().UID, pc.procInfo().GID, uidToUser(pc.procInfo().UID), gidToGroup(pc.procInfo().GID)) {
 			log.Infof("Adding rule for: %s", rule.getString(FirewallConfig.LogRedact))
 			log.Noticef("%s > %s", rule.getString(FirewallConfig.LogRedact), pc.print())
 			if rule.rtype == RULE_ACTION_ALLOW {
@@ -302,7 +321,7 @@ func (p *Policy) filterPending(rule *Rule) {
 			} else {
 				srcs := pc.src().String() + ":" + strconv.Itoa(int(pc.srcPort()))
 				log.Warningf("DENIED outgoing connection attempt by %s from %s %s -> %s:%d (user prompt)",
-                                pc.procInfo().ExePath, "TCP", srcs, pc.dst(), pc.dstPort)
+                                pc.procInfo().ExePath, pc.proto(), srcs, pc.dst(), pc.dstPort)
 				pc.drop()
 			}
 		} else {
@@ -327,20 +346,23 @@ func printPacket(pkt *nfqueue.NFQPacket, hostname string, pinfo *procsnitch.Info
 	proto := "???"
 	SrcPort, DstPort := uint16(0), uint16(0)
 	SrcIp, DstIp := getPacketIP4Addrs(pkt)
+	code := 0
+	codestr := ""
 
-//	switch pkt.Packet.TransportLayer().TransportFlow().EndpointType() {
 	if pkt.Packet.Layer(layers.LayerTypeTCP) != nil {
-//		case 4:
 		proto = "TCP"
 	} else if pkt.Packet.Layer(layers.LayerTypeUDP) != nil {
-//		case 5:
 		proto = "UDP"
+	} else if pkt.Packet.Layer(layers.LayerTypeICMPv4) != nil {
+		proto = "ICMP"
 	}
 
 	if proto == "TCP" {
 		SrcPort, DstPort = getPacketTCPPorts(pkt)
 	} else if proto == "UDP" {
 		SrcPort, DstPort = getPacketUDPPorts(pkt)
+	} else if proto == "ICMP" {
+		code, codestr = getpacketICMPCode(pkt)
 	}
 
 	if FirewallConfig.LogRedact {
@@ -351,8 +373,12 @@ func printPacket(pkt *nfqueue.NFQPacket, hostname string, pinfo *procsnitch.Info
 		name = DstIp.String()
 	}
 	if pinfo == nil {
+		if proto == "ICMP" {
+			return fmt.Sprintf("(%s %s -> %s: %s [%d])", proto, SrcIp, name, codestr, code)
+		}
 		return fmt.Sprintf("(%s %s:%d -> %s:%d)", proto, SrcIp, SrcPort, name, DstPort)
 	}
+
 
 	return fmt.Sprintf("%s %s %s:%d -> %s:%d", pinfo.ExePath, proto, SrcIp, SrcPort, name, DstPort)
 }
@@ -505,78 +531,111 @@ func getRealRoot(pathname string, pid int) string {
 func findProcessForPacket(pkt *nfqueue.NFQPacket) (*procsnitch.Info, string) {
 	srcip, dstip := getPacketIP4Addrs(pkt)
 	srcp, dstp := getPacketPorts(pkt)
+	proto := ""
 	optstr := ""
+	icode := -1
 
 	if pkt.Packet.Layer(layers.LayerTypeTCP) != nil {
-		// Try normal way first, before the more resource intensive/invasive way.
-		res := procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, nil)
+		proto = "tcp"
+	} else if pkt.Packet.Layer(layers.LayerTypeUDP) != nil {
+		proto = "udp"
+	} else if pkt.Packet.Layer(layers.LayerTypeICMPv4) != nil {
+		proto = "icmp"
+		icode, _ = getpacketICMPCode(pkt)
+	}
 
-		if res == nil {
-			removePids := make([]int, 0)
+	if proto == "" {
+		log.Warningf("Packet has unknown protocol: %d", pkt.Packet.NetworkLayer().LayerType())
+		return nil, optstr
+	}
 
-			for i := 0; i < len(OzInitPids); i++ {
-				data := ""
-				fname := fmt.Sprintf("/proc/%d/net/tcp", OzInitPids[i].Pid)
+	var res *procsnitch.Info = nil
+
+	// Try normal way first, before the more resource intensive/invasive way.
+	if proto == "tcp" {
+		res = procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, nil)
+	} else if proto == "udp" {
+		res = procsnitch.LookupUDPSocketProcessAll(srcip, srcp, dstip, dstp, nil, true)
+	} else if proto == "icmp" {
+		res = procsnitch.LookupICMPSocketProcessAll(srcip, dstip, icode, nil)
+	}
+
+	if res == nil {
+		removePids := make([]int, 0)
+
+		for i := 0; i < len(OzInitPids); i++ {
+			data := ""
+			fname := fmt.Sprintf("/proc/%d/net/%s", OzInitPids[i].Pid, proto)
 fmt.Println("XXX: opening: ", fname)
-				bdata, err := readFileDirect(fname)
+			bdata, err := readFileDirect(fname)
 
-				if err != nil {
-					fmt.Println("Error reading proc data from ", fname, ": ", err)
+			if err != nil {
+				fmt.Println("Error reading proc data from ", fname, ": ", err)
 
-					if err == syscall.ENOENT {
-						removePids = append(removePids, OzInitPids[i].Pid)
-					}
-
-					continue
-				} else {
-					data = string(bdata)
-					lines := strings.Split(data, "\n")
-					rlines := make([]string, 0)
-
-					for l := 0; l < len(lines); l++ {
-						lines[l] = strings.TrimSpace(lines[l])
-						ssplit := strings.Split(lines[l], ":")
-
-						if len(ssplit) != 6 {
-							continue
-						}
-
-						rlines = append(rlines, strings.Join(ssplit, ":"))
-					}
-
-					res = procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, rlines)
-
-					if res != nil {
-						optstr = "Sandbox: " + OzInitPids[i].Name
-						res.ExePath = getRealRoot(res.ExePath, OzInitPids[i].Pid)
-						break
-					}
+				if err == syscall.ENOENT {
+					removePids = append(removePids, OzInitPids[i].Pid)
 				}
 
-			}
+				continue
+			} else {
+				data = string(bdata)
+				lines := strings.Split(data, "\n")
+				rlines := make([]string, 0)
 
-			for _, p := range removePids {
-				removeInitPid(p)
+				for l := 0; l < len(lines); l++ {
+					lines[l] = strings.TrimSpace(lines[l])
+					ssplit := strings.Split(lines[l], ":")
+
+					if len(ssplit) != 6 {
+						continue
+					}
+
+					rlines = append(rlines, strings.Join(ssplit, ":"))
+				}
+
+				if proto == "tcp" {
+					res = procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, rlines)
+				} else if proto == "udp" {
+					res = procsnitch.LookupUDPSocketProcessAll(srcip, srcp, dstip, dstp, rlines, true)
+				} else if proto == "icmp" {
+					res = procsnitch.LookupICMPSocketProcessAll(srcip, dstip, icode, rlines)
+				}
+
+				if res != nil {
+					optstr = "Sandbox: " + OzInitPids[i].Name
+					res.ExePath = getRealRoot(res.ExePath, OzInitPids[i].Pid)
+					break
+				}
 			}
 
 		}
 
-		return res, optstr
-	} else if pkt.Packet.Layer(layers.LayerTypeUDP) != nil {
-		return procsnitch.LookupUDPSocketProcess(srcp), optstr
+		for _, p := range removePids {
+			removeInitPid(p)
+		}
+
 	}
 
-	log.Warningf("Packet has unknown protocol: %d", pkt.Packet.NetworkLayer().LayerType())
-	//log.Warningf("Packet has unknown protocol: %d", pkt.Protocol)
-	return nil, optstr
+	return res, optstr
 }
 
 func basicAllowPacket(pkt *nfqueue.NFQPacket) bool {
-	_, dstip := getPacketIP4Addrs(pkt)
+	srcip, dstip := getPacketIP4Addrs(pkt)
+	if pkt.Packet.Layer(layers.LayerTypeUDP) != nil {
+		_, dport := getPacketUDPPorts(pkt)
+		if dport == 53 {
+			return true
+		}
+	}
+	if pkt.Packet.Layer(layers.LayerTypeICMPv4) != nil && srcip.Equal(dstip) {
+		// An ICMP dest unreach packet sent to ourselves probably isn't a big security risk.
+		return true
+	}
 	return dstip.IsLoopback() ||
 		dstip.IsLinkLocalMulticast() ||
-		pkt.Packet.Layer(layers.LayerTypeTCP) == nil
-//		pkt.Protocol != nfqueue.TCP
+		(pkt.Packet.Layer(layers.LayerTypeTCP) == nil &&
+		 pkt.Packet.Layer(layers.LayerTypeUDP) == nil &&
+		 pkt.Packet.Layer(layers.LayerTypeICMPv4) == nil)
 }
 
 func getPacketIP4Addrs(pkt *nfqueue.NFQPacket) (net.IP, net.IP) {
@@ -588,6 +647,17 @@ func getPacketIP4Addrs(pkt *nfqueue.NFQPacket) (net.IP, net.IP) {
 
 	ip, _ := ipLayer.(*layers.IPv4)
 	return ip.SrcIP, ip.DstIP
+}
+
+func getpacketICMPCode(pkt *nfqueue.NFQPacket) (int, string) {
+	icmpLayer := pkt.Packet.Layer(layers.LayerTypeICMPv4)
+
+	if icmpLayer == nil {
+		return -1, ""
+	}
+
+	icmp, _ := icmpLayer.(*layers.ICMPv4)
+	return int(icmp.TypeCode.Code()), icmp.TypeCode.String()
 }
 
 func getPacketTCPPorts(pkt *nfqueue.NFQPacket) (uint16, uint16) {

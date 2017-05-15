@@ -78,6 +78,45 @@ func (ss *socketStatus) String() string {
 	return fmt.Sprintf("%s -> %s uid=%d inode=%d", ss.local, ss.remote, ss.uid, ss.inode)
 }
 
+func findICMPSocketAll(srcAddr net.IP, dstAddr net.IP, code int, custdata []string) *socketStatus {
+	if custdata == nil {
+		return findSocket("icmp", func(ss socketStatus) bool {
+			return ss.remote.ip.Equal(dstAddr) && ss.local.ip.Equal(srcAddr)
+		})
+	}
+
+	return findSocketCustom("icmp", custdata, func(ss socketStatus) bool {
+		return ss.remote.ip.Equal(dstAddr) && ss.local.ip.Equal(srcAddr)
+	})
+}
+
+func findUDPSocketAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort uint16, custdata []string, loose bool) *socketStatus {
+	wildcard := net.IP{0,0,0,0}
+
+	if custdata == nil {
+		if !loose {
+			return findSocket("udp", func(ss socketStatus) bool {
+//				return ss.remote.port == dstPort && ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
+				return ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
+			})
+		}
+
+		return findSocket("udp", func(ss socketStatus) bool {
+			return (ss.remote.ip.Equal(dstAddr) || ss.remote.ip.Equal(wildcard)) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
+		})
+	}
+
+	if !loose {
+		return findSocketCustom("udp", custdata, func(ss socketStatus) bool {
+			return ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
+		})
+	}
+
+	return findSocketCustom("udp", custdata, func(ss socketStatus) bool {
+		return (ss.remote.ip.Equal(dstAddr) || ss.remote.ip.Equal(wildcard)) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
+	})
+}
+
 func findUDPSocket(srcPort uint16) *socketStatus {
 	return findSocket("udp", func(ss socketStatus) bool {
 		return ss.local.port == srcPort
@@ -91,12 +130,10 @@ func findTCPSocket(srcPort uint16, dstAddr net.IP, dstPort uint16) *socketStatus
 }
 
 func findTCPSocketAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort uint16, custdata []string) *socketStatus {
-	found := findSocket("tcp", func(ss socketStatus) bool {
-		return ss.remote.port == dstPort && ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
-	})
-
-	if found != nil || custdata == nil {
-		return found
+	if custdata == nil {
+		return findSocket("tcp", func(ss socketStatus) bool {
+			return ss.remote.port == dstPort && ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
+		})
 	}
 
 	return findSocketCustom("tcp", custdata, func(ss socketStatus) bool {

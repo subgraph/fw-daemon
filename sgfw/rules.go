@@ -25,6 +25,7 @@ type Rule struct {
 	policy   *Policy
 	mode     RuleMode
 	rtype    RuleAction
+	proto    string
 	hostname string
 	network  *net.IPNet
 	addr     uint32
@@ -50,7 +51,12 @@ func (r *Rule) getString(redact bool) string {
 		rmode = "|" + RuleModeString[RULE_MODE_SYSTEM]
 	}
 
-	return fmt.Sprintf("%s|%s%s", rtype, r.AddrString(redact), rmode)
+	protostr := ""
+
+	if r.proto != "tcp" {
+		protostr = r.proto + ":"
+	}
+	return fmt.Sprintf("%s|%s%s%s", rtype, protostr, r.AddrString(redact), rmode)
 }
 
 func (r *Rule) AddrString(redact bool) string {
@@ -66,7 +72,7 @@ func (r *Rule) AddrString(redact bool) string {
 		addr = fmt.Sprintf("%d.%d.%d.%d", bs[0], bs[1], bs[2], bs[3])
 	}
 
-	if r.port != matchAny {
+	if r.port != matchAny || r.proto == "icmp" {
 		port = fmt.Sprintf("%d", r.port)
 	}
 
@@ -79,7 +85,10 @@ func (r *Rule) AddrString(redact bool) string {
 
 type RuleList []*Rule
 
-func (r *Rule) match(src net.IP, dst net.IP, dstPort uint16, hostname string, uid, gid int, uname, gname string) bool {
+func (r *Rule) match(src net.IP, dst net.IP, dstPort uint16, hostname string, proto string, uid, gid int, uname, gname string) bool {
+	if r.proto != proto {
+		return false
+	}
 	if r.uid != -1 && r.uid != uid {
 		return false
 	} else if r.gid != -1 && r.gid != gid {
@@ -115,6 +124,12 @@ log.Notice("comparison: ", hostname, " / ", dst, " : ", dstPort, " -> ", xip, " 
 	if r.network != nil && r.network.Contains(dst) {
 		return true
 	}
+	if proto == "icmp" {
+		fmt.Printf("network = %v, src = %v, r.addr = %x, src to4 = %x\n", r.network, src, r.addr, binary.BigEndian.Uint32(src.To4()))
+		if  (r.network != nil && r.network.Contains(src)) || (r.addr == binary.BigEndian.Uint32(src.To4())) {
+			return true
+		}
+	}
 	return r.addr == binary.BigEndian.Uint32(dst.To4())
 }
 
@@ -135,11 +150,11 @@ log.Notice("------------ trying match of src ", src, " against: ", r, " | ", r.s
 		if r.saddr == nil && src != nil && sandboxed {
 log.Notice("! Skipping comparison against incompatible rule types: rule src = ", r.saddr, " / packet src = ", src)
 			continue
-		} else if r.saddr != nil && !r.saddr.Equal(src) {
+		} else if r.saddr != nil && !r.saddr.Equal(src) && r.proto != "icmp" {
 log.Notice("! Skipping comparison of mismatching source ips")
 			continue
 		}
-		if r.match(src, dst, dstPort, hostname, pinfo.UID, pinfo.GID, uidToUser(pinfo.UID), gidToGroup(pinfo.GID)) {
+		if r.match(src, dst, dstPort, hostname, getNFQProto(pkt), pinfo.UID, pinfo.GID, uidToUser(pinfo.UID), gidToGroup(pinfo.GID)) {
 log.Notice("+ MATCH SUCCEEDED")
 			dstStr := dst.String()
 			if FirewallConfig.LogRedact {
@@ -153,12 +168,12 @@ log.Notice("+ MATCH SUCCEEDED")
 			}
 			log.Noticef("%s > %s %s %s -> %s:%d",
 				r.getString(FirewallConfig.LogRedact),
-				pinfo.ExePath, "TCP",
+				pinfo.ExePath, r.proto,
 				srcStr,
 				dstStr, dstPort)
 			if r.rtype == RULE_ACTION_DENY {
 			log.Warningf("DENIED outgoing connection attempt by %s from %s %s -> %s:%d",
-				pinfo.ExePath, "TCP",
+				pinfo.ExePath, r.proto,
 				srcStr,
 				dstStr, dstPort)
 				return FILTER_DENY
@@ -257,11 +272,21 @@ func (r *Rule) parseVerb(v string) bool {
 
 func (r *Rule) parseTarget(t string) bool {
 	addrPort := strings.Split(t, ":")
-	if len(addrPort) != 2 {
+	if len(addrPort) != 2 && len(addrPort) != 3 {
 		return false
 	}
+	sind := 0
+	if len(addrPort) == 3 {
+		if addrPort[0] != "udp" && addrPort[0] != "icmp" && addrPort[0] != "tcp" {
+			return false
+		}
+		r.proto = addrPort[0]
+		sind++
+	} else {
+		r.proto = "tcp"
+	}
 
-	return r.parseAddr(addrPort[0]) && r.parsePort(addrPort[1])
+	return r.parseAddr(addrPort[sind]) && r.parsePort(addrPort[sind+1])
 }
 
 func (r *Rule) parseAddr(a string) bool {
@@ -296,7 +321,7 @@ func (r *Rule) parsePort(p string) bool {
 	}
 	var err error
 	port, err := strconv.ParseUint(p, 10, 16)
-	if err != nil || port == 0 || port > 0xFFFF {
+	if err != nil || (port == 0 && r.proto != "icmp") || port > 0xFFFF {
 		return false
 	}
 	r.port = uint16(port)

@@ -72,6 +72,9 @@ func (sc *pendingSocksConnection) hostname() string {
 func (sc *pendingSocksConnection) dst() net.IP {
 	return sc.destIP
 }
+func (sc *pendingSocksConnection) proto() string {
+	return "tcp"
+}
 func (sc *pendingSocksConnection) srcPort() uint16 {
 	return sc.sourcePort
 }

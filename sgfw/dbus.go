@@ -131,6 +131,7 @@ func createDbusRule(r *Rule) DbusRule {
 		ID:     uint32(r.id),
 		Net:    netstr,
 		Origin: ostr,
+		Proto:  r.proto,
 		Privs:  pstr,
 		App:    path.Base(r.policy.path),
 		Path:   r.policy.path,

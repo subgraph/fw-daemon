@@ -77,6 +77,7 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		int32(pc.dstPort()),
 		pc.dst().String(),
 		pc.src().String(),
+		pc.proto(),
 		int32(pc.procInfo().UID),
 		int32(pc.procInfo().GID),
 		uidToUser(pc.procInfo().UID),

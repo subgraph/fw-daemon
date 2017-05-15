@@ -42,7 +42,7 @@ const DetailSection = new Lang.Class({
         return msg;
     },
 
-    setDetails: function(ip, path, pid, uid, gid, user, group, origin, optstring) {
+    setDetails: function(ip, path, pid, uid, gid, user, group, origin, proto, optstring) {
         this.ipAddr.text = ip;
         this.path.text = path;
 
@@ -55,13 +55,19 @@ const DetailSection = new Lang.Class({
 	this.origin.text = origin;
 
 	if (user != "") {
-		this.user.text = user + " (" + uid.toString() + ")";
+		this.user.text = user;
+		if (uid != -1) {
+			this.user.text += " (" + uid.toString() + ")";
+		}
 	} else {
 		this.user.text = "uid:" + uid.toString();
 	}
 
 	if (group != "") {
-		this.group.text = group + " (" + gid.toString() + ")";
+		this.group.text = group;
+		if (gid != -1) {
+			this.group.text += " (" + gid.toString() + ")";
+		}
 	} else {
 		this.group.text = "gid:" + gid.toString();
 	}
@@ -460,26 +466,42 @@ const PromptDialog = new Lang.Class({
     },
 
     ruleTarget: function() {
+	let base = "";
+	if(this._proto != "tcp") {
+		base = this._proto + ":";
+	}
         switch(this.optionList.selectedIdx()) {
         case 0:
-            return this._address + ":" + this._port;
+            return base + this._address + ":" + this._port;
         case 1:
-            return this._address + ":*";
+            return base + this._address + ":*";
         case 2:
-            return "*:" + this._port;
+            return base + "*:" + this._port;
         case 3:
-            return "*:*";
+            return base + "*:*";
         }
     },
 
     update: function(application, icon, path, address, port, ip, origin, uid, gid, user, group, pid, proto, optstring, expanded, expert, action) {
         this._address = address;
         this._port = port;
+	this._proto = proto;
 
         let port_str = (proto+"").toUpperCase() + " Port "+ port;
 
+        if (proto == "icmp") {
+                port_str = (proto+"").toUpperCase() + " Code "+ port;
+	}
+
         this.header.setTitle(application);
-        this.header.setMessage("Wants to connect to "+ address + " on " + port_str);
+
+	if (proto == "tcp") {
+	        this.header.setMessage("Wants to connect to "+ address + " on " + port_str);
+	} else if (proto == "udp") {
+	        this.header.setMessage("Wants to send data to "+ address + " on " + port_str);
+	} else if (proto == "icmp") {
+	        this.header.setMessage("Wants to send data to "+ address + " with " + port_str);
+	}
 
         if (expanded) {
             this.details.isOpen = false;
@@ -491,16 +513,32 @@ const PromptDialog = new Lang.Class({
             this.header.setIconDefault();
         }
 
-        this.optionList.setOptionText(0, "Only "+ address + " on "+ port_str);
+        if (proto == "icmp") {
+            this.optionList.setOptionText(0, "Only "+ address + " with "+ port_str);
+        } else {
+            this.optionList.setOptionText(0, "Only "+ address + " on "+ port_str);
+        }
         if (expert) {
-            this.optionList.setOptionText(1, "Only "+ address + " on any port");
+
+            if (proto == "icmp") {
+               this.optionList.setOptionText(1, "Only "+ address + " with any ICMP code");
+            } else if (proto == "udp") {
+               this.optionList.setOptionText(1, "Only "+ address + " on any UDP port");
+            } else {
+               this.optionList.setOptionText(1, "Only "+ address + " on any port");
+            }
+
             this.optionList.setOptionText(2, "Only "+ port_str);
         } else {
             this.optionList.setOptionText(1, false);
             this.optionList.setOptionText(2, false);
         }
 
+        if (proto != "tcp") {
+            this.optionList.setOptionText(3, "Any " + proto.toUpperCase() + " data");
+	}
+
         this.optionList.buttonGroup._setChecked(this.optionList.scopeToIdx(action))
-        this.info.setDetails(ip, path, pid, uid, gid, user, group, origin, optstring);
+        this.info.setDetails(ip, path, pid, uid, gid, user, group, origin, proto, optstring);
     },
 });

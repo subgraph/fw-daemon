@@ -66,6 +66,24 @@ func FindProcessForConnection(conn net.Conn, procInfo ProcInfo) *Info {
 	return info
 }
 
+// LookupICMPSocketProcessAll searches for a ICMP socket a given source host, destination IP, and type
+func LookupICMPSocketProcessAll(srcAddr net.IP, dstAddr net.IP, code int, custdata []string) *Info {
+	ss := findICMPSocketAll(srcAddr, dstAddr, code, custdata)
+	if ss == nil {
+		return nil
+	}
+	return pcache.lookup(ss.inode)
+}
+
+// LookupUDPSocketProcessAll searches for a UDP socket a given source port, destination IP, and destination port - AND source destination
+func LookupUDPSocketProcessAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort uint16, custdata []string, loose bool) *Info {
+	ss := findUDPSocketAll(srcAddr, srcPort, dstAddr, dstPort, custdata, loose)
+	if ss == nil {
+		return nil
+	}
+	return pcache.lookup(ss.inode)
+}
+
 // LookupUDPSocketProcess searches for a UDP socket with a source port
 func LookupUDPSocketProcess(srcPort uint16) *Info {
 	ss := findUDPSocket(srcPort)

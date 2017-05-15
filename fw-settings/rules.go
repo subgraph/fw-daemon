@@ -116,7 +116,11 @@ func (rr *ruleRow) update() {
 	rr.gtkLabelApp.SetText(rr.rule.App)
 	rr.gtkLabelApp.SetTooltipText(rr.rule.Path)
 	rr.gtkLabelVerb.SetText(getVerbText(rr.rule))
-	rr.gtkLabelOrigin.SetText(rr.rule.Origin)
+	if (rr.rule.Proto == "tcp") {
+		rr.gtkLabelOrigin.SetText(rr.rule.Origin)
+	} else {
+		rr.gtkLabelOrigin.SetText(rr.rule.Origin + " (" + rr.rule.Proto + ")")
+	}
 	rr.gtkLabelPrivs.SetText(rr.rule.Privs)
 	rr.gtkLabelTarget.SetText(getTargetText(rr.rule))
 }
@@ -139,13 +143,26 @@ func getTargetText(rule *sgfw.DbusRule) string {
 	}
 
 	if items[0] == "*" {
-		return fmt.Sprintf("Connections to All hosts on port %s", items[1])
+		if rule.Proto == "tcp" {
+			return fmt.Sprintf("Connections to ALL hosts on port %s", items[1])
+		} else if rule.Proto == "icmp" {
+			return fmt.Sprintf("Data to ALL hosts with ICMP code %s", items[1])
+		}
+		return fmt.Sprintf("Data to ALL hosts on port %s", items[1])
 	}
 	if items[1] == "*" {
-		return fmt.Sprintf("All connections to host %s", items[0])
+		if rule.Proto == "tcp" {
+			return fmt.Sprintf("All connections to host %s", items[0])
+		}
+		return fmt.Sprintf("All data to host %s", items[0])
 	}
 
-	return fmt.Sprintf("Connections to %s on port %s", items[0], items[1])
+	if rule.Proto == "tcp" {
+		return fmt.Sprintf("Connections to %s on port %s", items[0], items[1])
+	} else if rule.Proto == "icmp" {
+		return fmt.Sprintf("Data to %s with ICMP code %s", items[0], items[1])
+	}
+	return fmt.Sprintf("Data to %s on port %s", items[0], items[1])
 }
 
 func (rr *ruleRow) onSaveAsNew() {

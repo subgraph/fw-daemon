@@ -107,6 +107,7 @@ type DbusRule struct {
 	ID     uint32
 	Net    string
 	Origin string
+	Proto  string
 	Privs  string
 	App    string
 	Path   string
