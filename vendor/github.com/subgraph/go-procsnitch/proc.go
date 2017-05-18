@@ -76,8 +76,8 @@ func LookupICMPSocketProcessAll(srcAddr net.IP, dstAddr net.IP, code int, custda
 }
 
 // LookupUDPSocketProcessAll searches for a UDP socket a given source port, destination IP, and destination port - AND source destination
-func LookupUDPSocketProcessAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort uint16, custdata []string, loose bool) *Info {
-	ss := findUDPSocketAll(srcAddr, srcPort, dstAddr, dstPort, custdata, loose)
+func LookupUDPSocketProcessAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort uint16, custdata []string, strictness int) *Info {
+	ss := findUDPSocketAll(srcAddr, srcPort, dstAddr, dstPort, custdata, strictness)
 	if ss == nil {
 		return nil
 	}

@@ -10,7 +10,6 @@ import (
 
 //	nfnetlink "github.com/subgraph/go-nfnetlink"
 	nfqueue "github.com/subgraph/go-nfnetlink/nfqueue"
-//	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/subgraph/go-procsnitch"
 	"net"
@@ -203,21 +202,12 @@ func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info, o
 	dstb := pkt.Packet.NetworkLayer().NetworkFlow().Dst().Raw()
 	dstip := net.IP(dstb)
 	srcip := net.IP(pkt.Packet.NetworkLayer().NetworkFlow().Src().Raw())
-//	_, dstp := getPacketPorts(pkt)
-	name := p.fw.dns.Lookup(dstip)
+	name := p.fw.dns.Lookup(dstip, pinfo.Pid)
 	if !FirewallConfig.LogRedact {
 		log.Infof("Lookup(%s): %s", dstip.String(), name)
 	}
 //	fwo := matchAgainstOzRules(srcip, dstip, dstp)
 
-if name == "" {
-/*	log.Notice("XXXXXXXXXXXXx trying better rev lookup:")
-	net.LookupAddr(dstip.String())
-	name = p.fw.dns.Lookup(dstip)
-	log.Notice("NOW ITS: ", name) */
-}
-
-//log.Notice("XXX: Attempting to filter packet on rules -> ", fwo, " / rev lookup = ", name)
 	result := p.rules.filterPacket(pkt, pinfo, srcip, name, optstr)
 	switch result {
 	case FILTER_DENY:
@@ -384,12 +374,13 @@ func printPacket(pkt *nfqueue.NFQPacket, hostname string, pinfo *procsnitch.Info
 }
 
 func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
-	if pkt.Packet.Layer(layers.LayerTypeUDP) != nil {
+	isudp := pkt.Packet.Layer(layers.LayerTypeUDP) != nil
+	if isudp {
 		srcport, _ := getPacketUDPPorts(pkt)
 
 		if srcport == 53 {
+			fw.dns.processDNS(pkt)
 			pkt.Accept()
-			fw.dns.processDNS(pkt.Packet)
 			return
 		}
 
@@ -412,13 +403,18 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 
 
 	ppath := "*"
+	strictness := procsnitch.MATCH_STRICT
 
-	pinfo, optstring := findProcessForPacket(pkt)
+	if isudp {
+		strictness = procsnitch.MATCH_LOOSE
+	}
+
+	pinfo, optstring := findProcessForPacket(pkt, false, strictness)
 	if pinfo == nil {
 		pinfo = getEmptyPInfo()
 		ppath = "[unknown]"
 		optstring = "[Connection could not be mapped]"
-		log.Warningf("No proc found for %s", printPacket(pkt, fw.dns.Lookup(dstip), nil))
+		log.Warningf("No proc found for %s", printPacket(pkt, fw.dns.Lookup(dstip, pinfo.Pid), nil))
 //		pkt.Accept()
 //		return
 	} else {
@@ -433,7 +429,7 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 			}
 		}
 	}
-	log.Debugf("filterPacket [%s] %s", ppath, printPacket(pkt, fw.dns.Lookup(dstip), nil))
+	log.Debugf("filterPacket [%s] %s", ppath, printPacket(pkt, fw.dns.Lookup(dstip, pinfo.Pid), nil))
 	if basicAllowPacket(pkt) {
 		pkt.Accept()
 //log.Notice("XXX: passed basicallowpacket")
@@ -481,7 +477,7 @@ func getAllProcNetDataLocal() ([]string, error) {
 
 	for i := 0; i < len(OzInitPids); i++ {
 		fname := fmt.Sprintf("/proc/%d/net/tcp", OzInitPids[i])
-fmt.Println("XXX: opening: ", fname)
+//fmt.Println("XXX: opening: ", fname)
 		bdata, err := readFileDirect(fname)
 
 		if err != nil {
@@ -528,12 +524,17 @@ func getRealRoot(pathname string, pid int) string {
 	return pathname
 }
 
-func findProcessForPacket(pkt *nfqueue.NFQPacket) (*procsnitch.Info, string) {
+func findProcessForPacket(pkt *nfqueue.NFQPacket, reverse bool, strictness int) (*procsnitch.Info, string) {
 	srcip, dstip := getPacketIP4Addrs(pkt)
 	srcp, dstp := getPacketPorts(pkt)
 	proto := ""
 	optstr := ""
 	icode := -1
+
+	if reverse {
+		dstip, srcip = getPacketIP4Addrs(pkt)
+		dstp, srcp = getPacketPorts(pkt)
+	}
 
 	if pkt.Packet.Layer(layers.LayerTypeTCP) != nil {
 		proto = "tcp"
@@ -549,13 +550,15 @@ func findProcessForPacket(pkt *nfqueue.NFQPacket) (*procsnitch.Info, string) {
 		return nil, optstr
 	}
 
+//log.Noticef("XXX proto = %s, from %v : %v -> %v : %v\n", proto, srcip, srcp, dstip, dstp)
+
 	var res *procsnitch.Info = nil
 
 	// Try normal way first, before the more resource intensive/invasive way.
 	if proto == "tcp" {
 		res = procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, nil)
 	} else if proto == "udp" {
-		res = procsnitch.LookupUDPSocketProcessAll(srcip, srcp, dstip, dstp, nil, true)
+		res = procsnitch.LookupUDPSocketProcessAll(srcip, srcp, dstip, dstp, nil, strictness)
 	} else if proto == "icmp" {
 		res = procsnitch.LookupICMPSocketProcessAll(srcip, dstip, icode, nil)
 	}
@@ -566,7 +569,7 @@ func findProcessForPacket(pkt *nfqueue.NFQPacket) (*procsnitch.Info, string) {
 		for i := 0; i < len(OzInitPids); i++ {
 			data := ""
 			fname := fmt.Sprintf("/proc/%d/net/%s", OzInitPids[i].Pid, proto)
-fmt.Println("XXX: opening: ", fname)
+//fmt.Println("XXX: opening: ", fname)
 			bdata, err := readFileDirect(fname)
 
 			if err != nil {
@@ -596,7 +599,7 @@ fmt.Println("XXX: opening: ", fname)
 				if proto == "tcp" {
 					res = procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, rlines)
 				} else if proto == "udp" {
-					res = procsnitch.LookupUDPSocketProcessAll(srcip, srcp, dstip, dstp, rlines, true)
+					res = procsnitch.LookupUDPSocketProcessAll(srcip, srcp, dstip, dstp, rlines, strictness)
 				} else if proto == "icmp" {
 					res = procsnitch.LookupICMPSocketProcessAll(srcip, dstip, icode, rlines)
 				}
