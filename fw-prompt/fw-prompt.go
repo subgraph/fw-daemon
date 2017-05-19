@@ -6,6 +6,7 @@ import (
 	"github.com/gotk3/gotk3/glib"
 	"log"
 	"fmt"
+	"strings"
 	"strconv"
 	"os"
 	"io/ioutil"
@@ -42,7 +43,10 @@ type ruleColumns struct {
 	Port     int
 	UID      int
 	GID      int
+	Uname    string
+	Gname    string
 	Origin   string
+	Scope	 int
 }
 
 
@@ -53,14 +57,17 @@ var globalLS *gtk.ListStore
 var globalTV *gtk.TreeView
 var decisionWaiters []*decisionWaiter
 
-var editApp, editTarget, editPort *gtk.Entry
+var editApp, editTarget, editPort, editUser, editGroup *gtk.Entry
 var comboProto *gtk.ComboBoxText
+var radioOnce, radioProcess, radioParent, radioSession, radioPermanent *gtk.RadioButton
+var btnApprove, btnDeny, btnIgnore *gtk.Button
+var chkUser, chkGroup *gtk.CheckButton
 
 
 func dumpDecisions() {
-	fmt.Println("Total of decisions pending: ", len(decisionWaiters))
+	fmt.Println("XXX Total of decisions pending: ", len(decisionWaiters))
 	for i := 0; i < len(decisionWaiters); i++ {
-		fmt.Printf("%d ready = %v, rule = %v\n", i+1, decisionWaiters[i].Ready, decisionWaiters[i].Rule)
+		fmt.Printf("XXX %d ready = %v, rule = %v\n", i+1, decisionWaiters[i].Ready, decisionWaiters[i].Rule)
 	}
 }
 
@@ -174,7 +181,6 @@ func loadPreferences() bool {
 	}
 
 	prefPath := usr.HomeDir + "/.fwprompt.json"
-	fmt.Println("xxxxxxxxxxxxxxxxxxxxxx preferences path = ", prefPath)
 
 	jfile, err := ioutil.ReadFile(prefPath)
 
@@ -212,6 +218,17 @@ func get_vbox() *gtk.Box {
         }
 
         return vbox
+}
+
+func get_checkbox(text string, activated bool) *gtk.CheckButton {
+	cb, err := gtk.CheckButtonNewWithLabel(text)
+
+	if err != nil {
+		log.Fatal("Unable to create new checkbox:", err)
+	}
+
+	cb.SetActive(activated)
+	return cb
 }
 
 func get_combobox() *gtk.ComboBoxText {
@@ -336,6 +353,7 @@ func addRequest(listStore *gtk.ListStore, path, proto string, pid int, ipaddr, h
 
 	decision := addDecision()
 	dumpDecisions()
+	toggleHover()
 	return decision
 }
 
@@ -359,7 +377,7 @@ func setup_settings() {
 	}
 
 	scrollbox.Add(box)
-	scrollbox.SetSizeRequest(600, 800)
+	scrollbox.SetSizeRequest(600, 400)
 
 	tv, err := gtk.TreeViewNew()
 
@@ -438,9 +456,73 @@ func makeDecision(idx int, rule string, scope int) {
 	decisionWaiters[idx].Cond.L.Unlock()
 }
 
+func toggleHover() {
+	mainWin.SetKeepAbove(len(decisionWaiters) > 0)
+}
+
+func toggleValidRuleState() {
+	ok := true
+
+	if numSelections() <= 0 {
+		ok = false
+	}
+
+	str, err := editApp.GetText()
+	if err != nil || strings.Trim(str, "\t ") == "" {
+		ok = false
+	}
+
+	str, err = editTarget.GetText()
+	if err != nil || strings.Trim(str, "\t ") == "" {
+		ok = false
+	}
+
+	str, err = editPort.GetText()
+	if err != nil || strings.Trim(str, "\t ") == "" {
+		ok = false
+	} else {
+		pval, err := strconv.Atoi(str)
+
+		if err != nil || pval < 0 || pval > 65535 {
+			ok = false
+		}
+	}
+
+	if chkUser.GetActive() {
+		str, err = editUser.GetText()
+		if err != nil || strings.Trim(str, "\t ") == "" {
+			ok = false
+		}
+	}
+
+	if chkGroup.GetActive() {
+		str, err = editGroup.GetText()
+		if err != nil || strings.Trim(str, "\t ") == "" {
+			ok = false
+		}
+	}
+
+
+	btnApprove.SetSensitive(ok)
+	btnDeny.SetSensitive(ok)
+	btnIgnore.SetSensitive(ok)
+}
+
 func createCurrentRule() (ruleColumns, error) {
-	rule := ruleColumns{}
+	rule := ruleColumns{Scope: int(sgfw.APPLY_ONCE)}
 	var err error = nil
+
+	if radioProcess.GetActive() {
+		return rule, errors.New("Process scope is unsupported at the moment")
+	} else if radioParent.GetActive() {
+		return rule, errors.New("Parent process scope is unsupported at the moment")
+	} else if radioSession.GetActive() {
+		rule.Scope = int(sgfw.APPLY_SESSION)
+	} else if radioPermanent.GetActive() {
+		rule.Scope = int(sgfw.APPLY_FOREVER)
+	} else {
+		rule.Scope = int(sgfw.APPLY_ONCE)
+	}
 
 	rule.Path, err = editApp.GetText()
 	if err != nil {
@@ -465,6 +547,7 @@ func createCurrentRule() (ruleColumns, error) {
 	rule.Proto = comboProto.GetActiveID()
 
 	rule.UID, rule.GID = 0, 0
+	rule.Uname, rule.Gname = "", ""
 /*	Pid      int
 	Origin   string */
 
@@ -475,12 +558,16 @@ func clearEditor() {
 	editApp.SetText("")
 	editTarget.SetText("")
 	editPort.SetText("")
+	editUser.SetText("")
+	editGroup.SetText("")
 	comboProto.SetActive(0)
-/*	ronce.SetActive(true)
-	rprocess.SetActive(false)
-	rparent.SetActive(false)
-	rsession.SetActive(false)
-	rpermanent.SetActive(false) */
+	radioOnce.SetActive(true)
+	radioProcess.SetActive(false)
+	radioParent.SetActive(false)
+	radioSession.SetActive(false)
+	radioPermanent.SetActive(false)
+	chkUser.SetActive(false)
+	chkGroup.SetActive(false)
 }
 
 func removeSelectedRule(idx int) error {
@@ -503,7 +590,18 @@ func removeSelectedRule(idx int) error {
 	}
 
 	decisionWaiters = append(decisionWaiters[:idx], decisionWaiters[idx+1:]...)
+	toggleHover()
 	return nil
+}
+
+func numSelections() int {
+	sel, err := globalTV.GetSelection()
+	if err != nil {
+		return -1
+	}
+
+	rows := sel.GetSelectedRows(globalLS)
+	return int(rows.Length())
 }
 
 func getSelectedRule() (ruleColumns, int, error) {
@@ -568,7 +666,15 @@ func getSelectedRule() (ruleColumns, int, error) {
 		return rule, -1, err
 	}
 
-	rule.UID, rule.GID = 0, 0
+	rule.UID, err = lsGetInt(globalLS, iter, 7)
+	if err != nil {
+		return rule, -1, err
+	}
+
+	rule.GID, err = lsGetInt(globalLS, iter, 8)
+	if err != nil {
+		return rule, -1, err
+	}
 
 	rule.Origin, err = lsGetStr(globalLS, iter, 9)
 	if err != nil {
@@ -619,7 +725,7 @@ func main() {
 		log.Fatal("Unable to create new notebook:", err)
 	}
 
-	loglevel := "Pending Approval"
+	loglevel := "Firewall Traffic Pending Approval"
 
 	nbLabel, err := gtk.LabelNew(loglevel)
 
@@ -652,41 +758,48 @@ func main() {
 	tv.SetSizeRequest(300, 300)
 	tv.SetHeadersClickable(true)
 
-	ab, err := gtk.ButtonNewWithLabel("Approve")
+	btnApprove, err = gtk.ButtonNewWithLabel("Approve")
 	if err != nil {
 		log.Fatal("Unable to create button:", err)
 	}
 
-	db, err := gtk.ButtonNewWithLabel("Deny")
+	btnDeny, err = gtk.ButtonNewWithLabel("Deny")
 	if err != nil {
 		log.Fatal("Unable to create button:", err)
 	}
 
-	ib, err := gtk.ButtonNewWithLabel("Ignore")
+	btnIgnore, err = gtk.ButtonNewWithLabel("Ignore")
 	if err != nil {
 		log.Fatal("Unable to create button:", err)
 	}
+
+	btnApprove.SetSensitive(false)
+	btnDeny.SetSensitive(false)
+	btnIgnore.SetSensitive(false)
 
 	bb := get_hbox()
-	bb.PackStart(ab, false, false, 5)
-	bb.PackStart(db, false, false, 5)
-	bb.PackStart(ib, false, false, 5)
+	bb.PackStart(btnApprove, false, false, 5)
+	bb.PackStart(btnDeny, false, false, 5)
+	bb.PackStart(btnIgnore, false, false, 5)
 
 	editbox := get_vbox()
 	hbox := get_hbox()
 	lbl := get_label("Application path:")
 	editApp = get_entry("")
+	editApp.Connect("changed", toggleValidRuleState)
 	hbox.PackStart(lbl, false, false, 10)
-	hbox.PackStart(editApp, false, false, 5)
+	hbox.PackStart(editApp, true, true, 50)
 	editbox.PackStart(hbox, false, false, 5)
 
 	hbox = get_hbox()
 	lbl = get_label("Target host/IP:")
 	editTarget = get_entry("")
+	editTarget.Connect("changed", toggleValidRuleState)
 	hbox.PackStart(lbl, false, false, 10)
 	hbox.PackStart(editTarget, false, false, 5)
 	lbl = get_label("Port:")
 	editPort = get_entry("")
+	editPort.Connect("changed", toggleValidRuleState)
 	hbox.PackStart(lbl, false, false, 5)
 	hbox.PackStart(editPort, false, false, 5)
 	lbl = get_label("Protocol:")
@@ -697,17 +810,34 @@ func main() {
 
 	hbox = get_hbox()
 	lbl = get_label("Apply rule:")
-	ronce := get_radiobutton(nil, "Once", true)
-	rprocess := get_radiobutton(ronce, "This Process", false)
-	rparent := get_radiobutton(ronce, "Parent Process", false)
-	rsession := get_radiobutton(ronce, "Session", false)
-	rpermanent := get_radiobutton(ronce, "Permanent", false)
+	radioOnce = get_radiobutton(nil, "Once", true)
+	radioProcess = get_radiobutton(radioOnce, "This Process", false)
+	radioParent = get_radiobutton(radioOnce, "Parent Process", false)
+	radioSession = get_radiobutton(radioOnce, "Session", false)
+	radioPermanent = get_radiobutton(radioOnce, "Permanent", false)
+	radioProcess.SetSensitive(false)
+	radioParent.SetSensitive(false)
 	hbox.PackStart(lbl, false, false, 10)
-	hbox.PackStart(ronce, false, false, 5)
-	hbox.PackStart(rprocess, false, false, 5)
-	hbox.PackStart(rparent, false, false, 5)
-	hbox.PackStart(rsession, false, false, 5)
-	hbox.PackStart(rpermanent, false, false, 5)
+	hbox.PackStart(radioOnce, false, false, 5)
+	hbox.PackStart(radioProcess, false, false, 5)
+	hbox.PackStart(radioParent, false, false, 5)
+	hbox.PackStart(radioSession, false, false, 5)
+	hbox.PackStart(radioPermanent, false, false, 5)
+	editbox.PackStart(hbox, false, false, 5)
+
+	hbox = get_hbox()
+	chkUser = get_checkbox("Apply to UID/username", false)
+	chkUser.Connect("toggled", toggleValidRuleState)
+	editUser = get_entry("")
+	editUser.Connect("changed", toggleValidRuleState)
+	hbox.PackStart(chkUser, false, false, 10)
+	hbox.PackStart(editUser, false, false, 10)
+	chkGroup = get_checkbox("Apply to GID/group:", false)
+	chkGroup.Connect("toggled", toggleValidRuleState)
+	editGroup = get_entry("")
+	editGroup.Connect("changed", toggleValidRuleState)
+	hbox.PackStart(chkGroup, false, false, 10)
+	hbox.PackStart(editGroup, false, false, 10)
 	editbox.PackStart(hbox, false, false, 5)
 
 	box.PackStart(bb, false, false, 5)
@@ -731,7 +861,7 @@ func main() {
 
 	tv.SetModel(listStore)
 
-	ab.Connect("clicked", func() {
+	btnApprove.Connect("clicked", func() {
 		rule, idx, err := getSelectedRule()
 		if err != nil {
 			promptError("Error occurred processing request: "+err.Error())
@@ -747,7 +877,7 @@ func main() {
 		fmt.Println("rule = ", rule)
 		rulestr := "ALLOW|" + rule.Proto + ":" + rule.Target + ":" + strconv.Itoa(rule.Port)
 		fmt.Println("RULESTR = ", rulestr)
-		makeDecision(idx, rulestr, int(sgfw.APPLY_ONCE))
+		makeDecision(idx, rulestr, int(rule.Scope))
 		fmt.Println("Decision made.")
 		err = removeSelectedRule(idx)
 		if err == nil {
@@ -757,7 +887,7 @@ func main() {
 		}
 	})
 
-	db.Connect("clicked", func() {
+	btnDeny.Connect("clicked", func() {
 		rule, idx, err := getSelectedRule()
 		if err != nil {
 			promptError("Error occurred processing request: "+err.Error())
@@ -773,7 +903,7 @@ func main() {
 		fmt.Println("rule = ", rule)
 		rulestr := "DENY|" + rule.Proto + ":" + rule.Target + ":" + strconv.Itoa(rule.Port)
 		fmt.Println("RULESTR = ", rulestr)
-		makeDecision(idx, rulestr, int(sgfw.APPLY_ONCE))
+		makeDecision(idx, rulestr, int(rule.Scope))
 		fmt.Println("Decision made.")
 		err = removeSelectedRule(idx)
 		if err == nil {
@@ -783,21 +913,24 @@ func main() {
 		}
 	})
 
-	ib.Connect("clicked", func() {
-		promptError("Ignoring firewall request.")
-		return
-/*		promptError("Ignoring firewall request.")
-		fmt.Println("LOCKING")
-		decisionWaiters[0].Cond.L.Lock()
-		decisionWaiters[0].Ready = true
-		decisionWaiters[0].Rule = "bloop done"
-		fmt.Println("SIGNALING")
-		decisionWaiters[0].Cond.Signal()
-		fmt.Println("SIGNALED")
-		fmt.Println("UNLOCKING")
-		decisionWaiters[0].Cond.L.Unlock() */
+	btnIgnore.Connect("clicked", func() {
+		_, idx, err := getSelectedRule()
+		if err != nil {
+			promptError("Error occurred processing request: "+err.Error())
+			return
+		}
+
+		makeDecision(idx, "", 0)
+		fmt.Println("Decision made.")
+		err = removeSelectedRule(idx)
+		if err == nil {
+			clearEditor()
+		} else {
+			promptError("Error setting new rule: "+err.Error())
+		}
 	})
 
+//	tv.SetActivateOnSingleClick(true)
 	tv.Connect("row-activated", func() {
 		seldata, _, err := getSelectedRule()
 		if err != nil {
@@ -814,28 +947,45 @@ func main() {
 		}
 
 		editPort.SetText(strconv.Itoa(seldata.Port))
-		ronce.SetActive(true)
-		rprocess.SetActive(false)
-		rparent.SetActive(false)
-		rsession.SetActive(false)
-		rpermanent.SetActive(false)
+		radioOnce.SetActive(true)
+		radioProcess.SetActive(false)
+		radioParent.SetActive(false)
+		radioSession.SetActive(false)
+		radioPermanent.SetActive(false)
 		comboProto.SetActiveID(seldata.Proto)
 
+		if seldata.Uname != "" {
+			editUser.SetText(seldata.Uname)
+		} else if seldata.UID != -1 {
+			editUser.SetText(strconv.Itoa(seldata.UID))
+		} else {
+			editUser.SetText("")
+		}
+
+		if seldata.Gname != "" {
+			editGroup.SetText(seldata.Gname)
+		} else if seldata.GID != -1 {
+			editGroup.SetText(strconv.Itoa(seldata.GID))
+		} else {
+			editGroup.SetText("")
+		}
+
+		chkUser.SetActive(false)
+		chkGroup.SetActive(false)
 		return
-//		promptInfo(sval)
 	})
 
 
-	scrollbox.SetSizeRequest(600, 800)
+	scrollbox.SetSizeRequest(600, 400)
 	Notebook.AppendPage(scrollbox, nbLabel)
-	setup_settings()
+//	setup_settings()
 	mainWin.Add(Notebook)
 
 	if userPrefs.Winheight > 0 && userPrefs.Winwidth > 0 {
-		fmt.Printf("height was %d, width was %d\n", userPrefs.Winheight, userPrefs.Winwidth)
+//		fmt.Printf("height was %d, width was %d\n", userPrefs.Winheight, userPrefs.Winwidth)
 		mainWin.Resize(int(userPrefs.Winwidth), int(userPrefs.Winheight))
 	} else {
-		mainWin.SetDefaultSize(800, 600)
+		mainWin.SetDefaultSize(850, 450)
 	}
 
 	if userPrefs.Wintop > 0 && userPrefs.Winleft > 0 {
@@ -843,6 +993,6 @@ func main() {
 	}
 
 	mainWin.ShowAll()
-	mainWin.SetKeepAbove(true)
+//	mainWin.SetKeepAbove(true)
 	gtk.Main()
 }
