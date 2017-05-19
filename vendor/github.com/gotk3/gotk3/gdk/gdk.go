@@ -290,6 +290,13 @@ const (
 	DEVICE_TYPE_FLOATING DeviceType = C.GDK_DEVICE_TYPE_FLOATING
 )
 
+// EventPropagation constants
+
+const (
+	GDK_EVENT_PROPAGATE bool = C.GDK_EVENT_PROPAGATE != 0
+	GDK_EVENT_STOP      bool = C.GDK_EVENT_STOP != 0
+)
+
 /*
  * GdkAtom
  */
@@ -827,6 +834,14 @@ func KeyvalToUpper(v uint) uint {
 	return uint(C.gdk_keyval_to_upper(C.guint(v)))
 }
 
+func KeyvalToUnicode(v uint) rune {
+	return rune(C.gdk_keyval_to_unicode(C.guint(v)))
+}
+
+func UnicodeToKeyval(v rune) uint {
+	return uint(C.gdk_unicode_to_keyval(C.guint32(v)))
+}
+
 /*
  * GdkDragContext
  */
@@ -899,6 +914,25 @@ func (v *Event) free() {
 // EventButton is a representation of GDK's GdkEventButton.
 type EventButton struct {
 	*Event
+}
+
+func EventButtonNew() *EventButton {
+	ee := (*C.GdkEvent)(unsafe.Pointer(&C.GdkEventButton{}))
+	ev := Event{ee}
+	return &EventButton{&ev}
+}
+
+// EventButtonNewFromEvent returns an EventButton from an Event.
+//
+// Using widget.Connect() for a key related signal such as
+// "button-press-event" results in a *Event being passed as
+// the callback's second argument. The argument is actually a
+// *EventButton. EventButtonNewFromEvent provides a means of creating
+// an EventKey from the Event.
+func EventButtonNewFromEvent(event *Event) *EventButton {
+	ee := (*C.GdkEvent)(unsafe.Pointer(event.native()))
+	ev := Event{ee}
+	return &EventButton{&ev}
 }
 
 // Native returns a pointer to the underlying GdkEventButton.
@@ -985,6 +1019,19 @@ func EventKeyNew() *EventKey {
 	return &EventKey{&ev}
 }
 
+// EventKeyNewFromEvent returns an EventKey from an Event.
+//
+// Using widget.Connect() for a key related signal such as
+// "key-press-event" results in a *Event being passed as
+// the callback's second argument. The argument is actually a
+// *EventKey. EventKeyNewFromEvent provides a means of creating
+// an EventKey from the Event.
+func EventKeyNewFromEvent(event *Event) *EventKey {
+	ee := (*C.GdkEvent)(unsafe.Pointer(event.native()))
+	ev := Event{ee}
+	return &EventKey{&ev}
+}
+
 // Native returns a pointer to the underlying GdkEventKey.
 func (v *EventKey) Native() uintptr {
 	return uintptr(unsafe.Pointer(v.native()))
@@ -1017,6 +1064,25 @@ type EventMotion struct {
 	*Event
 }
 
+func EventMotionNew() *EventMotion {
+	ee := (*C.GdkEvent)(unsafe.Pointer(&C.GdkEventMotion{}))
+	ev := Event{ee}
+	return &EventMotion{&ev}
+}
+
+// EventMotionNewFromEvent returns an EventMotion from an Event.
+//
+// Using widget.Connect() for a key related signal such as
+// "button-press-event" results in a *Event being passed as
+// the callback's second argument. The argument is actually a
+// *EventMotion. EventMotionNewFromEvent provides a means of creating
+// an EventKey from the Event.
+func EventMotionNewFromEvent(event *Event) *EventMotion {
+	ee := (*C.GdkEvent)(unsafe.Pointer(event.native()))
+	ev := Event{ee}
+	return &EventMotion{&ev}
+}
+
 // Native returns a pointer to the underlying GdkEventMotion.
 func (v *EventMotion) Native() uintptr {
 	return uintptr(unsafe.Pointer(v.native()))
@@ -1045,6 +1111,25 @@ func (v *EventMotion) MotionValRoot() (float64, float64) {
 // EventScroll is a representation of GDK's GdkEventScroll.
 type EventScroll struct {
 	*Event
+}
+
+func EventScrollNew() *EventScroll {
+	ee := (*C.GdkEvent)(unsafe.Pointer(&C.GdkEventScroll{}))
+	ev := Event{ee}
+	return &EventScroll{&ev}
+}
+
+// EventScrollNewFromEvent returns an EventScroll from an Event.
+//
+// Using widget.Connect() for a key related signal such as
+// "button-press-event" results in a *Event being passed as
+// the callback's second argument. The argument is actually a
+// *EventScroll. EventScrollNewFromEvent provides a means of creating
+// an EventKey from the Event.
+func EventScrollNewFromEvent(event *Event) *EventScroll {
+	ee := (*C.GdkEvent)(unsafe.Pointer(event.native()))
+	ev := Event{ee}
+	return &EventScroll{&ev}
 }
 
 // Native returns a pointer to the underlying GdkEventScroll.
@@ -1406,6 +1491,32 @@ func PixbufLoaderNew() (*PixbufLoader, error) {
 	if c == nil {
 		return nil, nilPtrErr
 	}
+
+	//TODO this should be some wrap object
+	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
+	p := &PixbufLoader{obj}
+	runtime.SetFinalizer(obj, (*glib.Object).Unref)
+	return p, nil
+}
+
+// PixbufLoaderNewWithType() is a wrapper around gdk_pixbuf_loader_new_with_type().
+func PixbufLoaderNewWithType(t string) (*PixbufLoader, error) {
+	var err *C.GError
+
+	cstr := C.CString(t)
+	defer C.free(unsafe.Pointer(cstr))
+
+	c := C.gdk_pixbuf_loader_new_with_type((*C.char)(cstr), &err)
+	if err != nil {
+		defer C.g_error_free(err)
+		return nil, errors.New(C.GoString((*C.char)(err.message)))
+	}
+
+	if c == nil {
+		return nil, nilPtrErr
+	}
+
+	//TODO this should be some wrap object
 	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
 	p := &PixbufLoader{obj}
 	runtime.SetFinalizer(obj, (*glib.Object).Unref)
@@ -1429,6 +1540,7 @@ func (v *PixbufLoader) Write(data []byte) (int, error) {
 	c := C.gdk_pixbuf_loader_write(v.native(),
 		(*C.guchar)(unsafe.Pointer(&data[0])), C.gsize(len(data)),
 		&err)
+
 	if !gobool(c) {
 		defer C.g_error_free(err)
 		return 0, errors.New(C.GoString((*C.char)(err.message)))

@@ -67,7 +67,14 @@ func (ds *dbusServer) RequestPrompt(application, icon, path, address string, por
 			optstring string, expanded, expert bool, action int32) (int32, string, *dbus.Error) {
 	log.Printf("REALLY GOT IT!")
 	log.Printf("app = %s, icon = %s, path = %s, address = %s, action = %v\n", application, icon, path, address, action)
-	addRequest(nil, path, proto, int(pid), ip, address, int(port), int(uid), int(gid), origin, optstring)
+	decision := addRequest(nil, path, proto, int(pid), ip, address, int(port), int(uid), int(gid), origin, optstring)
+	log.Print("Waiting on decision...")
+	decision.Cond.L.Lock()
+	for !decision.Ready {
+		decision.Cond.Wait()
+	}
+	log.Print("Decision returned: ", decision.Rule)
+	decision.Cond.L.Unlock()
 //	glib.IdleAdd(func, data)
-	return 0, "bla bla bla", nil
+	return int32(decision.Scope), decision.Rule, nil
 }
