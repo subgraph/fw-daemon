@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"encoding/binary"
 
 //	"github.com/subgraph/go-nfnetlink"
 	"github.com/google/gopacket/layers"
@@ -64,7 +65,7 @@ func (dc *dnsCache) processDNS(pkt *nfqueue.NFQPacket) {
 		return
 	}
 	q := dns.question[0]
-	if q.Qtype == dnsTypeA {
+	if q.Qtype == dnsTypeA || q.Qtype == dnsTypeAAAA {
 		srcip, _ := getPacketIPAddrs(pkt)
 		pinfo := getEmptyPInfo()
 		if !isNSTrusted(srcip) {
@@ -76,7 +77,7 @@ func (dc *dnsCache) processDNS(pkt *nfqueue.NFQPacket) {
 			}
 		}
 //log.Notice("XXX: PROCESS LOOKUP -> ", pinfo)
-		dc.processRecordA(q.Name, dns.answer, pinfo.Pid)
+		dc.processRecordAddress(q.Name, dns.answer, pinfo.Pid)
 		return
 	}
 	log.Infof("Unhandled DNS message: %v", dns)
@@ -106,51 +107,60 @@ func procDeathCallback(pid int, param interface{}) {
 	}
 }
 
-func (dc *dnsCache) processRecordA(name string, answers []dnsRR, pid int) {
+func (dc *dnsCache) processRecordAddress(name string, answers []dnsRR, pid int) {
 	dc.lock.Lock()
 	defer dc.lock.Unlock()
 	for _, rr := range answers {
+		var aBytes []byte = nil
 		switch rec := rr.(type) {
 		case *dnsRR_A:
-			ip := net.IPv4(byte(rec.A>>24), byte(rec.A>>16), byte(rec.A>>8), byte(rec.A)).String()
-			if strings.HasSuffix(name, ".") {
-				name = name[:len(name)-1]
-			}
-
-			// Just in case.
-			if pid < 0 {
-				pid = 0
-			}
-			log.Noticef("______ Adding to dns map: %s: %s -> pid %d", name, ip, pid)
-
-			_, ok := dc.ipMap[pid]
-			if !ok {
-				dc.ipMap[pid] = make(map[string]dnsEntry)
-			}
-			dc.ipMap[pid][ip] = newDNSEntry(name, rr.Header().TTL)
-
-			if pid > 0 {
-				log.Warning("Adding process to be monitored by DNS cache: ", pid)
-				if !monitoring {
-					mlock.Lock()
-					if !monitoring {
-						monitoring = true
-//						go checker(dc)
-						go pcoroner.MonitorThread(procDeathCallback, dc)
-					}
-					mlock.Unlock()
-				}
-				pcoroner.MonitorProcess(pid)
-			}
-			if !FirewallConfig.LogRedact {
-				log.Infof("Adding %s: %s", name, ip)
-			}
+			var ipA [4]byte
+			aBytes = ipA[:]
+			binary.BigEndian.PutUint32(aBytes, rec.A)
 		case *dnsRR_AAAA:
-			log.Warning("AAAA record read from DNS; not supported.")
+			aBytes = rec.AAAA[:]
 		case *dnsRR_CNAME:
 			// Not that exotic; just ignore it
 		default:
 			log.Warningf("Unexpected RR type in answer section of A response: %v", rec)
+		}
+
+		if aBytes == nil {
+			continue
+		}
+
+		ip := net.IP(aBytes).String()
+		if strings.HasSuffix(name, ".") {
+			name = name[:len(name)-1]
+		}
+
+		// Just in case.
+		if pid < 0 {
+			pid = 0
+		}
+		log.Noticef("______ Adding to dns map: %s: %s -> pid %d", name, ip, pid)
+
+		_, ok := dc.ipMap[pid]
+		if !ok {
+			dc.ipMap[pid] = make(map[string]dnsEntry)
+		}
+		dc.ipMap[pid][ip] = newDNSEntry(name, rr.Header().TTL)
+
+		if pid > 0 {
+			log.Warning("Adding process to be monitored by DNS cache: ", pid)
+			if !monitoring {
+				mlock.Lock()
+				if !monitoring {
+					monitoring = true
+//						go checker(dc)
+					go pcoroner.MonitorThread(procDeathCallback, dc)
+				}
+				mlock.Unlock()
+			}
+			pcoroner.MonitorProcess(pid)
+		}
+		if !FirewallConfig.LogRedact {
+			log.Infof("Adding %s: %s", name, ip)
 		}
 	}
 }
