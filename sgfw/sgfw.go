@@ -16,6 +16,8 @@ import (
 	nfqueue "github.com/subgraph/go-nfnetlink/nfqueue"
 //	"github.com/subgraph/go-nfnetlink"
 	"github.com/subgraph/go-procsnitch"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 )
 
 var dbusp *dbusObjectP = nil
@@ -108,6 +110,22 @@ func (fw *Firewall) runFilter() {
 	go func() {
 		for p := range ps {
 			if fw.isEnabled() {
+				ipLayer := p.Packet.Layer(layers.LayerTypeIPv4)
+				if ipLayer == nil {
+					continue
+				}
+
+				ip, _ := ipLayer.(*layers.IPv4)
+				if ip == nil {
+					continue
+				}
+
+				if ip.Version == 6 {
+					ip6p := gopacket.NewPacket(ip.LayerContents(), layers.LayerTypeIPv6, gopacket.Default)
+					p.Packet = ip6p
+
+				}
+
 				fw.filterPacket(p)
 			} else {
 				p.Accept()

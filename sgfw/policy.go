@@ -93,21 +93,13 @@ func (pp *pendingPkt) hostname() string {
 }
 
 func (pp *pendingPkt) src() net.IP {
-	src, _ := getPacketIP4Addrs(pp.pkt)
+	src, _ := getPacketIPAddrs(pp.pkt)
 	return src
 }
 
 func (pp *pendingPkt) dst() net.IP {
-	_, dst := getPacketIP4Addrs(pp.pkt)
+	_, dst := getPacketIPAddrs(pp.pkt)
 	return dst
-/*	dst := pp.pkt.Packet.NetworkLayer().NetworkFlow().Dst()
-
-	if dst.EndpointType() != layers.EndpointIPv4 {
-		return nil
-	}
-
-	return dst.Raw() */
-//	pp.pkt.NetworkLayer().Layer
 }
 
 func getNFQProto(pkt *nfqueue.NFQPacket) string {
@@ -368,7 +360,7 @@ func (p *Policy) hasPersistentRules() bool {
 func printPacket(pkt *nfqueue.NFQPacket, hostname string, pinfo *procsnitch.Info) string {
 	proto := "???"
 	SrcPort, DstPort := uint16(0), uint16(0)
-	SrcIp, DstIp := getPacketIP4Addrs(pkt)
+	SrcIp, DstIp := getPacketIPAddrs(pkt)
 	code := 0
 	codestr := ""
 
@@ -418,7 +410,7 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 		}
 
 	}
-	_, dstip := getPacketIP4Addrs(pkt)
+	_, dstip := getPacketIPAddrs(pkt)
 /*	_, dstp := getPacketPorts(pkt)
 	fwo := matchAgainstOzRules(srcip, dstip, dstp)
 	log.Notice("XXX: Attempting [2] to filter packet on rules -> ", fwo)
@@ -558,14 +550,14 @@ func getRealRoot(pathname string, pid int) string {
 }
 
 func findProcessForPacket(pkt *nfqueue.NFQPacket, reverse bool, strictness int) (*procsnitch.Info, string) {
-	srcip, dstip := getPacketIP4Addrs(pkt)
+	srcip, dstip := getPacketIPAddrs(pkt)
 	srcp, dstp := getPacketPorts(pkt)
 	proto := ""
 	optstr := ""
 	icode := -1
 
 	if reverse {
-		dstip, srcip = getPacketIP4Addrs(pkt)
+		dstip, srcip = getPacketIPAddrs(pkt)
 		dstp, srcp = getPacketPorts(pkt)
 	}
 
@@ -574,6 +566,9 @@ func findProcessForPacket(pkt *nfqueue.NFQPacket, reverse bool, strictness int) 
 	} else if pkt.Packet.Layer(layers.LayerTypeUDP) != nil {
 		proto = "udp"
 	} else if pkt.Packet.Layer(layers.LayerTypeICMPv4) != nil {
+		proto = "icmp"
+		icode, _ = getpacketICMPCode(pkt)
+	} else if pkt.Packet.Layer(layers.LayerTypeICMPv6) != nil {
 		proto = "icmp"
 		icode, _ = getpacketICMPCode(pkt)
 	}
@@ -656,7 +651,7 @@ func findProcessForPacket(pkt *nfqueue.NFQPacket, reverse bool, strictness int) 
 }
 
 func basicAllowPacket(pkt *nfqueue.NFQPacket) bool {
-	srcip, dstip := getPacketIP4Addrs(pkt)
+	srcip, dstip := getPacketIPAddrs(pkt)
 	if pkt.Packet.Layer(layers.LayerTypeUDP) != nil {
 		_, dport := getPacketUDPPorts(pkt)
 		if dport == 53 {
@@ -674,15 +669,29 @@ func basicAllowPacket(pkt *nfqueue.NFQPacket) bool {
 		 pkt.Packet.Layer(layers.LayerTypeICMPv4) == nil)
 }
 
-func getPacketIP4Addrs(pkt *nfqueue.NFQPacket) (net.IP, net.IP) {
+func getPacketIPAddrs(pkt *nfqueue.NFQPacket) (net.IP, net.IP) {
+	ipv4 := true
 	ipLayer := pkt.Packet.Layer(layers.LayerTypeIPv4)
 
 	if ipLayer == nil {
-		return net.IP{0,0,0,0}, net.IP{0,0,0,0}
+		ipv4 = false
+		ipLayer = pkt.Packet.Layer(layers.LayerTypeIPv6)
 	}
 
-	ip, _ := ipLayer.(*layers.IPv4)
-	return ip.SrcIP, ip.DstIP
+	if ipLayer == nil {
+		if ipv4 {
+			return net.IP{0,0,0,0}, net.IP{0,0,0,0}
+		}
+		return net.IP{}, net.IP{}
+	}
+
+	if !ipv4 {
+		ip6, _ := ipLayer.(*layers.IPv6)
+		return ip6.SrcIP, ip6.DstIP
+	}
+
+	ip4, _ := ipLayer.(*layers.IPv4)
+	return ip4.SrcIP, ip4.DstIP
 }
 
 func getpacketICMPCode(pkt *nfqueue.NFQPacket) (int, string) {

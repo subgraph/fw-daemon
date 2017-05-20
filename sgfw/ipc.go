@@ -7,7 +7,6 @@ import (
 	"bufio"
 	"strings"
 	"strconv"
-	"encoding/binary"
 )
 
 const ReceiverSocketPath = "/tmp/fwoz.sock"
@@ -120,8 +119,6 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 			c.Write([]byte(banner))
 
 			for r := 0; r < len(rl); r++ {
-				ip := make([]byte, 4)
-		                binary.BigEndian.PutUint32(ip, rl[r].addr)
 				hostname := ""
 
 				if rl[r].hostname != "" {
@@ -134,7 +131,7 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 					portstr = "*"
 				}
 
-				ruledesc := fmt.Sprintf("id %v, %v | %v, src:%v -> %v%v: %v\n", rl[r].id, RuleModeString[rl[r].mode], RuleActionString[rl[r].rtype], rl[r].saddr, net.IP(ip), hostname, portstr)
+				ruledesc := fmt.Sprintf("id %v, %v | %v, src:%v -> %v%v: %v\n", rl[r].id, RuleModeString[rl[r].mode], RuleActionString[rl[r].rtype], rl[r].saddr, rl[r].addr, hostname, portstr)
 				c.Write([]byte(ruledesc))
 			}
 

@@ -68,7 +68,10 @@ func loadDesktopFile(path string) {
 			inDE = false
 		}
 		if inDE && strings.HasPrefix(line, "Exec=") {
-			exec = strings.Fields(line[5:])[0]
+			fields := strings.Fields(line[5:])
+			if len(fields) > 0 {
+				exec = fields[0]
+			}
 		}
 		if inDE && strings.HasPrefix(line, "Icon=") {
 			icon = line[5:]

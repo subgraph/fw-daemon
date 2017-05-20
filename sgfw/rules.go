@@ -9,7 +9,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"unicode"
 	"regexp"
 
 	nfqueue "github.com/subgraph/go-nfnetlink/nfqueue"
@@ -18,7 +17,9 @@ import (
 )
 
 const matchAny = 0
-const noAddress = uint32(0xffffffff)
+//const noAddress = uint32(0xffffffff)
+var anyAddress net.IP = net.IP{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,}
+var noAddress net.IP = net.IP{0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff}
 
 type Rule struct {
 	id       uint
@@ -28,7 +29,7 @@ type Rule struct {
 	proto    string
 	hostname string
 	network  *net.IPNet
-	addr     uint32
+	addr     net.IP
 	saddr    net.IP
 	port     uint16
 	uid      int
@@ -66,10 +67,11 @@ func (r *Rule) AddrString(redact bool) string {
 		addr = r.hostname
 	} else if r.network != nil {
 		addr = r.network.String()
-	} else if r.addr != matchAny && r.addr != noAddress {
-		bs := make([]byte, 4)
-		binary.BigEndian.PutUint32(bs, r.addr)
-		addr = fmt.Sprintf("%d.%d.%d.%d", bs[0], bs[1], bs[2], bs[3])
+	} else if !addrMatchesAny(r.addr) && !addrMatchesNone(r.addr) {
+//		bs := make([]byte, 4)
+//		binary.BigEndian.PutUint32(bs, r.addr)
+//		addr = fmt.Sprintf("%d.%d.%d.%d", bs[0], bs[1], bs[2], bs[3])
+		addr = r.addr.String()
 	}
 
 	if r.port != matchAny || r.proto == "icmp" {
@@ -99,13 +101,11 @@ func (r *Rule) match(src net.IP, dst net.IP, dstPort uint16, hostname string, pr
 		return false
 	}
 
-xip := make(net.IP, 4)
-binary.BigEndian.PutUint32(xip, r.addr)
-log.Notice("comparison: ", hostname, " / ", dst, " : ", dstPort, " -> ", xip, " / ", r.hostname, " : ", r.port)
+log.Notice("comparison: ", hostname, " / ", dst, " : ", dstPort, " -> ", r.addr, " / ", r.hostname, " : ", r.port)
 	if r.port != matchAny && r.port != dstPort {
 		return false
 	}
-	if r.addr == matchAny {
+	if addrMatchesAny(r.addr) {
 		return true
 	}
 	if r.hostname != "" {
@@ -126,15 +126,15 @@ log.Notice("comparison: ", hostname, " / ", dst, " : ", dstPort, " -> ", xip, " 
 	}
 	if proto == "icmp" {
 		fmt.Printf("network = %v, src = %v, r.addr = %x, src to4 = %x\n", r.network, src, r.addr, binary.BigEndian.Uint32(src.To4()))
-		if  (r.network != nil && r.network.Contains(src)) || (r.addr == binary.BigEndian.Uint32(src.To4())) {
+		if  (r.network != nil && r.network.Contains(src)) || (r.addr.Equal(src)) {
 			return true
 		}
 	}
-	return r.addr == binary.BigEndian.Uint32(dst.To4())
+	return r.addr.Equal(dst)
 }
 
 func (rl *RuleList) filterPacket(p *nfqueue.NFQPacket, pinfo *procsnitch.Info, srcip net.IP, hostname, optstr string) FilterResult {
-	_, dstip := getPacketIP4Addrs(p)
+	_, dstip := getPacketIPAddrs(p)
 	_, dstp := getPacketPorts(p)
 	return rl.filter(p, srcip, dstip, dstp, hostname, pinfo, optstr)
 }
@@ -162,7 +162,7 @@ log.Notice("+ MATCH SUCCEEDED")
 			}
 			srcStr := STR_UNKNOWN
 			if pkt != nil {
-				srcip, _ := getPacketIP4Addrs(pkt)
+				srcip, _ := getPacketIPAddrs(pkt)
 				srcp, _ := getPacketPorts(pkt)
 				srcStr = fmt.Sprintf("%s:%d", srcip, srcp)
 			}
@@ -272,30 +272,31 @@ func (r *Rule) parseVerb(v string) bool {
 
 func (r *Rule) parseTarget(t string) bool {
 	addrPort := strings.Split(t, ":")
-	if len(addrPort) != 2 && len(addrPort) != 3 {
+	if len(addrPort) < 2 {
 		return false
 	}
 	sind := 0
-	if len(addrPort) == 3 {
-		if addrPort[0] != "udp" && addrPort[0] != "icmp" && addrPort[0] != "tcp" {
-			return false
-		}
+	lind := len(addrPort)-1
+	if addrPort[0] == "udp" || addrPort[0] == "icmp" || addrPort[0] == "tcp" {
 		r.proto = addrPort[0]
 		sind++
 	} else {
 		r.proto = "tcp"
 	}
 
-	return r.parseAddr(addrPort[sind]) && r.parsePort(addrPort[sind+1])
+	newAddr := strings.Join(addrPort[sind:lind], ":")
+	return r.parseAddr(newAddr) && r.parsePort(addrPort[lind])
+//	return r.parseAddr(addrPort[sind]) && r.parsePort(addrPort[sind+1])
 }
 
 func (r *Rule) parseAddr(a string) bool {
 	if a == "*" {
 		r.hostname = ""
-		r.addr = matchAny
+		r.addr = anyAddress
 		return true
 	}
-	if strings.IndexFunc(a, unicode.IsLetter) != -1 {
+//	if strings.IndexFunc(a, unicode.IsLetter) != -1 {
+	if net.ParseIP(a) == nil {
 		r.hostname = a
 		return true
 	}
@@ -310,7 +311,7 @@ func (r *Rule) parseAddr(a string) bool {
 	} else {
 		r.network = ipnet
 	}
-	r.addr = binary.BigEndian.Uint32(ip.To4())
+	r.addr = ip
 	return true
 }
 
@@ -444,4 +445,24 @@ func processRuleLine(policy *Policy, line string) {
 		log.Warningf("Error parsing rule (%s): %v", line, err)
 		return
 	}
+}
+
+func addrMatchesAny(addr net.IP) bool {
+	any := anyAddress
+
+	if addr.To4() != nil {
+		any = net.IP{0,0,0,0}
+	}
+
+	return any.Equal(addr)
+}
+
+func addrMatchesNone(addr net.IP) bool {
+	none := noAddress
+
+	if addr.To4() != nil {
+		none = net.IP{0xff,0xff,0xff,0xff}
+	}
+
+	return none.Equal(addr)
 }

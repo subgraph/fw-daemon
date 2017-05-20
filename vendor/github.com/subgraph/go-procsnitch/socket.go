@@ -85,52 +85,61 @@ func (ss *socketStatus) String() string {
 }
 
 func findICMPSocketAll(srcAddr net.IP, dstAddr net.IP, code int, custdata []string) *socketStatus {
+	proto := "icmp"
+	if srcAddr.To4() == nil {
+		proto += "6"
+	}
+
 	if custdata == nil {
-		return findSocket("icmp", func(ss socketStatus) bool {
+		return findSocket(proto, func(ss socketStatus) bool {
 			return ss.remote.ip.Equal(dstAddr) && ss.local.ip.Equal(srcAddr)
 		})
 	}
 
-	return findSocketCustom("icmp", custdata, func(ss socketStatus) bool {
+	return findSocketCustom(proto, custdata, func(ss socketStatus) bool {
 		return ss.remote.ip.Equal(dstAddr) && ss.local.ip.Equal(srcAddr)
 	})
 }
 
 func findUDPSocketAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort uint16, custdata []string, strictness int) *socketStatus {
-	wildcard := net.IP{0,0,0,0}
+	proto := "udp"
+
+	if srcAddr.To4() == nil {
+		proto += "6"
+	}
 
 	if custdata == nil {
 		if strictness == MATCH_STRICT {
-			return findSocket("udp", func(ss socketStatus) bool {
+			return findSocket(proto, func(ss socketStatus) bool {
 				return ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
 			})
 		} else if strictness == MATCH_LOOSE {
-			return findSocket("udp", func(ss socketStatus) bool {
-				return (ss.remote.ip.Equal(dstAddr) || ss.remote.ip.Equal(wildcard)) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr) ||
-					(ss.local.ip.Equal(dstAddr) || ss.local.ip.Equal(wildcard)) && ss.remote.port == srcPort && ss.remote.ip.Equal(srcAddr)
+			return findSocket(proto, func(ss socketStatus) bool {
+				return (ss.remote.ip.Equal(dstAddr) || addrMatchesAny(ss.remote.ip)) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr) ||
+					(ss.local.ip.Equal(dstAddr) || addrMatchesAny(ss.local.ip)) && ss.remote.port == srcPort && ss.remote.ip.Equal(srcAddr)
 			})
 		}
-		return findSocket("udp", func(ss socketStatus) bool {
-			return (ss.remote.ip.Equal(dstAddr) || ss.remote.ip.Equal(wildcard)) && ss.local.port == srcPort && (ss.local.ip.Equal(srcAddr) || ss.local.ip.Equal(wildcard)) ||
-				(ss.local.ip.Equal(dstAddr) || ss.local.ip.Equal(wildcard)) && ss.remote.port == srcPort && (ss.remote.ip.Equal(srcAddr) || ss.remote.ip.Equal(srcAddr))
+		return findSocket(proto, func(ss socketStatus) bool {
+			return (ss.remote.ip.Equal(dstAddr) || addrMatchesAny(ss.remote.ip)) && ss.local.port == srcPort && (ss.local.ip.Equal(srcAddr) || addrMatchesAny(ss.local.ip)) ||
+				(ss.local.ip.Equal(dstAddr) || addrMatchesAny(ss.local.ip)) && ss.remote.port == srcPort && (ss.remote.ip.Equal(srcAddr) || ss.remote.ip.Equal(srcAddr))
 		})
 
 	}
 
 	if strictness == MATCH_STRICT {
-		return findSocketCustom("udp", custdata, func(ss socketStatus) bool {
+		return findSocketCustom(proto, custdata, func(ss socketStatus) bool {
 			return ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
 		})
 	} else if strictness == MATCH_LOOSE {
-		return findSocketCustom("udp", custdata, func(ss socketStatus) bool {
-			return (ss.remote.ip.Equal(dstAddr) || ss.remote.ip.Equal(wildcard)) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr) ||
-				(ss.local.ip.Equal(dstAddr) || ss.local.ip.Equal(wildcard)) && ss.remote.port == srcPort && ss.remote.ip.Equal(srcAddr)
+		return findSocketCustom(proto, custdata, func(ss socketStatus) bool {
+			return (ss.remote.ip.Equal(dstAddr) || addrMatchesAny(ss.remote.ip)) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr) ||
+				(ss.local.ip.Equal(dstAddr) || addrMatchesAny(ss.local.ip)) && ss.remote.port == srcPort && ss.remote.ip.Equal(srcAddr)
 		})
 	}
 
-	return findSocketCustom("udp", custdata, func(ss socketStatus) bool {
-		return (ss.remote.ip.Equal(dstAddr) || ss.remote.ip.Equal(wildcard)) && ss.local.port == srcPort && (ss.local.ip.Equal(srcAddr) || ss.local.ip.Equal(wildcard)) ||
-			(ss.local.ip.Equal(dstAddr) || ss.local.ip.Equal(wildcard)) && ss.remote.port == srcPort && (ss.remote.ip.Equal(srcAddr) || ss.remote.ip.Equal(srcAddr))
+	return findSocketCustom(proto, custdata, func(ss socketStatus) bool {
+		return (ss.remote.ip.Equal(dstAddr) || addrMatchesAny(ss.remote.ip)) && ss.local.port == srcPort && (ss.local.ip.Equal(srcAddr) || addrMatchesAny(ss.local.ip)) ||
+			(ss.local.ip.Equal(dstAddr) || addrMatchesAny(ss.local.ip)) && ss.remote.port == srcPort && (ss.remote.ip.Equal(srcAddr) || ss.remote.ip.Equal(srcAddr))
 	})
 }
 
@@ -141,19 +150,29 @@ func findUDPSocket(srcPort uint16) *socketStatus {
 }
 
 func findTCPSocket(srcPort uint16, dstAddr net.IP, dstPort uint16) *socketStatus {
-	return findSocket("tcp", func(ss socketStatus) bool {
+	proto := "tcp"
+	if dstAddr.To4() == nil {
+		proto += "6"
+	}
+
+	return findSocket(proto, func(ss socketStatus) bool {
 		return ss.remote.port == dstPort && ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort
 	})
 }
 
 func findTCPSocketAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort uint16, custdata []string) *socketStatus {
+	proto := "tcp"
+	if srcAddr.To4() == nil {
+		proto += "6"
+	}
+
 	if custdata == nil {
-		return findSocket("tcp", func(ss socketStatus) bool {
+		return findSocket(proto, func(ss socketStatus) bool {
 			return ss.remote.port == dstPort && ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
 		})
 	}
 
-	return findSocketCustom("tcp", custdata, func(ss socketStatus) bool {
+	return findSocketCustom(proto, custdata, func(ss socketStatus) bool {
 		return ss.remote.port == dstPort && ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
 	})
 }
@@ -297,4 +316,14 @@ func getSocketLines(proto string) []string {
 		lines = lines[1:]
 	}
 	return lines
+}
+
+func addrMatchesAny(addr net.IP) bool {
+	wildcard := net.IP{0,0,0,0}
+
+	if addr.To4() == nil {
+		wildcard = net.IP{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
+	}
+
+        return wildcard.Equal(addr)
 }

@@ -65,7 +65,7 @@ func (dc *dnsCache) processDNS(pkt *nfqueue.NFQPacket) {
 	}
 	q := dns.question[0]
 	if q.Qtype == dnsTypeA {
-		srcip, _ := getPacketIP4Addrs(pkt)
+		srcip, _ := getPacketIPAddrs(pkt)
 		pinfo := getEmptyPInfo()
 		if !isNSTrusted(srcip) {
 			pinfo, _  = findProcessForPacket(pkt, true, procsnitch.MATCH_LOOSEST)
@@ -145,6 +145,8 @@ func (dc *dnsCache) processRecordA(name string, answers []dnsRR, pid int) {
 			if !FirewallConfig.LogRedact {
 				log.Infof("Adding %s: %s", name, ip)
 			}
+		case *dnsRR_AAAA:
+			log.Warning("AAAA record read from DNS; not supported.")
 		case *dnsRR_CNAME:
 			// Not that exotic; just ignore it
 		default:
