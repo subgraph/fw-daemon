@@ -10,6 +10,12 @@ import (
 	"github.com/godbus/dbus"
 )
 
+
+var DoMultiPrompt = true
+const MAX_PROMPTS = 3
+var outstandingPrompts = 0
+var promptLock = &sync.Mutex{}
+
 func newPrompter(conn *dbus.Conn) *prompter {
 	p := new(prompter)
 	p.cond = sync.NewCond(&p.lock)
@@ -42,26 +48,85 @@ func (p *prompter) prompt(policy *Policy) {
 func (p *prompter) promptLoop() {
 	p.lock.Lock()
 	for {
+fmt.Println("promptLoop() outer")
 		for p.processNextPacket() {
+fmt.Println("promptLoop() inner")
 		}
+fmt.Println("promptLoop() wait")
 		p.cond.Wait()
 	}
 }
 
 func (p *prompter) processNextPacket() bool {
-	pc := p.nextConnection()
-	if pc == nil {
-		return false
+	var pc pendingConnection = nil
+
+	if !DoMultiPrompt {
+		pc, _ = p.nextConnection()
+		if pc == nil {
+			return false
+		}
+		p.lock.Unlock()
+		defer p.lock.Lock()
+		p.processConnection(pc)
+		return true
+	}
+
+	empty := true
+	for {
+		pc, empty = p.nextConnection()
+fmt.Println("processNextPacket() loop; empty = ", empty, " / pc = ", pc)
+		if pc == nil && empty {
+			return false
+		} else if pc == nil {
+			continue
+		} else if pc != nil {
+			break
+		}
 	}
 	p.lock.Unlock()
 	defer p.lock.Lock()
-	p.processConnection(pc)
+	fmt.Println("Waiting for prompt lock go...")
+	for {
+		promptLock.Lock()
+		if outstandingPrompts >= MAX_PROMPTS {
+			promptLock.Unlock()
+			continue
+		}
+
+		if pc.getPrompting() {
+			fmt.Println("Skipping over already prompted connection")
+			promptLock.Unlock()
+			continue
+		}
+
+		break
+	}
+	fmt.Println("Passed prompt lock!")
+	outstandingPrompts++
+	fmt.Println("Incremented outstanding to ", outstandingPrompts)
+	promptLock.Unlock()
+//	if !pc.getPrompting() {
+		pc.setPrompting(true)
+		go p.processConnection(pc)
+//	}
 	return true
+}
+
+func processReturn (pc pendingConnection) {
+	promptLock.Lock()
+	outstandingPrompts--
+	fmt.Println("Return decremented outstanding to ", outstandingPrompts)
+	promptLock.Unlock()
+	pc.setPrompting(false)
 }
 
 func (p *prompter) processConnection(pc pendingConnection) {
 	var scope int32
 	var rule string
+
+	if DoMultiPrompt {
+		defer processReturn(pc)
+	}
 
 	addr := pc.hostname()
 	if addr == "" {
@@ -124,23 +189,35 @@ func (p *prompter) processConnection(pc pendingConnection) {
 	dbusp.alertRule("sgfw prompt added new rule")
 }
 
-func (p *prompter) nextConnection() pendingConnection {
+func (p *prompter) nextConnection() (pendingConnection, bool) {
+fmt.Println("nextConnection()")
 	for {
 		if len(p.policyQueue) == 0 {
-			return nil
+			return nil, true
 		}
 		policy := p.policyQueue[0]
-		pc := policy.nextPending()
-		if pc == nil {
+		pc, qempty := policy.nextPending()
+		if pc == nil && qempty {
 			p.removePolicy(policy)
 		} else {
-			return pc
+			return pc, qempty
 		}
 	}
 }
 
 func (p *prompter) removePolicy(policy *Policy) {
-	newQueue := make([]*Policy, 0, len(p.policyQueue)-1)
+	var newQueue []*Policy = nil
+
+	if DoMultiPrompt {
+		if len(p.policyQueue) == 0 {
+			fmt.Println("Skipping over zero length policy queue")
+			newQueue = make([]*Policy, 0, 0)
+		}
+	}
+
+	if !DoMultiPrompt || newQueue == nil {
+		newQueue = make([]*Policy, 0, len(p.policyQueue)-1)
+	}
 	for _, pol := range p.policyQueue {
 		if pol != policy {
 			newQueue = append(newQueue, pol)

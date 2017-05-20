@@ -51,6 +51,7 @@ type pendingSocksConnection struct {
 	destPort uint16
 	pinfo    *procsnitch.Info
 	verdict  chan int
+	prompting bool
 }
 
 func (sc *pendingSocksConnection) policy() *Policy {
@@ -94,6 +95,10 @@ func (sc *pendingSocksConnection) deliverVerdict(v int) {
 func (sc *pendingSocksConnection) accept() { sc.deliverVerdict(socksVerdictAccept) }
 
 func (sc *pendingSocksConnection) drop() { sc.deliverVerdict(socksVerdictDrop) }
+
+func (sc *pendingSocksConnection) getPrompting() bool { return sc.prompting }
+
+func (sc *pendingSocksConnection) setPrompting(val bool) { sc.prompting = val }
 
 func (sc *pendingSocksConnection) print() string { return "socks connection" }
 
@@ -247,6 +252,7 @@ func (c *socksChainSession) filterConnect() bool {
 			destPort:   port,
 			pinfo:      pinfo,
 			verdict:    make(chan int),
+			prompting:  false,
 		}
 		policy.processPromptResult(pending)
 		v := <-pending.verdict

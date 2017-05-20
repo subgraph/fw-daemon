@@ -24,7 +24,7 @@ var _interpreters = []string{
 	"bash",
 }
 
-type sandboxRule struct {
+/*type sandboxRule struct {
 	SrcIf net.IP
 	DstIP net.IP
 	DstPort uint16
@@ -33,7 +33,7 @@ type sandboxRule struct {
 
 var sandboxRules = []sandboxRule {
 //	{ net.IP{172,16,1,42}, net.IP{140,211,166,134}, 21, false },
-}
+} */
 
 type pendingConnection interface {
 	policy() *Policy
@@ -47,6 +47,8 @@ type pendingConnection interface {
 	dstPort() uint16
 	accept()
 	drop()
+	setPrompting(bool)
+	getPrompting() bool
 	print() string
 }
 
@@ -56,6 +58,7 @@ type pendingPkt struct {
 	pkt   *nfqueue.NFQPacket
 	pinfo *procsnitch.Info
 	optstring string
+	prompting bool
 }
 
 func getEmptyPInfo() *procsnitch.Info {
@@ -152,6 +155,14 @@ func (pp *pendingPkt) drop() {
 	pp.pkt.Accept()
 }
 
+func (pp *pendingPkt) getPrompting() bool {
+	return pp.prompting
+}
+
+func (pp *pendingPkt) setPrompting(val bool) {
+	pp.prompting = val
+}
+
 func (pp *pendingPkt) print() string {
 	return printPacket(pp.pkt, pp.name, pp.pinfo)
 }
@@ -216,7 +227,7 @@ func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info, o
 	case FILTER_ALLOW:
 		pkt.Accept()
 	case FILTER_PROMPT:
-		p.processPromptResult(&pendingPkt{pol: p, name: name, pkt: pkt, pinfo: pinfo, optstring: optstr})
+		p.processPromptResult(&pendingPkt{pol: p, name: name, pkt: pkt, pinfo: pinfo, optstring: optstr, prompting: false})
 	default:
 		log.Warningf("Unexpected filter result: %d", result)
 	}
@@ -224,19 +235,41 @@ func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info, o
 
 func (p *Policy) processPromptResult(pc pendingConnection) {
 	p.pendingQueue = append(p.pendingQueue, pc)
-	if !p.promptInProgress {
+fmt.Println("processPromptResult(): p.promptInProgress = ", p.promptInProgress)
+	if DoMultiPrompt || (!DoMultiPrompt && !p.promptInProgress) {
 		p.promptInProgress = true
 		go p.fw.dbus.prompt(p)
 	}
 }
 
-func (p *Policy) nextPending() pendingConnection {
+func (p *Policy) nextPending() (pendingConnection, bool) {
 	p.lock.Lock()
+fmt.Println("nextPending(): len = ", len(p.pendingQueue))
 	defer p.lock.Unlock()
-	if len(p.pendingQueue) == 0 {
-		return nil
+	if !DoMultiPrompt {
+		if len(p.pendingQueue) == 0 {
+			return nil, true
+		}
+		return p.pendingQueue[0], false
 	}
-	return p.pendingQueue[0]
+
+	if len(p.pendingQueue) == 0 {
+		return nil, true
+	}
+
+//	for len(p.pendingQueue) != 0 {
+fmt.Println("nextPending() loop: len = ", len(p.pendingQueue))
+		for i := 0; i < len(p.pendingQueue); i++ {
+	fmt.Printf("pendingqueue %v: %v\n", i, p.pendingQueue[i].getPrompting())
+			if !p.pendingQueue[i].getPrompting() {
+				return p.pendingQueue[i], false
+			}
+		}
+//	}
+
+fmt.Println("nextPending() returning")
+
+	return nil, false
 }
 
 func (p *Policy) removePending(pc pendingConnection) {

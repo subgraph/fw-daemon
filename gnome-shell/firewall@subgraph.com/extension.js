@@ -93,7 +93,7 @@ const FirewallPromptHandler = new Lang.Class({
 
     RequestPromptAsync: function(params, invocation) {
         let [app, icon, path, address, port, ip, origin, proto, uid, gid, user, group, pid, optstring, expanded, expert, action] = params;
-        this._closeDialog();
+//        this._closeDialog();
         this._dialog = new Dialog.PromptDialog(invocation);
         this._invocation = invocation;
         this._dialog.update(app, icon, path, address, port, ip, origin, uid, gid, user, group, pid, proto, optstring, expanded, expert, action);

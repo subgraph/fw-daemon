@@ -570,8 +570,9 @@ func clearEditor() {
 	chkGroup.SetActive(false)
 }
 
-func removeSelectedRule(idx int) error {
+func removeSelectedRule(idx int, rmdecision bool) error {
 	fmt.Println("XXX: attempting to remove idx = ", idx)
+
 	path, err := gtk.TreePathNewFromString(fmt.Sprintf("%d", idx))
 	if err != nil {
 		return err
@@ -582,14 +583,12 @@ func removeSelectedRule(idx int) error {
 		return err
 	}
 
-	ok := globalLS.Remove(iter)
+	globalLS.Remove(iter)
 
-	// XXX: hmmm? why does this work? shouldn't it be the opposite?
-	if ok {
-		return errors.New("Unexpected error removing rule from list")
+	if rmdecision {
+		decisionWaiters = append(decisionWaiters[:idx], decisionWaiters[idx+1:]...)
 	}
 
-	decisionWaiters = append(decisionWaiters[:idx], decisionWaiters[idx+1:]...)
 	toggleHover()
 	return nil
 }
@@ -879,7 +878,7 @@ func main() {
 		fmt.Println("RULESTR = ", rulestr)
 		makeDecision(idx, rulestr, int(rule.Scope))
 		fmt.Println("Decision made.")
-		err = removeSelectedRule(idx)
+		err = removeSelectedRule(idx, true)
 		if err == nil {
 			clearEditor()
 		} else {
@@ -905,7 +904,7 @@ func main() {
 		fmt.Println("RULESTR = ", rulestr)
 		makeDecision(idx, rulestr, int(rule.Scope))
 		fmt.Println("Decision made.")
-		err = removeSelectedRule(idx)
+		err = removeSelectedRule(idx, true)
 		if err == nil {
 			clearEditor()
 		} else {
@@ -922,7 +921,7 @@ func main() {
 
 		makeDecision(idx, "", 0)
 		fmt.Println("Decision made.")
-		err = removeSelectedRule(idx)
+		err = removeSelectedRule(idx, true)
 		if err == nil {
 			clearEditor()
 		} else {
