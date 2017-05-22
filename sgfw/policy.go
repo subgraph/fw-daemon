@@ -395,6 +395,11 @@ func printPacket(pkt *nfqueue.NFQPacket, hostname string, pinfo *procsnitch.Info
 }
 
 func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
+	if basicAllowPacket(pkt) {
+		pkt.Accept()
+		return
+	}
+
 	isudp := pkt.Packet.Layer(layers.LayerTypeUDP) != nil
 	if isudp {
 		srcport, _ := getPacketUDPPorts(pkt)
@@ -421,7 +426,6 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 		pkt.Accept()
 		return
 	} */
-
 
 	ppath := "*"
 	strictness := procsnitch.MATCH_STRICT
@@ -451,11 +455,11 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 		}
 	}
 	log.Debugf("filterPacket [%s] %s", ppath, printPacket(pkt, fw.dns.Lookup(dstip, pinfo.Pid), nil))
-	if basicAllowPacket(pkt) {
+/*	if basicAllowPacket(pkt) {
 		pkt.Accept()
-//log.Notice("XXX: passed basicallowpacket")
 		return
 	}
+*/
 	policy := fw.PolicyForPath(ppath)
 //log.Notice("XXX: flunked basicallowpacket; policy = ", policy)
 	policy.processPacket(pkt, pinfo, optstring)
@@ -662,7 +666,8 @@ func basicAllowPacket(pkt *nfqueue.NFQPacket) bool {
 		dstip.IsLinkLocalMulticast() ||
 		(pkt.Packet.Layer(layers.LayerTypeTCP) == nil &&
 		 pkt.Packet.Layer(layers.LayerTypeUDP) == nil &&
-		 pkt.Packet.Layer(layers.LayerTypeICMPv4) == nil)
+		 pkt.Packet.Layer(layers.LayerTypeICMPv4) == nil &&
+		 pkt.Packet.Layer(layers.LayerTypeICMPv6) == nil)
 }
 
 func getPacketIPAddrs(pkt *nfqueue.NFQPacket) (net.IP, net.IP) {

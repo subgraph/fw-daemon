@@ -158,10 +158,12 @@ func (c *socksChainSession) sessionWorker() {
 		return
 	}
 
-	// Randomize username and password to force a new TOR circuit with each connection
-	rndbytes := []byte("sgfw" + strconv.Itoa(int(time.Now().UnixNano()) ^ os.Getpid()))
-	c.req.Auth.Uname = rndbytes
-	c.req.Auth.Passwd = rndbytes
+	if len(c.req.Auth.Uname) == 0 && len(c.req.Auth.Passwd) == 0 {
+		// Randomize username and password to force a new TOR circuit with each connection
+		rndbytes := []byte("sgfw" + strconv.Itoa(int(time.Now().UnixNano()) ^ os.Getpid()))
+		c.req.Auth.Uname = rndbytes
+		c.req.Auth.Passwd = rndbytes
+	}
 
 	switch c.req.Cmd {
 	case CommandTorResolve, CommandTorResolvePTR:
