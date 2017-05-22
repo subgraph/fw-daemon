@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/subgraph/fw-daemon/sgfw"
 	"github.com/godbus/dbus"
+	"github.com/gotk3/gotk3/glib"
 )
 
 
@@ -108,7 +109,7 @@ func newDbusServer() (*dbusServer, error) {
 
 func (ds *dbusServer) Alert(data string) *dbus.Error {
 	fmt.Println("Received Dbus update alert: ", data)
-	repopulateWin()
+	glib.IdleAdd(repopulateWin)
 	return nil
 }
 
