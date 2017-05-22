@@ -298,6 +298,7 @@ func (p *Policy) processNewRule(r *Rule, scope FilterScope) bool {
 func (p *Policy) parseRule(s string, add bool) (*Rule, error) {
 log.Noticef("XXX: attempt to parse rule: |%s|\n", s)
 	r := new(Rule)
+	r.pid = -1
 	r.mode = RULE_MODE_PERMANENT
 	r.policy = p
 	if !r.parse(s) {

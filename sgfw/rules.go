@@ -27,6 +27,7 @@ type Rule struct {
 	mode     RuleMode
 	rtype    RuleAction
 	proto    string
+	pid      int
 	hostname string
 	network  *net.IPNet
 	addr     net.IP
@@ -146,12 +147,16 @@ func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint
 	result := FILTER_PROMPT
 	sandboxed := strings.HasPrefix(optstr, "Sandbox")
 	for _, r := range *rl {
-log.Notice("------------ trying match of src ", src, " against: ", r, " | ", r.saddr, " / optstr = ", optstr)
+log.Notice("------------ trying match of src ", src, " against: ", r, " | ", r.saddr, " / optstr = ", optstr, "; pid ", pinfo.Pid, " vs rule pid ", r.pid)
 		if r.saddr == nil && src != nil && sandboxed {
 log.Notice("! Skipping comparison against incompatible rule types: rule src = ", r.saddr, " / packet src = ", src)
 			continue
 		} else if r.saddr != nil && !r.saddr.Equal(src) && r.proto != "icmp" {
 log.Notice("! Skipping comparison of mismatching source ips")
+			continue
+		}
+		if r.pid >= 0 && r.pid != pinfo.Pid {
+//log.Notice("! Skipping comparison of mismatching PIDs")
 			continue
 		}
 		if r.match(src, dst, dstPort, hostname, getNFQProto(pkt), pinfo.UID, pinfo.GID, uidToUser(pinfo.UID), gidToGroup(pinfo.GID)) {

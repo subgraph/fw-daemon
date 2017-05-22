@@ -12,7 +12,8 @@ const Tweener = imports.ui.tweener;
 const RuleScope = {
     APPLY_ONCE: 0,
     APPLY_SESSION: 1,
-    APPLY_FOREVER: 2,
+    APPLY_PROCESS: 2,
+    APPLY_FOREVER: 3,
 };
 
 const DetailSection = new Lang.Class({
@@ -129,9 +130,13 @@ Signals.addSignalMethods(OptionListItem.prototype);
 const OptionList = new Lang.Class({
     Name: 'OptionList',
 
-    _init: function() {
+    _init: function(pid_known) {
         this.actor = new St.BoxLayout({vertical: true, style_class: 'fw-option-list'});
-        this.buttonGroup = new ButtonGroup("Forever", "Session", "Once");
+	if (pid_known) {
+	        this.buttonGroup = new ButtonGroup("Forever", "Session", "Once", "PID");
+	} else {
+	        this.buttonGroup = new ButtonGroup("Forever", "Session", "Once");
+	}
         this.actor.add_child(this.buttonGroup.actor);
         this.items = [];
         this._selected;
@@ -188,6 +193,8 @@ const OptionList = new Lang.Class({
             return RuleScope.APPLY_SESSION;
         case 2:
             return RuleScope.APPLY_ONCE;
+        case 3:
+            return RuleScope.APPLY_PROCESS;
         default:
             log("unexpected scope value "+ this.buttonGroup._selected);
             return RuleScope.APPLY_SESSION;
@@ -196,6 +203,8 @@ const OptionList = new Lang.Class({
 
     scopeToIdx: function(scope) {
         switch (scope) {
+        case RuleScope.APPLY_PROCESS:
+            return 3;
         case RuleScope.APPLY_ONCE:
             return 2;
         case RuleScope.APPLY_SESSION:
@@ -413,7 +422,7 @@ const PromptDialog = new Lang.Class({
     Name: 'PromptDialog',
     Extends: ModalDialog.ModalDialog,
 
-    _init: function(invocation) {
+    _init: function(invocation, pid_known) {
         this.parent({ styleClass: 'fw-prompt-dialog' });
         this._invocation = invocation;
         this.header = new PromptDialogHeader();
@@ -426,7 +435,7 @@ const PromptDialog = new Lang.Class({
         this.info = new DetailSection();
         box.add_child(this.info.actor);
 
-        this.optionList = new OptionList();
+        this.optionList = new OptionList(pid_known);
         box.add_child(this.optionList.actor);
         this.optionList.addOptions([
             "Only PORT AND ADDRESS",

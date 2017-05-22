@@ -65,8 +65,7 @@ func newDbusServer() (*dbusServer, error) {
 
 func (ds *dbusServer) RequestPrompt(application, icon, path, address string, port int32, ip, origin, proto string, uid, gid int32, username, groupname string, pid int32,
 			optstring string, expanded, expert bool, action int32) (int32, string, *dbus.Error) {
-	log.Printf("REALLY GOT IT!")
-	log.Printf("app = %s, icon = %s, path = %s, address = %s, action = %v\n", application, icon, path, address, action)
+	log.Printf("request prompt: app = %s, icon = %s, path = %s, address = %s, action = %v\n", application, icon, path, address, action)
 	decision := addRequest(nil, path, proto, int(pid), ip, address, int(port), int(uid), int(gid), origin, optstring)
 	log.Print("Waiting on decision...")
 	decision.Cond.L.Lock()

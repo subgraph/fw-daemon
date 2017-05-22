@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"strconv"
 
 	"github.com/subgraph/fw-daemon/sgfw"
 
@@ -113,7 +114,12 @@ func createWidget(rule *sgfw.DbusRule) *ruleRow {
 }
 
 func (rr *ruleRow) update() {
-	rr.gtkLabelApp.SetText(rr.rule.App)
+	if rr.rule.Mode == uint16(sgfw.RULE_MODE_PROCESS) {
+		appstr := "(" + strconv.Itoa(int(rr.rule.Pid)) + ") " + rr.rule.App
+		rr.gtkLabelApp.SetText(appstr)
+	} else {
+		rr.gtkLabelApp.SetText(rr.rule.App)
+	}
 	rr.gtkLabelApp.SetTooltipText(rr.rule.Path)
 	rr.gtkLabelVerb.SetText(getVerbText(rr.rule))
 	if (rr.rule.Proto == "tcp") {

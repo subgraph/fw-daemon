@@ -18,7 +18,15 @@ type WatchProcess struct {
 	Stime int
 }
 
+type CallbackEntry struct {
+	fn    procCB
+	param interface{}
+}
+
 type procCB func(int, interface{})
+
+
+var Callbacks []CallbackEntry
 
 
 var pmutex = &sync.Mutex{}
@@ -53,6 +61,11 @@ func UnmonitorProcess(pid int) {
 	return
 }
 
+func AddCallback(cbfunc procCB, param interface{}) {
+	cbe := CallbackEntry{cbfunc, param}
+	Callbacks = append(Callbacks, cbe)
+}
+
 func MonitorThread(cbfunc procCB, param interface{}) {
 	for {
 /*		if len(pidMap) == 0 {
@@ -71,12 +84,15 @@ func MonitorThread(cbfunc procCB, param interface{}) {
 				if cbfunc != nil {
 					cbfunc(pkey, param)
 				}
+				for i := 0; i < len(Callbacks); i++ {
+					Callbacks[i].fn(pkey, Callbacks[i].param)
+				}
 				continue
 			}
 
 		}
 
-		time.Sleep(2 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 }
 

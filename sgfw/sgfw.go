@@ -16,6 +16,7 @@ import (
 	nfqueue "github.com/subgraph/go-nfnetlink/nfqueue"
 //	"github.com/subgraph/go-nfnetlink"
 	"github.com/subgraph/go-procsnitch"
+	"github.com/subgraph/fw-daemon/proc-coroner"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 )
@@ -227,6 +228,7 @@ func Main() {
 		stopChan:        make(chan bool, 0),
 	}
 	ds.fw = fw
+	go pcoroner.MonitorThread(procDeathCallbackDNS, fw.dns)
 
 	fw.loadRules()
 

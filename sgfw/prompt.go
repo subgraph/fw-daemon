@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/godbus/dbus"
+	"github.com/subgraph/fw-daemon/proc-coroner"
 )
 
 
@@ -177,6 +178,10 @@ func (p *prompter) processConnection(pc pendingConnection) {
 	fscope := FilterScope(scope)
 	if fscope == APPLY_SESSION {
 		r.mode = RULE_MODE_SESSION
+	} else if fscope == APPLY_PROCESS {
+		r.mode = RULE_MODE_PROCESS
+		r.pid = pc.procInfo().Pid
+		pcoroner.MonitorProcess(r.pid)
 	}
 	if !policy.processNewRule(r, fscope) {
 		p.lock.Lock()

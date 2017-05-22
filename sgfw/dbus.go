@@ -8,6 +8,7 @@ import (
 	"github.com/godbus/dbus"
 	"github.com/godbus/dbus/introspect"
 	"github.com/op/go-logging"
+	"github.com/subgraph/fw-daemon/proc-coroner"
 )
 
 const introspectXML = `
@@ -68,6 +69,31 @@ type dbusServer struct {
 	prompter *prompter
 }
 
+func DbusProcDeathCB(pid int, param interface{}) {
+	ds := param.(*dbusServer)
+	ds.fw.lock.Lock()
+	defer ds.fw.lock.Unlock()
+	done, updated := false, false
+	for !done {
+		done = true
+		for _, p := range ds.fw.policies {
+			for r := 0; r < len(p.rules); r++ {
+				if p.rules[r].pid == pid && p.rules[r].mode == RULE_MODE_PROCESS {
+					p.rules = append(p.rules[:r], p.rules[r+1:]...)
+					done = false
+					updated = true
+					log.Notice("Removed per-process firewall rule for PID: ", pid)
+					break
+				}
+			}
+		}
+	}
+
+	if updated {
+		dbusp.alertRule("Firewall removed on process death")
+	}
+}
+
 func newDbusServer() (*dbusServer, error) {
 	conn, err := dbus.SystemBus()
 	if err != nil {
@@ -92,6 +118,7 @@ func newDbusServer() (*dbusServer, error) {
 
 	ds.conn = conn
 	ds.prompter = newPrompter(conn)
+	pcoroner.AddCallback(DbusProcDeathCB, ds)
 	return ds, nil
 }
 
@@ -132,6 +159,7 @@ func createDbusRule(r *Rule) DbusRule {
 		Net:    netstr,
 		Origin: ostr,
 		Proto:  r.proto,
+		Pid:    uint32(r.pid),
 		Privs:  pstr,
 		App:    path.Base(r.policy.path),
 		Path:   r.policy.path,
@@ -191,6 +219,8 @@ func (ds *dbusServer) UpdateRule(rule DbusRule) *dbus.Error {
 			r.rtype = RuleAction(rule.Verb)
 		}
 		r.hostname = tmp.hostname
+		r.proto = tmp.proto
+		r.pid = tmp.pid
 		r.addr = tmp.addr
 		r.port = tmp.port
 		r.mode = RuleMode(rule.Mode)

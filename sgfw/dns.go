@@ -14,9 +14,6 @@ import (
 	"github.com/subgraph/fw-daemon/proc-coroner"
 )
 
-var monitoring = false
-var mlock = sync.Mutex{}
-
 type dnsEntry struct {
 	name string
 	ttl uint32
@@ -96,8 +93,7 @@ func (dc *dnsCache) processDNS(pkt *nfqueue.NFQPacket) {
 	}
 } */
 
-func procDeathCallback(pid int, param interface{}) {
-//	log.Warning("XXX: IN CALLBACK for pid: ", pid, " / param = ", param)
+func procDeathCallbackDNS(pid int, param interface{}) {
 
 	if pid != 0 {
 		cache := param.(*dnsCache)
@@ -148,15 +144,6 @@ func (dc *dnsCache) processRecordAddress(name string, answers []dnsRR, pid int) 
 
 		if pid > 0 {
 			log.Warning("Adding process to be monitored by DNS cache: ", pid)
-			if !monitoring {
-				mlock.Lock()
-				if !monitoring {
-					monitoring = true
-//						go checker(dc)
-					go pcoroner.MonitorThread(procDeathCallback, dc)
-				}
-				mlock.Unlock()
-			}
 			pcoroner.MonitorProcess(pid)
 		}
 		if !FirewallConfig.LogRedact {

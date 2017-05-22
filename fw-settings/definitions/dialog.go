@@ -86,7 +86,7 @@ func (*defDialog) String() string {
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkScrolledWindow" id="swRulesSystem">
+                  <object class="GtkScrolledWindow" id="swRulesProcess">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="hexpand">True</property>
@@ -103,10 +103,36 @@ func (*defDialog) String() string {
                   <object class="GtkLabel">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
-                    <property name="label" translatable="yes">System</property>
+                    <property name="label" translatable="yes">Process</property>
                   </object>
                   <packing>
                     <property name="position">2</property>
+                    <property name="tab_expand">True</property>
+                    <property name="tab_fill">False</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkScrolledWindow" id="swRulesSystem">
+                    <property name="visible">True</property>
+                    <property name="can_focus">True</property>
+                    <property name="hexpand">True</property>
+                    <property name="vexpand">True</property>
+                    <property name="hscrollbar_policy">never</property>
+                    <property name="shadow_type">in</property>
+                  </object>
+                  <packing>
+                    <property name="position">3</property>
+                    <property name="tab_expand">True</property>
+                  </packing>
+                </child>
+                <child type="tab">
+                  <object class="GtkLabel">
+                    <property name="visible">True</property>
+                    <property name="can_focus">False</property>
+                    <property name="label" translatable="yes">System</property>
+                  </object>
+                  <packing>
+                    <property name="position">3</property>
                     <property name="tab_expand">True</property>
                     <property name="tab_fill">False</property>
                   </packing>
@@ -272,6 +298,7 @@ func (*defDialog) String() string {
                     <items>
                       <item id="FOREVER" translatable="yes">Forever</item>
                       <item id="SESSION" translatable="yes">Session</item>
+                      <item id="PROCESS" translatable="yes">Process</item>
                       <item id="ONCE" translatable="yes">Once</item>
                     </items>
                     <signal name="changed" handler="on_action_combo_changed" swapped="no"/>

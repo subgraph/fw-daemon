@@ -513,7 +513,7 @@ func createCurrentRule() (ruleColumns, error) {
 	var err error = nil
 
 	if radioProcess.GetActive() {
-		return rule, errors.New("Process scope is unsupported at the moment")
+		rule.Scope = int(sgfw.APPLY_PROCESS)
 	} else if radioParent.GetActive() {
 		return rule, errors.New("Parent process scope is unsupported at the moment")
 	} else if radioSession.GetActive() {
@@ -612,7 +612,6 @@ func getSelectedRule() (ruleColumns, int, error) {
 	}
 
 	rows := sel.GetSelectedRows(globalLS)
-	fmt.Println("RETURNED ROWS: ", rows.Length())
 
 	if rows.Length() <= 0 {
 		return rule, -1, errors.New("No selection was made")
@@ -814,7 +813,6 @@ func main() {
 	radioParent = get_radiobutton(radioOnce, "Parent Process", false)
 	radioSession = get_radiobutton(radioOnce, "Session", false)
 	radioPermanent = get_radiobutton(radioOnce, "Permanent", false)
-	radioProcess.SetSensitive(false)
 	radioParent.SetSensitive(false)
 	hbox.PackStart(lbl, false, false, 10)
 	hbox.PackStart(radioOnce, false, false, 5)
@@ -948,6 +946,7 @@ func main() {
 		editPort.SetText(strconv.Itoa(seldata.Port))
 		radioOnce.SetActive(true)
 		radioProcess.SetActive(false)
+		radioProcess.SetSensitive(seldata.Pid > 0)
 		radioParent.SetActive(false)
 		radioSession.SetActive(false)
 		radioPermanent.SetActive(false)
@@ -971,6 +970,7 @@ func main() {
 
 		chkUser.SetActive(false)
 		chkGroup.SetActive(false)
+
 		return
 	})
 

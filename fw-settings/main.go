@@ -15,6 +15,7 @@ var fwswin *gtk.Window = nil
 var fwsbuilder *builder = nil
 var swRulesPermanent *gtk.ScrolledWindow = nil
 var swRulesSession *gtk.ScrolledWindow = nil
+var swRulesProcess *gtk.ScrolledWindow = nil
 var swRulesSystem *gtk.ScrolledWindow = nil
 
 func failDialog(parent *gtk.Window, format string, args ...interface{}) {
@@ -38,6 +39,7 @@ var repopMutex = &sync.Mutex{}
 func repopulateWin() {
 	fmt.Println("Refreshing firewall rule list.")
 	repopMutex.Lock()
+	defer repopMutex.Unlock()
 	win := fwswin
 
 	dbus, err := newDbusObject()
@@ -57,9 +59,15 @@ func repopulateWin() {
 	}
 	swRulesSession.Remove(child)
 
+	child, err = swRulesProcess.GetChild()
+	if err != nil {
+		failDialog(win, "Unable to clear out process rules list display: %v", err)
+	}
+	swRulesProcess.Remove(child)
+
 	child, err = swRulesSystem.GetChild()
 	if err != nil {
-		failDialog(win, "Unable to clear out session rules list display: %v", err)
+		failDialog(win, "Unable to clear out system rules list display: %v", err)
 	}
 	swRulesSystem.Remove(child)
 
@@ -69,9 +77,11 @@ func repopulateWin() {
 	boxSession, _ := gtk.ListBoxNew()
 	swRulesSession.Add(boxSession)
 
+	boxProcess, _ := gtk.ListBoxNew()
+	swRulesProcess.Add(boxProcess)
+
 	boxSystem, _ := gtk.ListBoxNew()
 	swRulesSystem.Add(boxSystem)
-
 
 	rlPermanent := newRuleList(dbus, win, boxPermanent)
 	if _, err := dbus.isEnabled(); err != nil {
@@ -85,6 +95,12 @@ func repopulateWin() {
 	}
 	rlSession.loadRules(sgfw.RULE_MODE_SESSION)
 
+	rlProcess := newRuleList(dbus, win, boxProcess)
+	if _, err := dbus.isEnabled(); err != nil {
+		failDialog(win, "Unable is connect to firewall daemon.  Is it running?")
+	}
+	rlProcess.loadRules(sgfw.RULE_MODE_PROCESS)
+
 	rlSystem := newRuleList(dbus, win, boxSystem)
 	if _, err := dbus.isEnabled(); err != nil {
 		failDialog(win, "Unable is connect to firewall daemon.  Is it running?")
@@ -94,7 +110,6 @@ func repopulateWin() {
 	loadConfig(win, fwsbuilder, dbus)
 //	app.AddWindow(win)
 	win.ShowAll()
-	repopMutex.Unlock()
 }
 
 func populateWin(app *gtk.Application, win *gtk.Window) {
@@ -104,6 +119,7 @@ func populateWin(app *gtk.Application, win *gtk.Window) {
 		"window", &win,
 		"swRulesPermanent", &swRulesPermanent,
 		"swRulesSession", &swRulesSession,
+		"swRulesProcess", &swRulesProcess,
 		"swRulesSystem", &swRulesSystem,
 	)
 	//win.SetIconName("security-high-symbolic")
@@ -114,6 +130,9 @@ func populateWin(app *gtk.Application, win *gtk.Window) {
 
 	boxSession, _ := gtk.ListBoxNew()
 	swRulesSession.Add(boxSession)
+
+	boxProcess, _ := gtk.ListBoxNew()
+	swRulesProcess.Add(boxProcess)
 
 	boxSystem, _ := gtk.ListBoxNew()
 	swRulesSystem.Add(boxSystem)
@@ -134,6 +153,12 @@ func populateWin(app *gtk.Application, win *gtk.Window) {
 		failDialog(win, "Unable is connect to firewall daemon.  Is it running?")
 	}
 	rlSession.loadRules(sgfw.RULE_MODE_SESSION)
+
+	rlProcess := newRuleList(dbus, win, boxProcess)
+	if _, err := dbus.isEnabled(); err != nil {
+		failDialog(win, "Unable is connect to firewall daemon.  Is it running?")
+	}
+	rlProcess.loadRules(sgfw.RULE_MODE_PROCESS)
 
 	rlSystem := newRuleList(dbus, win, boxSystem)
 	if _, err := dbus.isEnabled(); err != nil {
