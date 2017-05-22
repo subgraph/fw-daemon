@@ -236,7 +236,6 @@ fmt.Println("processPromptResult(): p.promptInProgress = ", p.promptInProgress)
 
 func (p *Policy) nextPending() (pendingConnection, bool) {
 	p.lock.Lock()
-fmt.Println("nextPending(): len = ", len(p.pendingQueue))
 	defer p.lock.Unlock()
 	if !DoMultiPrompt {
 		if len(p.pendingQueue) == 0 {
@@ -250,16 +249,12 @@ fmt.Println("nextPending(): len = ", len(p.pendingQueue))
 	}
 
 //	for len(p.pendingQueue) != 0 {
-fmt.Println("nextPending() loop: len = ", len(p.pendingQueue))
 		for i := 0; i < len(p.pendingQueue); i++ {
-	fmt.Printf("pendingqueue %v: %v\n", i, p.pendingQueue[i].getPrompting())
 			if !p.pendingQueue[i].getPrompting() {
 				return p.pendingQueue[i], false
 			}
 		}
 //	}
-
-fmt.Println("nextPending() returning")
 
 	return nil, false
 }

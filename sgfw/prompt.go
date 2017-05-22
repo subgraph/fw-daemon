@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/godbus/dbus"
 	"github.com/subgraph/fw-daemon/proc-coroner"
@@ -195,7 +196,6 @@ func (p *prompter) processConnection(pc pendingConnection) {
 }
 
 func (p *prompter) nextConnection() (pendingConnection, bool) {
-fmt.Println("nextConnection()")
 	for {
 		if len(p.policyQueue) == 0 {
 			return nil, true
@@ -205,6 +205,10 @@ fmt.Println("nextConnection()")
 		if pc == nil && qempty {
 			p.removePolicy(policy)
 		} else {
+			if pc == nil && !qempty {
+				fmt.Println("FIX ME: I NEED TO SLEEP ON A WAKEABLE CONDITION PROPERLY!!")
+				time.Sleep(time.Millisecond * 300)
+			}
 			return pc, qempty
 		}
 	}
