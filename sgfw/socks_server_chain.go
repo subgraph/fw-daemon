@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/subgraph/go-procsnitch"
 	"strings"
@@ -156,6 +157,11 @@ func (c *socksChainSession) sessionWorker() {
 		log.Infof("ERR/socks: Failed SOCKS5 handshake: %v", err)
 		return
 	}
+
+	// Randomize username and password to force a new TOR circuit with each connection
+	rndbytes := []byte("sgfw" + strconv.Itoa(int(time.Now().UnixNano()) ^ os.Getpid()))
+	c.req.Auth.Uname = rndbytes
+	c.req.Auth.Passwd = rndbytes
 
 	switch c.req.Cmd {
 	case CommandTorResolve, CommandTorResolvePTR:
