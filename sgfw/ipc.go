@@ -7,6 +7,9 @@ import (
 	"bufio"
 	"strings"
 	"strconv"
+	"errors"
+
+        "github.com/subgraph/oz/ipc"
 )
 
 const ReceiverSocketPath = "/tmp/fwoz.sock"
@@ -299,4 +302,67 @@ func OzReceiver(fw *Firewall) {
 		go ReceiverLoop(fw, fd)
         }
 
+}
+
+
+type ListProxiesMsg struct {
+	_ string "ListProxies"
+}
+
+type ListProxiesResp struct {
+	Proxies []string "ListProxiesResp"
+}
+
+func ListProxies() ([]string, error) {
+	resp, err := clientSend(&ListProxiesMsg{})
+	if err != nil {
+		return nil, err
+	}
+	body, ok := resp.Body.(*ListProxiesResp)
+	if !ok {
+		return nil, errors.New("ListProxies response was not expected type")
+	}
+	return body.Proxies, nil
+}
+
+const OzSocketName = "@oz-control"
+var bSockName = OzSocketName
+
+var messageFactory = ipc.NewMsgFactory(
+        new(ListProxiesMsg),
+        new(ListProxiesResp),
+)
+
+func clientConnect() (*ipc.MsgConn, error) {
+	bSockName = os.Getenv("SOCKET_NAME")
+
+	if bSockName != "" {
+		fmt.Println("Attempting to connect on custom socket provided through environment: ", bSockName)
+
+		if bSockName[0:1] != "@" {
+			fmt.Println("Environment variable specified invalid socket name... prepending @")
+			bSockName = "@" + bSockName
+		}
+
+	} else {
+		bSockName = OzSocketName
+	}
+
+	return ipc.Connect(bSockName, messageFactory, nil)
+}
+
+func clientSend(msg interface{}) (*ipc.Message, error) {
+	c, err := clientConnect()
+	if err != nil {
+		return nil, err
+	}
+	defer c.Close()
+	rr, err := c.ExchangeMsg(msg)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := <-rr.Chan()
+	rr.Done()
+	return resp, nil
 }

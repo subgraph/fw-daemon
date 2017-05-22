@@ -53,6 +53,7 @@ type pendingSocksConnection struct {
 	pinfo    *procsnitch.Info
 	verdict  chan int
 	prompting bool
+	optstr   string
 }
 
 func (sc *pendingSocksConnection) policy() *Policy {
@@ -64,7 +65,7 @@ func (sc *pendingSocksConnection) procInfo() *procsnitch.Info {
 }
 
 func (sc *pendingSocksConnection) getOptString() string {
-	return ""
+	return sc.optstr
 }
 
 func (sc *pendingSocksConnection) hostname() string {
@@ -205,11 +206,77 @@ func (c *socksChainSession) addressDetails() (string, net.IP, uint16) {
 	return "", ip, uint16(port)
 }
 
+func findProxyEndpoint(pdata []string, conn net.Conn) (*procsnitch.Info, string) {
+	for _, pstr := range pdata {
+		toks := strings.Split(pstr, " ")
+
+		if len(toks) != 6 {
+			continue
+		}
+
+		s1, d1, s2, d2 := toks[0], toks[2], toks[3], toks[5]
+
+		if strings.HasSuffix(d1, ",") {
+			d1 = d1[0:len(d1)-1]
+		}
+
+		if conn.LocalAddr().String() == d2 && conn.RemoteAddr().String() == s2 {
+			srcips, srcps, err := net.SplitHostPort(s1)
+			dstips, dstps, err2 := net.SplitHostPort(d1)
+
+			if err != nil && err2 != nil {
+				continue
+			}
+
+			srcip := net.ParseIP(srcips)
+			dstip := net.ParseIP(dstips)
+
+			if srcip == nil || dstip == nil {
+				continue
+			}
+
+			srcport, err := strconv.Atoi(srcps)
+			dstport, err2 := strconv.Atoi(dstps)
+
+			if err != nil || err2 != nil {
+				continue
+			}
+
+			res := procsnitch.LookupTCPSocketProcessAll(srcip, uint16(srcport), dstip, uint16(dstport), nil)
+			res, optstr := LookupSandboxProc(srcip, uint16(srcport), dstip, uint16(dstport), "tcp", procsnitch.MATCH_STRICT, 0)
+
+			if res != nil {
+				return res, optstr
+			}
+		}
+
+	}
+
+	return nil, ""
+}
+
 func (c *socksChainSession) filterConnect() bool {
-	pinfo := procsnitch.FindProcessForConnection(c.clientConn, c.procInfo)
+	allProxies, err := ListProxies()
+	var pinfo *procsnitch.Info = nil
+	var optstr = ""
+
+	if err == nil {
+		pinfo, optstr = findProxyEndpoint(allProxies, c.clientConn)
+	}
+
+	if pinfo == nil {
+		pinfo = procsnitch.FindProcessForConnection(c.clientConn, c.procInfo)
+	}
+
 	if pinfo == nil {
 		log.Warningf("No proc found for [socks5] connection from: %s", c.clientConn.RemoteAddr())
 		return false
+	}
+
+	if optstr == "" {
+		optstr = "[via SOCKS5/Tor]"
+	} else {
+		optstr = "SOCKS5|Tor / " + optstr
 	}
 
 	policy := c.server.fw.PolicyForPath(pinfo.ExePath)
@@ -218,7 +285,7 @@ func (c *socksChainSession) filterConnect() bool {
 	if ip == nil && hostname == "" {
 		return false
 	}
-	result := policy.rules.filter(nil, nil, ip, port, hostname, pinfo, "SOCKS")
+	result := policy.rules.filter(nil, nil, ip, port, hostname, pinfo, optstr)
 	switch result {
 	case FILTER_DENY:
 		return false
@@ -261,6 +328,7 @@ func (c *socksChainSession) filterConnect() bool {
 			pinfo:      pinfo,
 			verdict:    make(chan int),
 			prompting:  false,
+			optstr:     optstr,
 		}
 		policy.processPromptResult(pending)
 		v := <-pending.verdict

@@ -549,6 +549,66 @@ func getRealRoot(pathname string, pid int) string {
 	return pathname
 }
 
+// XXX: This is redundant code.... it should be called by findProcessForPacket()
+func LookupSandboxProc(srcip net.IP, srcp uint16, dstip net.IP, dstp uint16, proto string, strictness, icode int) (*procsnitch.Info, string) {
+	var res *procsnitch.Info = nil
+	var optstr string
+	removePids := make([]int, 0)
+
+	for i := 0; i < len(OzInitPids); i++ {
+		data := ""
+		fname := fmt.Sprintf("/proc/%d/net/%s", OzInitPids[i].Pid, proto)
+//fmt.Println("XXX: opening: ", fname)
+		bdata, err := readFileDirect(fname)
+
+		if err != nil {
+			fmt.Println("Error reading proc data from ", fname, ": ", err)
+
+			if err == syscall.ENOENT {
+				removePids = append(removePids, OzInitPids[i].Pid)
+			}
+
+			continue
+		} else {
+			data = string(bdata)
+			lines := strings.Split(data, "\n")
+			rlines := make([]string, 0)
+
+			for l := 0; l < len(lines); l++ {
+				lines[l] = strings.TrimSpace(lines[l])
+				ssplit := strings.Split(lines[l], ":")
+
+				if len(ssplit) != 6 {
+					continue
+				}
+
+				rlines = append(rlines, strings.Join(ssplit, ":"))
+			}
+
+			if proto == "tcp" {
+				res = procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, rlines)
+			} else if proto == "udp" {
+				res = procsnitch.LookupUDPSocketProcessAll(srcip, srcp, dstip, dstp, rlines, strictness)
+			} else if proto == "icmp" {
+				res = procsnitch.LookupICMPSocketProcessAll(srcip, dstip, icode, rlines)
+			}
+
+			if res != nil {
+				optstr = "Sandbox: " + OzInitPids[i].Name
+				res.ExePath = getRealRoot(res.ExePath, OzInitPids[i].Pid)
+				break
+			}
+		}
+
+	}
+
+	for _, p := range removePids {
+		removeInitPid(p)
+	}
+
+	return res, optstr
+}
+
 func findProcessForPacket(pkt *nfqueue.NFQPacket, reverse bool, strictness int) (*procsnitch.Info, string) {
 	srcip, dstip := getPacketIPAddrs(pkt)
 	srcp, dstp := getPacketPorts(pkt)
