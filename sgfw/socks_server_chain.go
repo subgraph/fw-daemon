@@ -172,7 +172,7 @@ func (c *socksChainSession) sessionWorker() {
 
 		// If we reach here, the request has been dispatched and completed.
 		if err == nil {
-			// Successfully even, send the response back with the addresc.
+			// Successfully even, send the response back with the address.
 			c.req.ReplyAddr(ReplySucceeded, c.bndAddr)
 		}
 	case CommandConnect:
@@ -364,6 +364,15 @@ func (c *socksChainSession) handleConnect() {
 }
 
 func (c *socksChainSession) forwardTraffic() {
+	err := TLSGuard(c.clientConn, c.upstreamConn, c.req.Addr.addrStr)
+
+	if err != nil {
+		log.Error("Dropping traffic due to TLSGuard violation: ", err)
+		return
+	} else {
+		log.Notice("TLSGuard approved certificate presented for connection to: ", c.req.Addr.addrStr)
+	}
+
 	var wg sync.WaitGroup
 	wg.Add(2)
 

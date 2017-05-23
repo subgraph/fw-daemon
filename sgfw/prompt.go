@@ -136,13 +136,19 @@ func (p *prompter) processConnection(pc pendingConnection) {
 	}
 	policy := pc.policy()
 
+	dststr := ""
+
+	if pc.dst() != nil {
+		dststr = pc.dst().String()
+	}
+
 	call := p.dbusObj.Call("com.subgraph.FirewallPrompt.RequestPrompt", 0,
 		policy.application,
 		policy.icon,
 		policy.path,
 		addr,
 		int32(pc.dstPort()),
-		pc.dst().String(),
+		dststr,
 		pc.src().String(),
 		pc.proto(),
 		int32(pc.procInfo().UID),

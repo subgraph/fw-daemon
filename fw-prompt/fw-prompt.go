@@ -331,7 +331,13 @@ func addRequest(listStore *gtk.ListStore, path, proto string, pid int, ipaddr, h
 	colVals[1] = path
 	colVals[2] = proto
 	colVals[3] = pid
-	colVals[4] = ipaddr
+
+	if ipaddr == "" {
+		colVals[4] = "---"
+	} else {
+		colVals[4] = ipaddr
+	}
+
 	colVals[5] = hostname
 	colVals[6] = port
 	colVals[7] = uid
