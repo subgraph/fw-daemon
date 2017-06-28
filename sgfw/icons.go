@@ -67,7 +67,7 @@ func loadDesktopFile(path string) {
 		} else if len(line) > 0 && line[0] == '[' {
 			inDE = false
 		}
-		if inDE && strings.HasPrefix(line, "Exec=") {
+		if inDE && len(line) > 5 && strings.HasPrefix(line, "Exec=") {
 			exec = strings.Fields(line[5:])[0]
 		}
 		if inDE && strings.HasPrefix(line, "Icon=") {
