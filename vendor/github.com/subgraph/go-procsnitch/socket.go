@@ -111,12 +111,15 @@ func findUDPSocketAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort ui
 	if custdata == nil {
 		if strictness == MATCH_STRICT {
 			return findSocket(proto, func(ss socketStatus) bool {
-				return ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
+				//return ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
+				return ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
 			})
 		} else if strictness == MATCH_LOOSE {
 			return findSocket(proto, func(ss socketStatus) bool {
+				return ss.local.port == srcPort && (ss.local.ip.Equal(srcAddr) || ss.local.ip.Equal(net.IPv4(0,0,0,0)))
+				/*
 				return (ss.remote.ip.Equal(dstAddr) || addrMatchesAny(ss.remote.ip)) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr) ||
-					(ss.local.ip.Equal(dstAddr) || addrMatchesAny(ss.local.ip)) && ss.remote.port == srcPort && ss.remote.ip.Equal(srcAddr)
+					(ss.local.ip.Equal(dstAddr) || addrMatchesAny(ss.local.ip)) && ss.remote.port == srcPort && ss.remote.ip.Equal(srcAddr) */
 			})
 		}
 		return findSocket(proto, func(ss socketStatus) bool {
