@@ -52,13 +52,19 @@ func (r *Rule) getString(redact bool) string {
 	if r.mode == RULE_MODE_SYSTEM {
 		rmode = "|" + RuleModeString[RULE_MODE_SYSTEM]
 	}
+	if r.mode == RULE_MODE_PERMANENT {
+		rmode = "|" + RuleModeString[RULE_MODE_PERMANENT]
+	}
 
 	protostr := ""
 
 	if r.proto != "tcp" {
 		protostr = r.proto + ":"
 	}
-	return fmt.Sprintf("%s|%s%s%s", rtype, protostr, r.AddrString(redact), rmode)
+
+	rpriv := fmt.Sprintf("|%d:%d", r.uid, r.gid)
+
+	return fmt.Sprintf("%s|%s%s%s%s", rtype, protostr, r.AddrString(redact), rmode, rpriv)
 }
 
 func (r *Rule) AddrString(redact bool) string {
@@ -204,15 +210,20 @@ func (r *Rule) parse(s string) bool {
 	r.saddr = nil
 	parts := strings.Split(s, "|")
 	if len(parts) < 4 || len(parts) > 5 {
+		log.Notice("invalid number ", len(parts), " of rule parts in line ", s)
 		return false
 	}
 	if parts[2] == "SYSTEM" {
 		r.mode = RULE_MODE_SYSTEM
+	} else if parts[2] == "PERMANENT" {
+		r.mode = RULE_MODE_PERMANENT
 	} else if parts[2] != "" {
+		log.Notice("invalid rule mode ", parts[2], " in line ", s)
 		return false
 	}
 
 	if  !r.parsePrivs(parts[3]) {
+		log.Notice("invalid privs ", parts[3], " in line ", s)
 		return false
 	}
 
@@ -222,11 +233,11 @@ func (r *Rule) parse(s string) bool {
 		r.saddr = net.ParseIP(parts[4])
 
 		if r.saddr == nil {
+			log.Notice("invalid source IP ", parts[4], " in line ", s)
 			return false
 		}
 
 	}
-
 	return r.parseVerb(parts[0]) && r.parseTarget(parts[1])
 }
 

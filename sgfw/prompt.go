@@ -196,6 +196,7 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		p.removePolicy(pc.policy())
 	}
 	if fscope == APPLY_FOREVER {
+		r.mode = RULE_MODE_PERMANENT
 		policy.fw.saveRules()
 	}
 	dbusp.alertRule("sgfw prompt added new rule")
