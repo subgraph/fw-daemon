@@ -23,6 +23,7 @@ type Info struct {
 	FirstArg      string
 	ParentCmdLine string
 	ParentExePath string
+	Sandbox	      string
 }
 
 type pidCache struct {
