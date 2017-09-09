@@ -167,10 +167,13 @@ log.Notice("r.saddr: ", r.saddr, "src: ", src , "sandboxed ", sandboxed, "optstr
 		if r.saddr == nil && src != nil && sandboxed {
 log.Notice("! Skipping comparison against incompatible rule types: rule src = ", r.saddr, " / packet src = ", src)
 			continue
+		} else if r.saddr == nil && src == nil && sandboxed {
+			continue
 		} else if r.saddr != nil && !r.saddr.Equal(src) && r.proto != "icmp" {
 log.Notice("! Skipping comparison of mismatching source ips")
 			continue
 		}
+		log.Notice("r.saddr = ", r.saddr, "src = ", src, "\n")
 		if r.pid >= 0 && r.pid != pinfo.Pid {
 //log.Notice("! Skipping comparison of mismatching PIDs")
 			continue
