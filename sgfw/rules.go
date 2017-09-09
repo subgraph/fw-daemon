@@ -37,6 +37,7 @@ type Rule struct {
 	gid      int
 	uname    string
 	gname    string
+	sandbox	 string
 }
 
 func (r *Rule) String() string {
@@ -64,7 +65,15 @@ func (r *Rule) getString(redact bool) string {
 
 	rpriv := fmt.Sprintf("|%d:%d", r.uid, r.gid)
 
-	return fmt.Sprintf("%s|%s%s%s%s", rtype, protostr, r.AddrString(redact), rmode, rpriv)
+	sbox := "|"
+	if r.sandbox != "" {
+		sbox = "|SANDBOX:"+sbox
+	} else {
+		log.Notice("sandbox is ", r.sandbox)
+	}
+
+
+	return fmt.Sprintf("%s|%s%s%s%s%s", rtype, protostr, r.AddrString(redact), rmode, rpriv, sbox)
 }
 
 func (r *Rule) AddrString(redact bool) string {
@@ -151,9 +160,10 @@ func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint
 		return FILTER_PROMPT
 	}
 	result := FILTER_PROMPT
-	sandboxed := strings.HasPrefix(optstr, "Sandbox")
+	sandboxed := strings.HasPrefix(optstr, "SOCKS5|Tor / Sandbox")
 	for _, r := range *rl {
 log.Notice("------------ trying match of src ", src, " against: ", r, " | ", r.saddr, " / optstr = ", optstr, "; pid ", pinfo.Pid, " vs rule pid ", r.pid)
+log.Notice("r.saddr: ", r.saddr, "src: ", src , "sandboxed ", sandboxed, "optstr: ", optstr)
 		if r.saddr == nil && src != nil && sandboxed {
 log.Notice("! Skipping comparison against incompatible rule types: rule src = ", r.saddr, " / packet src = ", src)
 			continue
@@ -209,7 +219,7 @@ func (r *Rule) parse(s string) bool {
 	r.addr = noAddress
 	r.saddr = nil
 	parts := strings.Split(s, "|")
-	if len(parts) < 4 || len(parts) > 5 {
+	if len(parts) < 4 || len(parts) > 6 {
 		log.Notice("invalid number ", len(parts), " of rule parts in line ", s)
 		return false
 	}
@@ -227,18 +237,38 @@ func (r *Rule) parse(s string) bool {
 		return false
 	}
 
+	if !r.parseSandbox(parts[4]) {
+		log.Notice("invalid sandbox ", parts[4], "in line ", s)
+		return false
+	}
+
+	log.Notice("parsed sandbox ", parts[4])
+
 //fmt.Printf("uid = %v, gid = %v, user = %v, group = %v, hostname = %v\n", r.uid, r.gid, r.uname, r.gname, r.hostname)
 
-	if len(parts) == 5 && len(strings.TrimSpace(parts[4])) > 0 {
-		r.saddr = net.ParseIP(parts[4])
+	if len(parts) == 6 && len(strings.TrimSpace(parts[5])) > 0 {
+		r.saddr = net.ParseIP(parts[5])
 
 		if r.saddr == nil {
-			log.Notice("invalid source IP ", parts[4], " in line ", s)
+			log.Notice("invalid source IP ", parts[5], " in line ", s)
 			return false
 		}
 
 	}
 	return r.parseVerb(parts[0]) && r.parseTarget(parts[1])
+}
+
+func (r *Rule) parseSandbox(p string) bool {
+	if p == "" {
+		r.sandbox = ""
+		return true
+	}
+	toks := strings.Split(p, ":")
+	if len(toks) != 2 {
+		return false
+	}
+	r.sandbox = toks[1]
+	return true
 }
 
 func (r *Rule) parsePrivs(p string) bool {

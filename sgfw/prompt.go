@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os/user"
 	"strconv"
-	"strings"
+	//"strings"
 	"sync"
 	"time"
 
@@ -168,13 +168,28 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		return
 	}
 
-	if pc.src() != nil {
-		if !strings.HasSuffix(rule, "SYSTEM") && !strings.HasSuffix(rule, "||") {
-			rule += "|"
-		}
-		rule += "||" + pc.src().String()
-	}
+        // the prompt sends: 
+        // ALLOW|dest or DENY|dest
+        //
+        // rule string needs to be:
+        // VERB|dst|class|uid:gid|sandbox|[src]
 
+        // sometimes there's a src 
+        // this needs to be re-visited
+
+
+	if pc.src() != nil {
+
+		//if !strings.HasSuffix(rule, "SYSTEM") && !strings.HasSuffix(rule, "||") {
+			//rule += "||"
+		//}
+		//ule += "|||" + pc.src().String()
+
+		rule += "||-1:-1||" + pc.src().String()
+		log.Warningf("Creating rule: %v", rule)
+	} else {
+		rule += "||-1:-1||"
+	}
 	r, err := policy.parseRule(rule, false)
 	if err != nil {
 		log.Warningf("Error parsing rule string returned from dbus RequestPrompt: %v", err)
@@ -199,6 +214,7 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		r.mode = RULE_MODE_PERMANENT
 		policy.fw.saveRules()
 	}
+	log.Warningf("Creating rule: %v", rule)
 	dbusp.alertRule("sgfw prompt added new rule")
 }
 
