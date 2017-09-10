@@ -1,10 +1,7 @@
 {
 	"ImportPath": "github.com/subgraph/fw-daemon",
 	"GoVersion": "go1.7",
-	"GodepVersion": "v74",
-	"Packages": [
-		"./..."
-	],
+	"GodepVersion": "v79",
 	"Deps": [
 		{
 			"ImportPath": "github.com/godbus/dbus",
@@ -17,29 +14,14 @@
 			"Rev": "32c6cc29c14570de4cf6d7e7737d68fb2d01ad15"
 		},
 		{
-			"ImportPath": "github.com/gotk3/gotk3/cairo",
-			"Comment": "GOTK3_0_2_0-467-gefaac8f",
-			"Rev": "efaac8f907aac2f965675d64fd163097db109f95"
+			"ImportPath": "github.com/google/gopacket",
+			"Comment": "v1.1.12-75-g8af772c",
+			"Rev": "8af772c0bcc826f671fd7c133917fec9686d720d"
 		},
 		{
-			"ImportPath": "github.com/gotk3/gotk3/gdk",
-			"Comment": "GOTK3_0_2_0-467-gefaac8f",
-			"Rev": "efaac8f907aac2f965675d64fd163097db109f95"
-		},
-		{
-			"ImportPath": "github.com/gotk3/gotk3/glib",
-			"Comment": "GOTK3_0_2_0-467-gefaac8f",
-			"Rev": "efaac8f907aac2f965675d64fd163097db109f95"
-		},
-		{
-			"ImportPath": "github.com/gotk3/gotk3/gtk",
-			"Comment": "GOTK3_0_2_0-467-gefaac8f",
-			"Rev": "efaac8f907aac2f965675d64fd163097db109f95"
-		},
-		{
-			"ImportPath": "github.com/gotk3/gotk3/pango",
-			"Comment": "GOTK3_0_2_0-467-gefaac8f",
-			"Rev": "efaac8f907aac2f965675d64fd163097db109f95"
+			"ImportPath": "github.com/google/gopacket/layers",
+			"Comment": "v1.1.12-75-g8af772c",
+			"Rev": "8af772c0bcc826f671fd7c133917fec9686d720d"
 		},
 		{
 			"ImportPath": "github.com/naoina/go-stringutil",
@@ -62,12 +44,25 @@
 			"Rev": "970db520ece77730c7e4724c61121037378659d9"
 		},
 		{
+			"ImportPath": "github.com/subgraph/go-nfnetlink",
+			"Rev": "34abd96bd88d0fbc1a5bbba9fff1bdc2c0448f47"
+		},
+		{
+			"ImportPath": "github.com/subgraph/go-nfnetlink/nfqueue",
+			"Rev": "34abd96bd88d0fbc1a5bbba9fff1bdc2c0448f47"
+		},
+		{
 			"ImportPath": "github.com/subgraph/go-procsnitch",
 			"Rev": "fbc2965632eec2dcea9b8d630b081b10980d325d"
 		},
 		{
-			"ImportPath": "golang.org/x/net/proxy",
-			"Rev": "ef2e00e88c5e0a3569f0bb9df697e9cbc6215fea"
+			"ImportPath": "github.com/subgraph/oz/ipc",
+			"Comment": "0.2.5",
+			"Rev": "69e556d2d33a76f19546471d813a21f7b7fa4181"
+		},
+		{
+			"ImportPath": "github.com/subgraph/ozipc",
+			"Rev": "2cbf2ba8878e9dea012edb021f3b4836f7c93202"
 		}
 	]
 }
