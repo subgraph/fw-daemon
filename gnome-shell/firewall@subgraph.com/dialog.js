@@ -149,7 +149,10 @@ const OptionList = new Lang.Class({
         this.actor.add_child(this.buttonGroup.actor);
         this.items = [];
         this._selected;
-        this.tlsGuard = true;
+        this.tlsGuard = false;
+	if (sandboxed) {
+		this.tlsGuard = true;
+	}
     },
 
     setOptionText: function(idx, text) {
