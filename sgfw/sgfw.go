@@ -152,7 +152,7 @@ type SocksJsonConfig struct {
 
 var commentRegexp = regexp.MustCompile("^[ \t]*#")
 
-const defaultSocksCfgPath = "/etc/fw-daemon-socks.json"
+const defaultSocksCfgPath = "/etc/sgfw/fw-daemon-socks.json"
 
 func loadSocksConfiguration(configFilePath string) (*SocksJsonConfig, error) {
 	config := SocksJsonConfig{}
