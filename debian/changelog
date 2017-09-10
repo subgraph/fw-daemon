@@ -1,3 +1,9 @@
+fw-daemon (0.0.9-2) unstable; urgency=low
+
+  * Update install file and replace package systemd unit
+
+ -- Subgraph <info@subgraph.com>  Sun, 10 Sep 2017 22:55:00 +0000
+
 fw-daemon (0.0.9-1) unstable; urgency=low
 
   * Bump version

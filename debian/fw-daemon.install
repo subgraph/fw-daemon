@@ -3,4 +3,3 @@ usr/bin/fw-settings usr/bin
 sources/etc/dbus-1/system.d/com.subgraph.Firewall.conf etc/dbus-1/system.d/
 sources/usr/share/applications/subgraph-firewall.desktop usr/share/applications/
 sources/etc/sgfw/fw-daemon-socks.json /etc/sgfw/
-sources/lib/systemd/system/fw-daemon.service /lib/systemd/system/
