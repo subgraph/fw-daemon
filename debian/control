@@ -9,7 +9,7 @@ Build-Depends: debhelper (>= 9),
                libcairo2-dev,
                libglib2.0-dev,
                libgtk-3-dev,
-               libnetfilter-queue-dev
+               libnetfilter-queue-dev, golang-github-gotk3-gotk3-dev
 Standards-Version: 3.9.8
 Homepage: https://github.com/subgraph/fw-daemon
 Vcs-Git: https://github.com/subgraph/fw-daemon.git
