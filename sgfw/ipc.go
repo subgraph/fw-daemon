@@ -18,12 +18,13 @@ const ReceiverSocketPath = "/tmp/fwoz.sock"
 type OzInitProc struct {
 	Name string
 	Pid int
+	SandboxID int
 }
 
 var OzInitPids []OzInitProc = []OzInitProc{}
 
 
-func addInitPid(pid int, name string) {
+func addInitPid(pid int, name string, sboxid int) {
 fmt.Println("::::::::::: init pid added: ", pid, " -> ", name)
 	for i := 0; i < len(OzInitPids); i++ {
 		if OzInitPids[i].Pid == pid {
@@ -31,7 +32,7 @@ fmt.Println("::::::::::: init pid added: ", pid, " -> ", name)
 		}
 	}
 
-	ozi := OzInitProc{Name: name, Pid: pid}
+	ozi := OzInitProc{Name: name, Pid: pid, SandboxID: sboxid}
 	OzInitPids = append(OzInitPids, ozi)
 }
 
@@ -163,6 +164,7 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 
 			if tokens[0] == "register-init" && len(tokens) >= 3 {
 				initp := tokens[1]
+				
 				initpid, err := strconv.Atoi(initp)
 
 				if err != nil {
@@ -171,8 +173,15 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 					return
 				}
 
-				ozname := strings.Join(tokens[2:], " ")
-				addInitPid(initpid, ozname)
+				sboxid, err := strconv.Atoi(tokens[3])
+				if err != nil {
+					log.Notice("IPC received invalid oz sbox number: ",tokens[3])
+					c.Write([]byte("Bad command: sandbox id was invalid"))
+					return
+				}
+
+				// ozname := strings.Join(tokens[2:], " ")
+				addInitPid(initpid, tokens[2], sboxid)
 				c.Write([]byte("OK.\n"))
 				return
 			} else if tokens[0] == "unregister-init" && len(tokens) == 2 {
@@ -278,8 +287,8 @@ func OzReceiver(fw *Firewall) {
 		if len(sboxes) > 0 {
 			log.Warning("Adding existing Oz sandbox init pids...")
 			for s := 0; s < len(sboxes); s++ {
-				profname := fmt.Sprintf("%s (%d)", sboxes[s].Profile, sboxes[s].Id)
-				addInitPid(sboxes[s].InitPid, profname)
+				//profname := fmt.Sprintf("%s (%d)", sboxes[s].Profile, sboxes[s].Id)
+				addInitPid(sboxes[s].InitPid, sboxes[s].Profile, sboxes[s].Id)
 			}
 		} else {
 			log.Warning("It does not appear there were any Oz sandboxed processes already launched.")

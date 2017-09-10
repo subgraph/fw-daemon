@@ -6,19 +6,19 @@ import (
 	"regexp"
 	"sync"
 	"syscall"
-//	"time"
+	//	"time"
 	"bufio"
 	"encoding/json"
-	"strings"
 	"fmt"
+	"strings"
 
 	"github.com/op/go-logging"
 	nfqueue "github.com/subgraph/go-nfnetlink/nfqueue"
-//	"github.com/subgraph/go-nfnetlink"
-	"github.com/subgraph/go-procsnitch"
-	"github.com/subgraph/fw-daemon/proc-coroner"
+	//	"github.com/subgraph/go-nfnetlink"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"github.com/subgraph/fw-daemon/proc-coroner"
+	"github.com/subgraph/go-procsnitch"
 )
 
 var dbusp *dbusObjectP = nil
@@ -96,9 +96,9 @@ func (fw *Firewall) runFilter() {
 	q := nfqueue.NewNFQueue(0)
 
 	// XXX: need to implement this
-//	q.DefaultVerdict = nfqueue.DROP
+	//	q.DefaultVerdict = nfqueue.DROP
 	// XXX: need this as well
-//	q.Timeout = 5 * time.Minute
+	//	q.Timeout = 5 * time.Minute
 
 	ps, err := q.Open()
 
@@ -145,6 +145,7 @@ func (fw *Firewall) runFilter() {
 }
 
 type SocksJsonConfig struct {
+	Name          string
 	SocksListener string
 	TorSocks      string
 }
@@ -174,7 +175,7 @@ func loadSocksConfiguration(configFilePath string) (*SocksJsonConfig, error) {
 }
 
 func getSocksChainConfig(config *SocksJsonConfig) *socksChainConfig {
-	// XXX
+	// TODO: fix this to support multiple named proxy forwarders of different types
 	fields := strings.Split(config.TorSocks, "|")
 	torSocksNet := fields[0]
 	torSocksAddr := fields[1]
@@ -182,6 +183,7 @@ func getSocksChainConfig(config *SocksJsonConfig) *socksChainConfig {
 	socksListenNet := fields[0]
 	socksListenAddr := fields[1]
 	socksConfig := socksChainConfig{
+		Name:            config.Name,
 		TargetSocksNet:  torSocksNet,
 		TargetSocksAddr: torSocksAddr,
 		ListenSocksNet:  socksListenNet,
@@ -191,7 +193,6 @@ func getSocksChainConfig(config *SocksJsonConfig) *socksChainConfig {
 	log.Notice(socksConfig)
 	return &socksConfig
 }
-
 
 func Main() {
 	readConfig()
@@ -232,23 +233,23 @@ func Main() {
 
 	fw.loadRules()
 
-       /*
-                go func() {
-                        http.ListenAndServe("localhost:6060", nil)
-                }()
-        */
+	/*
+	   go func() {
+	           http.ListenAndServe("localhost:6060", nil)
+	   }()
+	*/
 
-        wg := sync.WaitGroup{}
+	wg := sync.WaitGroup{}
 
-        config, err := loadSocksConfiguration(defaultSocksCfgPath)
-        if err != nil && !os.IsNotExist(err) {
-                panic(err)
-        }
-        if config != nil {
-                socksConfig := getSocksChainConfig(config)
-                chain := NewSocksChain(socksConfig, &wg, fw)
-                chain.start()
-        } else {
+	config, err := loadSocksConfiguration(defaultSocksCfgPath)
+	if err != nil && !os.IsNotExist(err) {
+		panic(err)
+	}
+	if config != nil {
+		socksConfig := getSocksChainConfig(config)
+		chain := NewSocksChain(socksConfig, &wg, fw)
+		chain.start()
+	} else {
 		log.Notice("Did not find SOCKS5 configuration file at", defaultSocksCfgPath, "; ignoring subsystem...")
 	}
 

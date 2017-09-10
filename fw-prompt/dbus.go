@@ -27,6 +27,7 @@ type promptData struct {
 	Username    string
 	Groupname   string
 	Pid         int
+	Sandbox     string
 	OptString   string
 	Expanded    bool
 	Expert      bool
@@ -63,10 +64,10 @@ func newDbusServer() (*dbusServer, error) {
 	return ds, nil
 }
 
-func (ds *dbusServer) RequestPrompt(application, icon, path, address string, port int32, ip, origin, proto string, uid, gid int32, username, groupname string, pid int32,
+func (ds *dbusServer) RequestPrompt(application, icon, path, address string, port int32, ip, origin, proto string, uid, gid int32, username, groupname string, pid int32, sandbox string,
 			optstring string, expanded, expert bool, action int32) (int32, string, *dbus.Error) {
 	log.Printf("request prompt: app = %s, icon = %s, path = %s, address = %s, action = %v\n", application, icon, path, address, action)
-	decision := addRequest(nil, path, proto, int(pid), ip, address, int(port), int(uid), int(gid), origin, optstring)
+	decision := addRequest(nil, path, proto, int(pid), ip, address, int(port), int(uid), int(gid), origin, optstring, sandbox)
 	log.Print("Waiting on decision...")
 	decision.Cond.L.Lock()
 	for !decision.Ready {

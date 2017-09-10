@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os/user"
 	"strconv"
-	//"strings"
+	"strings"
 	"sync"
 	"time"
 
@@ -140,6 +140,8 @@ func (p *prompter) processConnection(pc pendingConnection) {
 
 	if pc.dst() != nil {
 		dststr = pc.dst().String()
+	} else {
+		dststr = addr + " (proxy to resolve)"
 	}
 
 	call := p.dbusObj.Call("com.subgraph.FirewallPrompt.RequestPrompt", 0,
@@ -156,6 +158,7 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		uidToUser(pc.procInfo().UID),
 		gidToGroup(pc.procInfo().GID),
 		int32(pc.procInfo().Pid),
+		pc.sandbox(),
 		pc.getOptString(),
 		FirewallConfig.PromptExpanded,
 		FirewallConfig.PromptExpert,
@@ -177,6 +180,16 @@ func (p *prompter) processConnection(pc pendingConnection) {
         // sometimes there's a src 
         // this needs to be re-visited
 
+	toks := strings.Split(rule, "|")
+	//verb := toks[0]
+	//target := toks[1]
+	sandbox := ""
+
+	if len(toks) > 2 {
+		sandbox = toks[2]
+	}
+	
+	tempRule := fmt.Sprintf("%s|%s",toks[0],toks[1])
 
 	if pc.src() != nil {
 
@@ -184,13 +197,12 @@ func (p *prompter) processConnection(pc pendingConnection) {
 			//rule += "||"
 		//}
 		//ule += "|||" + pc.src().String()
-
-		rule += "||-1:-1||" + pc.src().String()
-		log.Warningf("Creating rule: %v", rule)
+		
+		tempRule += "||-1:-1|"+sandbox+"|" + pc.src().String()
 	} else {
-		rule += "||-1:-1||"
+		tempRule += "||-1:-1|"+sandbox+"|"
 	}
-	r, err := policy.parseRule(rule, false)
+	r, err := policy.parseRule(tempRule, false)
 	if err != nil {
 		log.Warningf("Error parsing rule string returned from dbus RequestPrompt: %v", err)
 		policy.removePending(pc)

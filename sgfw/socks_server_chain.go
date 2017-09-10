@@ -17,6 +17,7 @@ type socksChainConfig struct {
 	TargetSocksAddr string
 	ListenSocksNet  string
 	ListenSocksAddr string
+	Name		string
 }
 
 type socksChain struct {
@@ -41,6 +42,7 @@ type socksChainSession struct {
 const (
 	socksVerdictDrop   = 1
 	socksVerdictAccept = 2
+	socksVerdictAcceptTLSOnly = 3
 )
 
 type pendingSocksConnection struct {
@@ -54,6 +56,10 @@ type pendingSocksConnection struct {
 	verdict  chan int
 	prompting bool
 	optstr   string
+}
+
+func (sc *pendingSocksConnection) sandbox() string {
+	return sc.pinfo.Sandbox
 }
 
 func (sc *pendingSocksConnection) policy() *Policy {
@@ -95,6 +101,10 @@ func (sc *pendingSocksConnection) deliverVerdict(v int) {
 }
 
 func (sc *pendingSocksConnection) accept() { sc.deliverVerdict(socksVerdictAccept) }
+
+// need to generalize special accept 
+
+func (sc *pendingSocksConnection) acceptTLSOnly() {sc.deliverVerdict(socksVerdictAcceptTLSOnly) }
 
 func (sc *pendingSocksConnection) drop() { sc.deliverVerdict(socksVerdictDrop) }
 
@@ -176,11 +186,13 @@ func (c *socksChainSession) sessionWorker() {
 			c.req.ReplyAddr(ReplySucceeded, c.bndAddr)
 		}
 	case CommandConnect:
-		if !c.filterConnect() {
+		verdict, tls := c.filterConnect()
+
+		if !verdict {
 			c.req.Reply(ReplyConnectionRefused)
 			return
 		}
-		c.handleConnect()
+		c.handleConnect(tls)
 	default:
 		// Should *NEVER* happen, validated as part of handshake.
 		log.Infof("BUG/socks: Unsupported SOCKS command: 0x%02x", c.req.Cmd)
@@ -255,7 +267,9 @@ func findProxyEndpoint(pdata []string, conn net.Conn) (*procsnitch.Info, string)
 	return nil, ""
 }
 
-func (c *socksChainSession) filterConnect() bool {
+func (c *socksChainSession) filterConnect() (bool, bool) {
+	// return filter verdict, tlsguard
+
 	allProxies, err := ListProxies()
 	var pinfo *procsnitch.Info = nil
 	var optstr = ""
@@ -270,27 +284,30 @@ func (c *socksChainSession) filterConnect() bool {
 
 	if pinfo == nil {
 		log.Warningf("No proc found for [socks5] connection from: %s", c.clientConn.RemoteAddr())
-		return false
+		return false, false
 	}
 
 	if optstr == "" {
-		optstr = "[via SOCKS5/Tor]"
+		optstr = "Via SOCKS5: " + c.cfg.Name
 	} else {
-		optstr = "SOCKS5|Tor / " + optstr
+		optstr = "[Via SOCKS5: " + c.cfg.Name + "] " + optstr
 	}
 
 	policy := c.server.fw.PolicyForPath(pinfo.ExePath)
 
 	hostname, ip, port := c.addressDetails()
 	if ip == nil && hostname == "" {
-		return false
+		return false, false
 	}
 	result := policy.rules.filter(nil, nil, ip, port, hostname, pinfo, optstr)
+	log.Errorf("result %v",result)
 	switch result {
 	case FILTER_DENY:
-		return false
+		return false, false
 	case FILTER_ALLOW:
-		return true
+		return true, false
+	case FILTER_ALLOW_TLSONLY:
+		return true, true
 	case FILTER_PROMPT:
 		caddr := c.clientConn.RemoteAddr().String()
 		caddrt := strings.Split(caddr, ":")
@@ -333,15 +350,17 @@ func (c *socksChainSession) filterConnect() bool {
 		policy.processPromptResult(pending)
 		v := <-pending.verdict
 		if v == socksVerdictAccept {
-			return true
+			return true, false
+		} else if v == socksVerdictAcceptTLSOnly {
+			return true, true
 		}
 	}
 
-	return false
+	return false, false
 
 }
 
-func (c *socksChainSession) handleConnect() {
+func (c *socksChainSession) handleConnect(tls bool) {
 	err := c.dispatchTorSOCKS()
 	if err != nil {
 		return
@@ -359,18 +378,20 @@ func (c *socksChainSession) handleConnect() {
 
 	// A upstream connection has been established, push data back and forth
 	// till the session is done.
-	c.forwardTraffic()
+	c.forwardTraffic(tls)
 	log.Infof("INFO/socks: Closed SOCKS connection from: %v", c.clientConn.RemoteAddr())
 }
 
-func (c *socksChainSession) forwardTraffic() {
-	err := TLSGuard(c.clientConn, c.upstreamConn, c.req.Addr.addrStr)
+func (c *socksChainSession) forwardTraffic(tls bool) {
+	if tls == true {
+		err := TLSGuard(c.clientConn, c.upstreamConn, c.req.Addr.addrStr)
 
-	if err != nil {
-		log.Error("Dropping traffic due to TLSGuard violation: ", err)
-		return
-	} else {
-		log.Notice("TLSGuard approved certificate presented for connection to: ", c.req.Addr.addrStr)
+		if err != nil {
+			log.Error("Dropping traffic due to TLSGuard violation: ", err)
+			return
+		} else {
+			log.Notice("TLSGuard approved certificate presented for connection to: ", c.req.Addr.addrStr)
+		}
 	}
 
 	var wg sync.WaitGroup

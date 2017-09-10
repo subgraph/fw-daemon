@@ -7,19 +7,20 @@ import (
 	"net"
 	"os"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
-	"regexp"
 
 	nfqueue "github.com/subgraph/go-nfnetlink/nfqueue"
-//	"github.com/subgraph/go-nfnetlink"
+	//	"github.com/subgraph/go-nfnetlink"
 	"github.com/subgraph/go-procsnitch"
 )
 
 const matchAny = 0
+
 //const noAddress = uint32(0xffffffff)
-var anyAddress net.IP = net.IP{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,}
-var noAddress net.IP = net.IP{0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff}
+var anyAddress net.IP = net.IP{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+var noAddress net.IP = net.IP{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 
 type Rule struct {
 	id       uint
@@ -37,7 +38,7 @@ type Rule struct {
 	gid      int
 	uname    string
 	gname    string
-	sandbox	 string
+	sandbox  string
 }
 
 func (r *Rule) String() string {
@@ -48,6 +49,8 @@ func (r *Rule) getString(redact bool) string {
 	rtype := RuleActionString[RULE_ACTION_DENY]
 	if r.rtype == RULE_ACTION_ALLOW {
 		rtype = RuleActionString[RULE_ACTION_ALLOW]
+	} else if r.rtype == RULE_ACTION_ALLOW_TLSONLY {
+		rtype = RuleActionString[RULE_ACTION_ALLOW_TLSONLY]
 	}
 	rmode := ""
 	if r.mode == RULE_MODE_SYSTEM {
@@ -67,11 +70,10 @@ func (r *Rule) getString(redact bool) string {
 
 	sbox := "|"
 	if r.sandbox != "" {
-		sbox = "|SANDBOX:"+sbox
+		sbox = "|" + sbox
 	} else {
 		log.Notice("sandbox is ", r.sandbox)
 	}
-
 
 	return fmt.Sprintf("%s|%s%s%s%s%s", rtype, protostr, r.AddrString(redact), rmode, rpriv, sbox)
 }
@@ -84,9 +86,9 @@ func (r *Rule) AddrString(redact bool) string {
 	} else if r.network != nil {
 		addr = r.network.String()
 	} else if !addrMatchesAny(r.addr) && !addrMatchesNone(r.addr) {
-//		bs := make([]byte, 4)
-//		binary.BigEndian.PutUint32(bs, r.addr)
-//		addr = fmt.Sprintf("%d.%d.%d.%d", bs[0], bs[1], bs[2], bs[3])
+		//		bs := make([]byte, 4)
+		//		binary.BigEndian.PutUint32(bs, r.addr)
+		//		addr = fmt.Sprintf("%d.%d.%d.%d", bs[0], bs[1], bs[2], bs[3])
 		addr = r.addr.String()
 	}
 
@@ -103,7 +105,7 @@ func (r *Rule) AddrString(redact bool) string {
 
 type RuleList []*Rule
 
-func (r *Rule) match(src net.IP, dst net.IP, dstPort uint16, hostname string, proto string, uid, gid int, uname, gname string) bool {
+func (r *Rule) match(src net.IP, dst net.IP, dstPort uint16, hostname string, proto string, uid, gid int, uname, gname string, sandbox string) bool {
 	if r.proto != proto {
 		return false
 	}
@@ -117,7 +119,7 @@ func (r *Rule) match(src net.IP, dst net.IP, dstPort uint16, hostname string, pr
 		return false
 	}
 
-log.Notice("comparison: ", hostname, " / ", dst, " : ", dstPort, " -> ", r.addr, " / ", r.hostname, " : ", r.port)
+	log.Notice("comparison: ", hostname, " / ", dst, " : ", dstPort, " -> ", r.addr, " / ", r.hostname, " : ", r.port)
 	if r.port != matchAny && r.port != dstPort {
 		return false
 	}
@@ -142,7 +144,7 @@ log.Notice("comparison: ", hostname, " / ", dst, " : ", dstPort, " -> ", r.addr,
 	}
 	if proto == "icmp" {
 		fmt.Printf("network = %v, src = %v, r.addr = %x, src to4 = %x\n", r.network, src, r.addr, binary.BigEndian.Uint32(src.To4()))
-		if  (r.network != nil && r.network.Contains(src)) || (r.addr.Equal(src)) {
+		if (r.network != nil && r.network.Contains(src)) || (r.addr.Equal(src)) {
 			return true
 		}
 	}
@@ -160,26 +162,32 @@ func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint
 		return FILTER_PROMPT
 	}
 	result := FILTER_PROMPT
-	sandboxed := strings.HasPrefix(optstr, "SOCKS5|Tor / Sandbox")
+	sandboxed := false
+	if pinfo.Sandbox != "" {
+		sandboxed = true
+	}
+	// sandboxed := strings.HasPrefix(optstr, "SOCKS5|Tor / Sandbox")
 	for _, r := range *rl {
-log.Notice("------------ trying match of src ", src, " against: ", r, " | ", r.saddr, " / optstr = ", optstr, "; pid ", pinfo.Pid, " vs rule pid ", r.pid)
-log.Notice("r.saddr: ", r.saddr, "src: ", src , "sandboxed ", sandboxed, "optstr: ", optstr)
+
+		log.Notice("fuck ",r)
+		log.Notice("------------ trying match of src ", src, " against: ", r, " | ", r.saddr, " / optstr = ", optstr, "; pid ", pinfo.Pid, " vs rule pid ", r.pid)
+		log.Notice("r.saddr: ", r.saddr, "src: ", src, "sandboxed ", sandboxed, "optstr: ", optstr)
 		if r.saddr == nil && src != nil && sandboxed {
-log.Notice("! Skipping comparison against incompatible rule types: rule src = ", r.saddr, " / packet src = ", src)
+			log.Notice("! Skipping comparison against incompatible rule types: rule src = ", r.saddr, " / packet src = ", src)
 			continue
 		} else if r.saddr == nil && src == nil && sandboxed {
 			continue
 		} else if r.saddr != nil && !r.saddr.Equal(src) && r.proto != "icmp" {
-log.Notice("! Skipping comparison of mismatching source ips")
+			log.Notice("! Skipping comparison of mismatching source ips")
 			continue
 		}
 		log.Notice("r.saddr = ", r.saddr, "src = ", src, "\n")
 		if r.pid >= 0 && r.pid != pinfo.Pid {
-//log.Notice("! Skipping comparison of mismatching PIDs")
+			//log.Notice("! Skipping comparison of mismatching PIDs")
 			continue
 		}
-		if r.match(src, dst, dstPort, hostname, getNFQProto(pkt), pinfo.UID, pinfo.GID, uidToUser(pinfo.UID), gidToGroup(pinfo.GID)) {
-log.Notice("+ MATCH SUCCEEDED")
+		if r.match(src, dst, dstPort, hostname, getNFQProto(pkt), pinfo.UID, pinfo.GID, uidToUser(pinfo.UID), gidToGroup(pinfo.GID), pinfo.Sandbox) {
+			log.Notice("+ MATCH SUCCEEDED")
 			dstStr := dst.String()
 			if FirewallConfig.LogRedact {
 				dstStr = STR_REDACTED
@@ -196,10 +204,10 @@ log.Notice("+ MATCH SUCCEEDED")
 				srcStr,
 				dstStr, dstPort)
 			if r.rtype == RULE_ACTION_DENY {
-			log.Warningf("DENIED outgoing connection attempt by %s from %s %s -> %s:%d",
-				pinfo.ExePath, r.proto,
-				srcStr,
-				dstStr, dstPort)
+				log.Warningf("DENIED outgoing connection attempt by %s from %s %s -> %s:%d",
+					pinfo.ExePath, r.proto,
+					srcStr,
+					dstStr, dstPort)
 				return FILTER_DENY
 			} else if r.rtype == RULE_ACTION_ALLOW {
 				result = FILTER_ALLOW
@@ -208,9 +216,11 @@ log.Notice("+ MATCH SUCCEEDED")
 					return result
 				}
 			}
-		} else { log.Notice("+ MATCH FAILED") }
+		} else {
+			log.Notice("+ MATCH FAILED")
+		}
 	}
-log.Notice("--- RESULT = ", result)
+	log.Notice("--- RESULT = ", result)
 	return result
 }
 
@@ -235,7 +245,7 @@ func (r *Rule) parse(s string) bool {
 		return false
 	}
 
-	if  !r.parsePrivs(parts[3]) {
+	if !r.parsePrivs(parts[3]) {
 		log.Notice("invalid privs ", parts[3], " in line ", s)
 		return false
 	}
@@ -245,9 +255,7 @@ func (r *Rule) parse(s string) bool {
 		return false
 	}
 
-	log.Notice("parsed sandbox ", parts[4])
-
-//fmt.Printf("uid = %v, gid = %v, user = %v, group = %v, hostname = %v\n", r.uid, r.gid, r.uname, r.gname, r.hostname)
+	fmt.Printf("uid = %v, gid = %v, user = %v, group = %v, hostname = %v, sandbox = %v\n", r.uid, r.gid, r.uname, r.gname, r.hostname, r.sandbox)
 
 	if len(parts) == 6 && len(strings.TrimSpace(parts[5])) > 0 {
 		r.saddr = net.ParseIP(parts[5])
@@ -262,15 +270,7 @@ func (r *Rule) parse(s string) bool {
 }
 
 func (r *Rule) parseSandbox(p string) bool {
-	if p == "" {
-		r.sandbox = ""
-		return true
-	}
-	toks := strings.Split(p, ":")
-	if len(toks) != 2 {
-		return false
-	}
-	r.sandbox = toks[1]
+	r.sandbox = p
 	return true
 }
 
@@ -312,6 +312,9 @@ func (r *Rule) parseVerb(v string) bool {
 	case RuleActionString[RULE_ACTION_ALLOW]:
 		r.rtype = RULE_ACTION_ALLOW
 		return true
+	case RuleActionString[RULE_ACTION_ALLOW_TLSONLY]:
+		r.rtype = RULE_ACTION_ALLOW_TLSONLY
+		return true
 	case RuleActionString[RULE_ACTION_DENY]:
 		r.rtype = RULE_ACTION_DENY
 		return true
@@ -325,7 +328,7 @@ func (r *Rule) parseTarget(t string) bool {
 		return false
 	}
 	sind := 0
-	lind := len(addrPort)-1
+	lind := len(addrPort) - 1
 	if addrPort[0] == "udp" || addrPort[0] == "icmp" || addrPort[0] == "tcp" {
 		r.proto = addrPort[0]
 		sind++
@@ -335,7 +338,7 @@ func (r *Rule) parseTarget(t string) bool {
 
 	newAddr := strings.Join(addrPort[sind:lind], ":")
 	return r.parseAddr(newAddr) && r.parsePort(addrPort[lind])
-//	return r.parseAddr(addrPort[sind]) && r.parsePort(addrPort[sind+1])
+	//	return r.parseAddr(addrPort[sind]) && r.parsePort(addrPort[sind+1])
 }
 
 func (r *Rule) parseAddr(a string) bool {
@@ -344,12 +347,12 @@ func (r *Rule) parseAddr(a string) bool {
 		r.addr = anyAddress
 		return true
 	}
-//	if strings.IndexFunc(a, unicode.IsLetter) != -1 {
+	//	if strings.IndexFunc(a, unicode.IsLetter) != -1 {
 	if net.ParseIP(a) == nil {
 		r.hostname = a
 		return true
 	}
-//	ip := net.ParseIP(a)
+	//	ip := net.ParseIP(a)
 	ip, ipnet, err := net.ParseCIDR(a)
 	if err != nil || ip == nil {
 		ip = net.ParseIP(a)
@@ -500,7 +503,7 @@ func addrMatchesAny(addr net.IP) bool {
 	any := anyAddress
 
 	if addr.To4() != nil {
-		any = net.IP{0,0,0,0}
+		any = net.IP{0, 0, 0, 0}
 	}
 
 	return any.Equal(addr)
@@ -510,7 +513,7 @@ func addrMatchesNone(addr net.IP) bool {
 	none := noAddress
 
 	if addr.To4() != nil {
-		none = net.IP{0xff,0xff,0xff,0xff}
+		none = net.IP{0xff, 0xff, 0xff, 0xff}
 	}
 
 	return none.Equal(addr)

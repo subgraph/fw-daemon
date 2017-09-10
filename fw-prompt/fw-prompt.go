@@ -319,7 +319,7 @@ func createListStore(general bool) *gtk.ListStore {
 	return listStore
 }
 
-func addRequest(listStore *gtk.ListStore, path, proto string, pid int, ipaddr, hostname string, port, uid, gid int, origin, optstring string) *decisionWaiter {
+func addRequest(listStore *gtk.ListStore, path, proto string, pid int, ipaddr, hostname string, port, uid, gid int, origin, optstring string, sandbox string) *decisionWaiter {
 	if listStore == nil {
 		listStore = globalLS
 	}

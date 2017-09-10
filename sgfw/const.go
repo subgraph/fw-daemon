@@ -15,16 +15,19 @@ type RuleAction uint16
 const (
 	RULE_ACTION_DENY RuleAction = iota
 	RULE_ACTION_ALLOW
+	RULE_ACTION_ALLOW_TLSONLY
 )
 // RuleActionString is used to get a string from an action id
 var RuleActionString = map[RuleAction]string{
 	RULE_ACTION_DENY:  "DENY",
 	RULE_ACTION_ALLOW: "ALLOW",
+	RULE_ACTION_ALLOW_TLSONLY: "ALLOW_TLSONLY",
 }
 // RuleActionValue is used to get an action id using the action string
 var RuleActionValue = map[string]RuleAction{
 	RuleActionString[RULE_ACTION_DENY]:  RULE_ACTION_DENY,
 	RuleActionString[RULE_ACTION_ALLOW]: RULE_ACTION_ALLOW,
+	RuleActionString[RULE_ACTION_ALLOW_TLSONLY]: RULE_ACTION_ALLOW_TLSONLY,
 }
 
 //RuleMode contains the time scope of a rule
@@ -94,18 +97,21 @@ const (
 	FILTER_DENY FilterResult = iota
 	FILTER_ALLOW
 	FILTER_PROMPT
+	FILTER_ALLOW_TLSONLY
 )
 // FilterResultString converts a filter value ID to its string
 var FilterResultString = map[FilterResult]string{
 	FILTER_DENY:   "DENY",
 	FILTER_ALLOW:  "ALLOW",
 	FILTER_PROMPT: "PROMPT",
+	FILTER_ALLOW_TLSONLY: "ALLOW_TLSONLY",
 }
 // FilterResultValue converts a filter value string to its ID
 var FilterResultValue = map[string]FilterResult{
 	FilterResultString[FILTER_DENY]:   FILTER_DENY,
 	FilterResultString[FILTER_ALLOW]:  FILTER_ALLOW,
 	FilterResultString[FILTER_PROMPT]: FILTER_PROMPT,
+	FilterResultString[FILTER_ALLOW_TLSONLY]: FILTER_ALLOW_TLSONLY,
 }
 
 // DbusRule struct of the rule passed to the dbus interface

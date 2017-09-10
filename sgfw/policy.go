@@ -2,20 +2,20 @@ package sgfw
 
 import (
 	"fmt"
-	"strings"
 	"strconv"
+	"strings"
 	"sync"
 
-//	"encoding/binary"
+	//	"encoding/binary"
 
-//	nfnetlink "github.com/subgraph/go-nfnetlink"
-	nfqueue "github.com/subgraph/go-nfnetlink/nfqueue"
+	//	nfnetlink "github.com/subgraph/go-nfnetlink"
 	"github.com/google/gopacket/layers"
+	nfqueue "github.com/subgraph/go-nfnetlink/nfqueue"
 	"github.com/subgraph/go-procsnitch"
 	"net"
+	"os"
 	"syscall"
 	"unsafe"
-	"os"
 )
 
 var _interpreters = []string{
@@ -45,7 +45,9 @@ type pendingConnection interface {
 	srcPort() uint16
 	dst() net.IP
 	dstPort() uint16
+	sandbox() string
 	accept()
+	acceptTLSOnly()
 	drop()
 	setPrompting(bool)
 	getPrompting() bool
@@ -53,10 +55,10 @@ type pendingConnection interface {
 }
 
 type pendingPkt struct {
-	pol   *Policy
-	name  string
-	pkt   *nfqueue.NFQPacket
-	pinfo *procsnitch.Info
+	pol       *Policy
+	name      string
+	pkt       *nfqueue.NFQPacket
+	pinfo     *procsnitch.Info
 	optstring string
 	prompting bool
 }
@@ -70,6 +72,10 @@ func getEmptyPInfo() *procsnitch.Info {
 	pinfo.ParentCmdLine = "[unknown-pcmdline]"
 	pinfo.ParentExePath = "[unknown-pexe]"
 	return &pinfo
+}
+
+func (pp *pendingPkt) sandbox() string {
+	return pp.pinfo.Sandbox
 }
 
 func (pp *pendingPkt) policy() *Policy {
@@ -142,6 +148,13 @@ func (pp *pendingPkt) accept() {
 	pp.pkt.Accept()
 }
 
+func (pp *pendingPkt) acceptTLSOnly() {
+	// Not implemented
+
+	pp.pkt.SetMark(1)
+	pp.pkt.Accept()
+}
+
 func (pp *pendingPkt) drop() {
 	pp.pkt.SetMark(1)
 	pp.pkt.Accept()
@@ -196,10 +209,10 @@ func (fw *Firewall) policyForPath(path string) *Policy {
 
 func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info, optstr string) {
 
-/*	hbytes, err := pkt.GetHWAddr()
-	if err != nil {
-		log.Notice("Failed to get HW address underlying packet: ", err)
-	} else { log.Notice("got hwaddr: ", hbytes) } */
+	/*	hbytes, err := pkt.GetHWAddr()
+		if err != nil {
+			log.Notice("Failed to get HW address underlying packet: ", err)
+		} else { log.Notice("got hwaddr: ", hbytes) } */
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	dstb := pkt.Packet.NetworkLayer().NetworkFlow().Dst().Raw()
@@ -209,7 +222,7 @@ func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info, o
 	if !FirewallConfig.LogRedact {
 		log.Infof("Lookup(%s): %s", dstip.String(), name)
 	}
-//	fwo := matchAgainstOzRules(srcip, dstip, dstp)
+	//	fwo := matchAgainstOzRules(srcip, dstip, dstp)
 
 	result := p.rules.filterPacket(pkt, pinfo, srcip, name, optstr)
 	switch result {
@@ -227,7 +240,8 @@ func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info, o
 
 func (p *Policy) processPromptResult(pc pendingConnection) {
 	p.pendingQueue = append(p.pendingQueue, pc)
-fmt.Println("processPromptResult(): p.promptInProgress = ", p.promptInProgress)
+	fmt.Println("im here now.. processing prompt result..")
+	fmt.Println("processPromptResult(): p.promptInProgress = ", p.promptInProgress)
 	if DoMultiPrompt || (!DoMultiPrompt && !p.promptInProgress) {
 		p.promptInProgress = true
 		go p.fw.dbus.prompt(p)
@@ -248,13 +262,13 @@ func (p *Policy) nextPending() (pendingConnection, bool) {
 		return nil, true
 	}
 
-//	for len(p.pendingQueue) != 0 {
-		for i := 0; i < len(p.pendingQueue); i++ {
-			if !p.pendingQueue[i].getPrompting() {
-				return p.pendingQueue[i], false
-			}
+	//	for len(p.pendingQueue) != 0 {
+	for i := 0; i < len(p.pendingQueue); i++ {
+		if !p.pendingQueue[i].getPrompting() {
+			return p.pendingQueue[i], false
 		}
-//	}
+	}
+	//	}
 
 	return nil, false
 }
@@ -281,7 +295,7 @@ func (p *Policy) processNewRule(r *Rule, scope FilterScope) bool {
 	if scope != APPLY_ONCE {
 		p.rules = append(p.rules, r)
 	}
-
+	log.Noticef("processNewRule: ",r)
 	p.filterPending(r)
 	if len(p.pendingQueue) == 0 {
 		p.promptInProgress = false
@@ -291,7 +305,7 @@ func (p *Policy) processNewRule(r *Rule, scope FilterScope) bool {
 }
 
 func (p *Policy) parseRule(s string, add bool) (*Rule, error) {
-log.Noticef("XXX: attempt to parse rule: |%s|\n", s)
+	log.Noticef("XXX: attempt to parse rule: |%s|\n", s)
 	r := new(Rule)
 	r.pid = -1
 	r.mode = RULE_MODE_PERMANENT
@@ -324,15 +338,17 @@ func (p *Policy) removeRule(r *Rule) {
 func (p *Policy) filterPending(rule *Rule) {
 	remaining := []pendingConnection{}
 	for _, pc := range p.pendingQueue {
-		if rule.match(pc.src(), pc.dst(), pc.dstPort(), pc.hostname(), pc.proto(), pc.procInfo().UID, pc.procInfo().GID, uidToUser(pc.procInfo().UID), gidToGroup(pc.procInfo().GID)) {
+		if rule.match(pc.src(), pc.dst(), pc.dstPort(), pc.hostname(), pc.proto(), pc.procInfo().UID, pc.procInfo().GID, uidToUser(pc.procInfo().UID), gidToGroup(pc.procInfo().GID), pc.procInfo().Sandbox) {
 			log.Infof("Adding rule for: %s", rule.getString(FirewallConfig.LogRedact))
 			log.Noticef("%s > %s", rule.getString(FirewallConfig.LogRedact), pc.print())
 			if rule.rtype == RULE_ACTION_ALLOW {
 				pc.accept()
+			} else if rule.rtype == RULE_ACTION_ALLOW_TLSONLY {
+				pc.acceptTLSOnly()
 			} else {
 				srcs := pc.src().String() + ":" + strconv.Itoa(int(pc.srcPort()))
-				log.Warningf("DENIED outgoing connection attempt by %s from %s %s -> %s:%d (user prompt)",
-                                pc.procInfo().ExePath, pc.proto(), srcs, pc.dst(), pc.dstPort)
+				log.Warningf("DENIED outgoing connection attempt by %s from %s %s -> %s:%d (user prompt) %v",
+					pc.procInfo().ExePath, pc.proto(), srcs, pc.dst(), pc.dstPort, rule.rtype)
 				pc.drop()
 			}
 		} else {
@@ -390,7 +406,6 @@ func printPacket(pkt *nfqueue.NFQPacket, hostname string, pinfo *procsnitch.Info
 		return fmt.Sprintf("(%s %s:%d -> %s:%d)", proto, SrcIp, SrcPort, name, DstPort)
 	}
 
-
 	return fmt.Sprintf("%s %s %s:%d -> %s:%d", pinfo.ExePath, proto, SrcIp, SrcPort, name, DstPort)
 }
 
@@ -412,20 +427,20 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 
 	}
 	_, dstip := getPacketIPAddrs(pkt)
-/*	_, dstp := getPacketPorts(pkt)
-	fwo := matchAgainstOzRules(srcip, dstip, dstp)
-	log.Notice("XXX: Attempting [2] to filter packet on rules -> ", fwo)
+	/*	_, dstp := getPacketPorts(pkt)
+		fwo := eatchAgainstOzRules(srcip, dstip, dstp)
+		log.Notice("XXX: Attempting [2] to filter packet on rules -> ", fwo)
 
-	if fwo == OZ_FWRULE_WHITELIST {
-		log.Noticef("Automatically passed through whitelisted sandbox traffic from %s to %s:%d\n", srcip, dstip, dstp)
-		pkt.Accept()
-		return
-	} else if fwo == OZ_FWRULE_BLACKLIST {
-		log.Noticef("Automatically blocking blacklisted sandbox traffic from %s to %s:%d\n", srcip, dstip, dstp)
-		pkt.SetMark(1)
-		pkt.Accept()
-		return
-	} */
+		if fwo == OZ_FWRULE_WHITELIST {
+			log.Noticef("Automatically passed through whitelisted sandbox traffic from %s to %s:%d\n", srcip, dstip, dstp)
+			pkt.Accept()
+			return
+		} else if fwo == OZ_FWRULE_BLACKLIST {
+			log.Noticef("Automatically blocking blacklisted sandbox traffic from %s to %s:%d\n", srcip, dstip, dstp)
+			pkt.SetMark(1)
+			pkt.Accept()
+			return
+		} */
 
 	ppath := "*"
 	strictness := procsnitch.MATCH_STRICT
@@ -440,8 +455,8 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 		ppath = "[unknown]"
 		optstring = "[Connection could not be mapped]"
 		log.Warningf("No proc found for %s", printPacket(pkt, fw.dns.Lookup(dstip, pinfo.Pid), nil))
-//		pkt.Accept()
-//		return
+		//		pkt.Accept()
+		//		return
 	} else {
 		ppath = pinfo.ExePath
 		cf := strings.Fields(pinfo.CmdLine)
@@ -455,13 +470,13 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 		}
 	}
 	log.Debugf("filterPacket [%s] %s", ppath, printPacket(pkt, fw.dns.Lookup(dstip, pinfo.Pid), nil))
-/*	if basicAllowPacket(pkt) {
-		pkt.Accept()
-		return
-	}
-*/
+	/*	if basicAllowPacket(pkt) {
+			pkt.Accept()
+			return
+		}
+	*/
 	policy := fw.PolicyForPath(ppath)
-//log.Notice("XXX: flunked basicallowpacket; policy = ", policy)
+	//log.Notice("XXX: flunked basicallowpacket; policy = ", policy)
 	policy.processPacket(pkt, pinfo, optstring)
 }
 
@@ -502,7 +517,7 @@ func getAllProcNetDataLocal() ([]string, error) {
 
 	for i := 0; i < len(OzInitPids); i++ {
 		fname := fmt.Sprintf("/proc/%d/net/tcp", OzInitPids[i])
-//fmt.Println("XXX: opening: ", fname)
+		//fmt.Println("XXX: opening: ", fname)
 		bdata, err := readFileDirect(fname)
 
 		if err != nil {
@@ -558,7 +573,7 @@ func LookupSandboxProc(srcip net.IP, srcp uint16, dstip net.IP, dstp uint16, pro
 	for i := 0; i < len(OzInitPids); i++ {
 		data := ""
 		fname := fmt.Sprintf("/proc/%d/net/%s", OzInitPids[i].Pid, proto)
-//fmt.Println("XXX: opening: ", fname)
+		//fmt.Println("XXX: opening: ", fname)
 		bdata, err := readFileDirect(fname)
 
 		if err != nil {
@@ -594,7 +609,8 @@ func LookupSandboxProc(srcip net.IP, srcp uint16, dstip net.IP, dstp uint16, pro
 			}
 
 			if res != nil {
-				optstr = "Sandbox: " + OzInitPids[i].Name
+				// optstr = "Sandbox: " + OzInitPids[i].Name
+				res.Sandbox = OzInitPids[i].Name
 				res.ExePath = getRealRoot(res.ExePath, OzInitPids[i].Pid)
 				break
 			}
@@ -657,7 +673,7 @@ func findProcessForPacket(pkt *nfqueue.NFQPacket, reverse bool, strictness int) 
 		for i := 0; i < len(OzInitPids); i++ {
 			data := ""
 			fname := fmt.Sprintf("/proc/%d/net/%s", OzInitPids[i].Pid, proto)
-//fmt.Println("XXX: opening: ", fname)
+			//fmt.Println("XXX: opening: ", fname)
 			bdata, err := readFileDirect(fname)
 
 			if err != nil {
@@ -725,9 +741,9 @@ func basicAllowPacket(pkt *nfqueue.NFQPacket) bool {
 	return dstip.IsLoopback() ||
 		dstip.IsLinkLocalMulticast() ||
 		(pkt.Packet.Layer(layers.LayerTypeTCP) == nil &&
-		 pkt.Packet.Layer(layers.LayerTypeUDP) == nil &&
-		 pkt.Packet.Layer(layers.LayerTypeICMPv4) == nil &&
-		 pkt.Packet.Layer(layers.LayerTypeICMPv6) == nil)
+			pkt.Packet.Layer(layers.LayerTypeUDP) == nil &&
+			pkt.Packet.Layer(layers.LayerTypeICMPv4) == nil &&
+			pkt.Packet.Layer(layers.LayerTypeICMPv6) == nil)
 }
 
 func getPacketIPAddrs(pkt *nfqueue.NFQPacket) (net.IP, net.IP) {
@@ -741,7 +757,7 @@ func getPacketIPAddrs(pkt *nfqueue.NFQPacket) (net.IP, net.IP) {
 
 	if ipLayer == nil {
 		if ipv4 {
-			return net.IP{0,0,0,0}, net.IP{0,0,0,0}
+			return net.IP{0, 0, 0, 0}, net.IP{0, 0, 0, 0}
 		}
 		return net.IP{}, net.IP{}
 	}
