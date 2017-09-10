@@ -2,12 +2,22 @@ package sgfw
 
 import (
 	"fmt"
+	"net"
 	"os/user"
 	"strconv"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/godbus/dbus"
+	"github.com/subgraph/fw-daemon/proc-coroner"
 )
+
+
+var DoMultiPrompt = true
+const MAX_PROMPTS = 3
+var outstandingPrompts = 0
+var promptLock = &sync.Mutex{}
 
 func newPrompter(conn *dbus.Conn) *prompter {
 	p := new(prompter)
@@ -29,11 +39,12 @@ type prompter struct {
 func (p *prompter) prompt(policy *Policy) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	_, ok := p.policyMap[policy.path]
+	_, ok := p.policyMap[policy.sandbox + "|" + policy.path]
 	if ok {
 		return
 	}
-	p.policyMap[policy.path] = policy
+	p.policyMap[policy.sandbox + "|" + policy.path] = policy
+	fmt.Println("Saving policy key:"+policy.sandbox + "|" + policy.path)
 	p.policyQueue = append(p.policyQueue, policy)
 	p.cond.Signal()
 }
@@ -41,26 +52,85 @@ func (p *prompter) prompt(policy *Policy) {
 func (p *prompter) promptLoop() {
 	p.lock.Lock()
 	for {
+fmt.Println("promptLoop() outer")
 		for p.processNextPacket() {
+fmt.Println("promptLoop() inner")
 		}
+fmt.Println("promptLoop() wait")
 		p.cond.Wait()
 	}
 }
 
 func (p *prompter) processNextPacket() bool {
-	pc := p.nextConnection()
-	if pc == nil {
-		return false
+	var pc pendingConnection = nil
+
+	if !DoMultiPrompt {
+		pc, _ = p.nextConnection()
+		if pc == nil {
+			return false
+		}
+		p.lock.Unlock()
+		defer p.lock.Lock()
+		p.processConnection(pc)
+		return true
+	}
+
+	empty := true
+	for {
+		pc, empty = p.nextConnection()
+fmt.Println("processNextPacket() loop; empty = ", empty, " / pc = ", pc)
+		if pc == nil && empty {
+			return false
+		} else if pc == nil {
+			continue
+		} else if pc != nil {
+			break
+		}
 	}
 	p.lock.Unlock()
 	defer p.lock.Lock()
-	p.processConnection(pc)
+	fmt.Println("Waiting for prompt lock go...")
+	for {
+		promptLock.Lock()
+		if outstandingPrompts >= MAX_PROMPTS {
+			promptLock.Unlock()
+			continue
+		}
+
+		if pc.getPrompting() {
+			fmt.Println("Skipping over already prompted connection")
+			promptLock.Unlock()
+			continue
+		}
+
+		break
+	}
+	fmt.Println("Passed prompt lock!")
+	outstandingPrompts++
+	fmt.Println("Incremented outstanding to ", outstandingPrompts)
+	promptLock.Unlock()
+//	if !pc.getPrompting() {
+		pc.setPrompting(true)
+		go p.processConnection(pc)
+//	}
 	return true
+}
+
+func processReturn (pc pendingConnection) {
+	promptLock.Lock()
+	outstandingPrompts--
+	fmt.Println("Return decremented outstanding to ", outstandingPrompts)
+	promptLock.Unlock()
+	pc.setPrompting(false)
 }
 
 func (p *prompter) processConnection(pc pendingConnection) {
 	var scope int32
 	var rule string
+
+	if DoMultiPrompt {
+		defer processReturn(pc)
+	}
 
 	addr := pc.hostname()
 	if addr == "" {
@@ -68,15 +138,30 @@ func (p *prompter) processConnection(pc pendingConnection) {
 	}
 	policy := pc.policy()
 
+	dststr := ""
+
+	if pc.dst() != nil {
+		dststr = pc.dst().String()
+	} else {
+		dststr = addr + " (proxy to resolve)"
+	}
+
 	call := p.dbusObj.Call("com.subgraph.FirewallPrompt.RequestPrompt", 0,
 		policy.application,
 		policy.icon,
 		policy.path,
 		addr,
 		int32(pc.dstPort()),
-		pc.dst().String(),
+		dststr,
+		pc.src().String(),
+		pc.proto(),
+		int32(pc.procInfo().UID),
+		int32(pc.procInfo().GID),
 		uidToUser(pc.procInfo().UID),
+		gidToGroup(pc.procInfo().GID),
 		int32(pc.procInfo().Pid),
+		pc.sandbox(),
+		pc.getOptString(),
 		FirewallConfig.PromptExpanded,
 		FirewallConfig.PromptExpert,
 		int32(FirewallConfig.DefaultActionID))
@@ -88,7 +173,38 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		return
 	}
 
-	r, err := policy.parseRule(rule, false)
+        // the prompt sends: 
+        // ALLOW|dest or DENY|dest
+        //
+        // rule string needs to be:
+        // VERB|dst|class|uid:gid|sandbox|[src]
+
+        // sometimes there's a src 
+        // this needs to be re-visited
+
+	toks := strings.Split(rule, "|")
+	//verb := toks[0]
+	//target := toks[1]
+	sandbox := ""
+
+	if len(toks) > 2 {
+		sandbox = toks[2]
+	}
+	
+	tempRule := fmt.Sprintf("%s|%s",toks[0],toks[1])
+
+	if (pc.src() != nil && !pc.src().Equal(net.ParseIP("127.0.0.1")) && sandbox != "") {
+
+		//if !strings.HasSuffix(rule, "SYSTEM") && !strings.HasSuffix(rule, "||") {
+			//rule += "||"
+		//}
+		//ule += "|||" + pc.src().String()
+		
+		tempRule += "||-1:-1|"+sandbox+"|" + pc.src().String()
+	} else {
+		tempRule += "||-1:-1|"+sandbox+"|"
+	}
+	r, err := policy.parseRule(tempRule, false)
 	if err != nil {
 		log.Warningf("Error parsing rule string returned from dbus RequestPrompt: %v", err)
 		policy.removePending(pc)
@@ -98,6 +214,10 @@ func (p *prompter) processConnection(pc pendingConnection) {
 	fscope := FilterScope(scope)
 	if fscope == APPLY_SESSION {
 		r.mode = RULE_MODE_SESSION
+	} else if fscope == APPLY_PROCESS {
+		r.mode = RULE_MODE_PROCESS
+		r.pid = pc.procInfo().Pid
+		pcoroner.MonitorProcess(r.pid)
 	}
 	if !policy.processNewRule(r, fscope) {
 		p.lock.Lock()
@@ -105,44 +225,77 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		p.removePolicy(pc.policy())
 	}
 	if fscope == APPLY_FOREVER {
+		r.mode = RULE_MODE_PERMANENT
 		policy.fw.saveRules()
 	}
+	log.Warningf("Prompt returning rule: %v", rule)
+	dbusp.alertRule("sgfw prompt added new rule")
 }
 
-func (p *prompter) nextConnection() pendingConnection {
+func (p *prompter) nextConnection() (pendingConnection, bool) {
 	for {
 		if len(p.policyQueue) == 0 {
-			return nil
+			return nil, true
 		}
 		policy := p.policyQueue[0]
-		pc := policy.nextPending()
-		if pc == nil {
+		pc, qempty := policy.nextPending()
+		if pc == nil && qempty {
 			p.removePolicy(policy)
 		} else {
-			return pc
+			if pc == nil && !qempty {
+				fmt.Println("FIX ME: I NEED TO SLEEP ON A WAKEABLE CONDITION PROPERLY!!")
+				time.Sleep(time.Millisecond * 300)
+			}
+			return pc, qempty
 		}
 	}
 }
 
 func (p *prompter) removePolicy(policy *Policy) {
-	newQueue := make([]*Policy, 0, len(p.policyQueue)-1)
+	var newQueue []*Policy = nil
+
+	if DoMultiPrompt {
+		if len(p.policyQueue) == 0 {
+			fmt.Println("Skipping over zero length policy queue")
+			newQueue = make([]*Policy, 0, 0)
+		}
+	}
+
+	if !DoMultiPrompt || newQueue == nil {
+		newQueue = make([]*Policy, 0, len(p.policyQueue)-1)
+	}
 	for _, pol := range p.policyQueue {
 		if pol != policy {
 			newQueue = append(newQueue, pol)
 		}
 	}
 	p.policyQueue = newQueue
-	delete(p.policyMap, policy.path)
+	delete(p.policyMap, policy.sandbox + "|" + policy.path)
 }
 
 var userMap = make(map[int]string)
+var groupMap = make(map[int]string)
 
 func lookupUser(uid int) string {
+	if uid == -1 {
+		return "[unknown]"
+	}
 	u, err := user.LookupId(strconv.Itoa(uid))
 	if err != nil {
 		return fmt.Sprintf("%d", uid)
 	}
-	return u.Name
+	return u.Username
+}
+
+func lookupGroup(gid int) string {
+	if gid == -1 {
+		return "[unknown]"
+	}
+	g, err := user.LookupGroupId(strconv.Itoa(gid))
+	if err != nil {
+		return fmt.Sprintf("%d", gid)
+	}
+	return g.Name
 }
 
 func uidToUser(uid int) string {
@@ -153,4 +306,14 @@ func uidToUser(uid int) string {
 	uname = lookupUser(uid)
 	userMap[uid] = uname
 	return uname
+}
+
+func gidToGroup(gid int) string {
+	gname, ok := groupMap[gid]
+	if ok {
+		return gname
+	}
+	gname = lookupGroup(gid)
+	groupMap[gid] = gname
+	return gname
 }

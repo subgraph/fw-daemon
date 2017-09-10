@@ -1,0 +1,4 @@
+iptables rules necessary to get bridge traffic routed through fw-daemon:
+
+iptables -t mangle -I PREROUTING 1 -m conntrack --ctstate NEW --proto tcp -j NFQUEUE --queue-num 0 --queue-bypass
+iptables -I FORWARD 1 -m mark --mark 0x1 -j REJECT --reject-with icmp-host-prohibited

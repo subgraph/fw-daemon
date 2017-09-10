@@ -14,6 +14,7 @@ import (
 // Info is a struct containing the result of a socket proc query
 type Info struct {
 	UID           int
+	GID           int
 	Pid           int
 	ParentPid     int
 	loaded        bool
@@ -22,6 +23,7 @@ type Info struct {
 	FirstArg      string
 	ParentCmdLine string
 	ParentExePath string
+	Sandbox	      string
 }
 
 type pidCache struct {
@@ -175,6 +177,7 @@ func (pi *Info) loadProcessInfo() bool {
 	}
 	sys := finfo.Sys().(*syscall.Stat_t)
 	pi.UID = int(sys.Uid)
+	pi.GID = int(sys.Gid)
 	pi.ParentPid = ppid
 	pi.ParentCmdLine = string(pbs)
 	pi.ParentExePath = string(pexePath)

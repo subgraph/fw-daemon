@@ -2,6 +2,7 @@ package procsnitch
 
 import (
 	"encoding/hex"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/op/go-logging"
@@ -9,9 +10,11 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"unsafe"
 )
 
 var log = logging.MustGetLogger("go-procsockets")
+var isLittleEndian = -1
 
 // SetLogger allows setting a custom go-logging instance
 func SetLogger(logger *logging.Logger) {
@@ -66,9 +69,36 @@ func FindProcessForConnection(conn net.Conn, procInfo ProcInfo) *Info {
 	return info
 }
 
+// LookupICMPSocketProcessAll searches for a ICMP socket a given source host, destination IP, and type
+func LookupICMPSocketProcessAll(srcAddr net.IP, dstAddr net.IP, code int, custdata []string) *Info {
+	ss := findICMPSocketAll(srcAddr, dstAddr, code, custdata)
+	if ss == nil {
+		return nil
+	}
+	return pcache.lookup(ss.inode)
+}
+
+// LookupUDPSocketProcessAll searches for a UDP socket a given source port, destination IP, and destination port - AND source destination
+func LookupUDPSocketProcessAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort uint16, custdata []string, strictness int) *Info {
+	ss := findUDPSocketAll(srcAddr, srcPort, dstAddr, dstPort, custdata, strictness)
+	if ss == nil {
+		return nil
+	}
+	return pcache.lookup(ss.inode)
+}
+
 // LookupUDPSocketProcess searches for a UDP socket with a source port
 func LookupUDPSocketProcess(srcPort uint16) *Info {
 	ss := findUDPSocket(srcPort)
+	if ss == nil {
+		return nil
+	}
+	return pcache.lookup(ss.inode)
+}
+
+// LookupTCPSocketProcessAll searches for a TCP socket a given source port, destination IP, and destination port - AND source destination
+func LookupTCPSocketProcessAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort uint16, custdata []string) *Info {
+	ss := findTCPSocketAll(srcAddr, srcPort, dstAddr, dstPort, custdata)
 	if ss == nil {
 		return nil
 	}
@@ -130,11 +160,32 @@ func ParseIP(ip string) (net.IP, error) {
 	}
 	// Reverse byte order -- /proc/net/tcp etc. is little-endian
 	// TODO: Does this vary by architecture?
-	for i, j := 0, len(dst)-1; i < j; i, j = i+1, j-1 {
-		dst[i], dst[j] = dst[j], dst[i]
+	if isLittleEndian == -1 {
+		setEndian()
 	}
-	result = net.IP(dst)
-	return result, nil
+
+	if len(dst) != 4 && len(dst) != 16 {
+		return result, errors.New("Unsupported address type (not IPv4 or IPv16)")
+	}
+
+	if isLittleEndian > 0 {
+		for i := 0; i < len(dst) / 4; i++ {
+			start, end := i*4, (i+1)*4
+			word := dst[start:end]
+			lval := binary.LittleEndian.Uint32(word)
+			binary.BigEndian.PutUint32(dst[start:], lval)
+		}
+	}
+
+/*		if len(dst) == 16 {
+			dst2 := []byte{dst[3], dst[2], dst[1], dst[0], dst[7], dst[6], dst[5], dst[4], dst[11], dst[10], dst[9], dst[8], dst[15], dst[14], dst[13], dst[12]}
+			return net.IP(dst2), nil
+		}
+		for i, j := 0, len(dst)-1; i < j; i, j = i+1, j-1 {
+			dst[i], dst[j] = dst[j], dst[i]
+		} */
+
+	return net.IP(dst), nil
 }
 
 // ParsePort parses a base16 port represented as a string to a uint16
@@ -257,4 +308,16 @@ func stripLabel(s string) string {
 		return s
 	}
 	return s[idx+1:]
+}
+
+// stolen from github.com/virtao/GoEndian
+const INT_SIZE int = int(unsafe.Sizeof(0))
+func setEndian() {
+	var i int = 0x1
+	bs := (*[INT_SIZE]byte)(unsafe.Pointer(&i))
+	if bs[0] == 0 {
+		isLittleEndian = 0
+	} else {
+		isLittleEndian = 1
+	}
 }

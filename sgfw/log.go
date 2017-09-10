@@ -4,6 +4,7 @@ import (
 	"os"
 	"syscall"
 	"unsafe"
+	"fmt"
 
 	"github.com/op/go-logging"
 )
@@ -43,14 +44,25 @@ func isTerminal(fd int) bool {
 	return err == 0
 }
 
-func setupLoggerBackend(lvl logging.Level) logging.LeveledBackend {
+func setupLoggerBackend(lvl logging.Level) (logging.LeveledBackend, logging.LeveledBackend) {
 	format := logFormat
+	sleveler := logging.LeveledBackend(nil)
 	if isTerminal(int(os.Stderr.Fd())) {
 		format = ttyFormat
+		fmt.Fprintf(os.Stderr, "Program was launched from a terminal; forcing output to syslog.\n")
+		sbackend, err := logging.NewSyslogBackend("sgfw")
+
+		if err != nil {
+			log.Error("Could not open syslog backend for logging: %v", err)
+		} else {
+			sformatter := logging.NewBackendFormatter(sbackend, logFormat)
+			sleveler = logging.AddModuleLevel(sformatter)
+			sleveler.SetLevel(lvl, "sgfw")
+		}
 	}
 	backend := logging.NewLogBackend(os.Stderr, "", 0)
 	formatter := logging.NewBackendFormatter(backend, format)
 	leveler := logging.AddModuleLevel(formatter)
 	leveler.SetLevel(lvl, "sgfw")
-	return leveler
+	return leveler, sleveler
 }

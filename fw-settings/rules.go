@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"strconv"
 
 	"github.com/subgraph/fw-daemon/sgfw"
 
@@ -17,6 +18,8 @@ type ruleList struct {
 	col1 *gtk.SizeGroup
 	col2 *gtk.SizeGroup
 	col3 *gtk.SizeGroup
+	col4 *gtk.SizeGroup
+	col5 *gtk.SizeGroup
 }
 
 type ruleRow struct {
@@ -25,6 +28,8 @@ type ruleRow struct {
 	widget          *gtk.ListBoxRow
 	gtkLabelApp     *gtk.Label
 	gtkLabelVerb    *gtk.Label
+	gtkLabelOrigin  *gtk.Label
+	gtkLabelPrivs   *gtk.Label
 	gtkLabelTarget  *gtk.Label
 	gtkButtonEdit   *gtk.Button
 	gtkButtonSave   *gtk.Button
@@ -37,6 +42,8 @@ func newRuleList(dbus *dbusObject, win *gtk.Window, list *gtk.ListBox) *ruleList
 	rl.col1, _ = gtk.SizeGroupNew(gtk.SIZE_GROUP_HORIZONTAL)
 	rl.col2, _ = gtk.SizeGroupNew(gtk.SIZE_GROUP_HORIZONTAL)
 	rl.col3, _ = gtk.SizeGroupNew(gtk.SIZE_GROUP_HORIZONTAL)
+	rl.col4, _ = gtk.SizeGroupNew(gtk.SIZE_GROUP_HORIZONTAL)
+	rl.col5, _ = gtk.SizeGroupNew(gtk.SIZE_GROUP_HORIZONTAL)
 	return rl
 }
 
@@ -59,7 +66,9 @@ func (rl *ruleList) addRules(rules []sgfw.DbusRule, mode sgfw.RuleMode) {
 		row.rl = rl
 		rl.col1.AddWidget(row.gtkLabelApp)
 		rl.col2.AddWidget(row.gtkLabelVerb)
-		rl.col3.AddWidget(row.gtkLabelTarget)
+		rl.col3.AddWidget(row.gtkLabelOrigin)
+		rl.col4.AddWidget(row.gtkLabelPrivs)
+		rl.col5.AddWidget(row.gtkLabelTarget)
 		rl.list.Add(row.widget)
 	}
 }
@@ -73,6 +82,8 @@ func createWidget(rule *sgfw.DbusRule) *ruleRow {
 		"grid", &grid,
 		"app_label", &row.gtkLabelApp,
 		"verb_label", &row.gtkLabelVerb,
+		"origin_label", &row.gtkLabelOrigin,
+		"privs_label", &row.gtkLabelPrivs,
 		"target_label", &row.gtkLabelTarget,
 		"edit_button", &row.gtkButtonEdit,
 		"save_button", &row.gtkButtonSave,
@@ -103,9 +114,20 @@ func createWidget(rule *sgfw.DbusRule) *ruleRow {
 }
 
 func (rr *ruleRow) update() {
-	rr.gtkLabelApp.SetText(rr.rule.App)
+	if rr.rule.Mode == uint16(sgfw.RULE_MODE_PROCESS) {
+		appstr := "(" + strconv.Itoa(int(rr.rule.Pid)) + ") " + rr.rule.App
+		rr.gtkLabelApp.SetText(appstr)
+	} else {
+		rr.gtkLabelApp.SetText(rr.rule.App)
+	}
 	rr.gtkLabelApp.SetTooltipText(rr.rule.Path)
 	rr.gtkLabelVerb.SetText(getVerbText(rr.rule))
+	if (rr.rule.Proto == "tcp") {
+		rr.gtkLabelOrigin.SetText(rr.rule.Origin)
+	} else {
+		rr.gtkLabelOrigin.SetText(rr.rule.Origin + " (" + rr.rule.Proto + ")")
+	}
+	rr.gtkLabelPrivs.SetText(rr.rule.Privs)
 	rr.gtkLabelTarget.SetText(getTargetText(rr.rule))
 }
 
@@ -127,13 +149,26 @@ func getTargetText(rule *sgfw.DbusRule) string {
 	}
 
 	if items[0] == "*" {
-		return fmt.Sprintf("Connections to All hosts on port %s", items[1])
+		if rule.Proto == "tcp" {
+			return fmt.Sprintf("Connections to ALL hosts on port %s", items[1])
+		} else if rule.Proto == "icmp" {
+			return fmt.Sprintf("Data to ALL hosts with ICMP code %s", items[1])
+		}
+		return fmt.Sprintf("Data to ALL hosts on port %s", items[1])
 	}
 	if items[1] == "*" {
-		return fmt.Sprintf("All connections to host %s", items[0])
+		if rule.Proto == "tcp" {
+			return fmt.Sprintf("All connections to host %s", items[0])
+		}
+		return fmt.Sprintf("All data to host %s", items[0])
 	}
 
-	return fmt.Sprintf("Connections to %s on port %s", items[0], items[1])
+	if rule.Proto == "tcp" {
+		return fmt.Sprintf("Connections to %s on port %s", items[0], items[1])
+	} else if rule.Proto == "icmp" {
+		return fmt.Sprintf("Data to %s with ICMP code %s", items[0], items[1])
+	}
+	return fmt.Sprintf("Data to %s on port %s", items[0], items[1])
 }
 
 func (rr *ruleRow) onSaveAsNew() {
@@ -167,7 +202,9 @@ func (rr *ruleRow) onDelete() {
 func (rl *ruleList) remove(rr *ruleRow) {
 	rl.col1.RemoveWidget(rr.gtkLabelApp)
 	rl.col2.RemoveWidget(rr.gtkLabelVerb)
-	rl.col3.RemoveWidget(rr.gtkLabelTarget)
+	rl.col3.RemoveWidget(rr.gtkLabelOrigin)
+	rl.col4.RemoveWidget(rr.gtkLabelPrivs)
+	rl.col5.RemoveWidget(rr.gtkLabelTarget)
 	rl.list.Remove(rr.widget)
 }
 

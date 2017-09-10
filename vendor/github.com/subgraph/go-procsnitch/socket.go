@@ -32,6 +32,12 @@ type socketStatus struct {
 type ConnectionStatus int
 
 const (
+	MATCH_STRICT = iota
+	MATCH_LOOSE
+	MATCH_LOOSEST
+)
+
+const (
 	ESTABLISHED ConnectionStatus = iota
 	SYN_SENT
 	SYN_RECV
@@ -78,6 +84,113 @@ func (ss *socketStatus) String() string {
 	return fmt.Sprintf("%s -> %s uid=%d inode=%d", ss.local, ss.remote, ss.uid, ss.inode)
 }
 
+func findICMPSocketAll(srcAddr net.IP, dstAddr net.IP, code int, custdata []string) *socketStatus {
+	proto := "icmp"
+	if srcAddr.To4() == nil {
+		proto += "6"
+	}
+
+	if custdata == nil {
+		return findSocket(proto, func(ss socketStatus) bool {
+			return ss.remote.ip.Equal(dstAddr) && ss.local.ip.Equal(srcAddr)
+		})
+	}
+
+	return findSocketCustom(proto, custdata, func(ss socketStatus) bool {
+		return ss.remote.ip.Equal(dstAddr) && ss.local.ip.Equal(srcAddr)
+	})
+}
+
+func findUDPSocketAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort uint16, custdata []string, strictness int) *socketStatus {
+	proto := "udp"
+
+	if srcAddr.To4() == nil {
+		proto += "6"
+	}
+
+	if custdata == nil {
+		if strictness == MATCH_STRICT {
+			return findSocket(proto, func(ss socketStatus) bool {
+				fmt.Println("Match strict")
+				return ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
+				//return ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
+			})
+		} else if strictness == MATCH_LOOSE {
+			return findSocket(proto, func(ss socketStatus) bool {
+				/* 
+				fmt.Println("Match loose")
+				fmt.Printf("sock dst = %v pkt dst = %v\n", ss.remote.ip, dstAddr)
+				fmt.Printf("sock port = %d pkt port = %d\n", ss.local.port, srcPort)
+				fmt.Printf("local ip: %v\n source ip: %v\n", ss.local.ip, srcAddr)
+				*/
+
+				if (ss.local.port == srcPort && (ss.local.ip.Equal(net.IPv4(0,0,0,0)) && ss.remote.ip.Equal(net.IPv4(0,0,0,0)))) {
+					fmt.Printf("Matching for UDP socket bound to *:%d\n",ss.local.port)
+					return true
+				} else if (ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)) {
+					return true
+				}
+
+				// Finally, loop through all interfaces if src port matches 
+
+				if ss.local.port == srcPort {
+					ifs, err := net.Interfaces()
+					if err != nil {
+						log.Warningf("Error on net.Interfaces(): %v", err)
+						return false
+					}
+					for _, i := range ifs {
+						addrs, err := i.Addrs()
+						if err != nil {
+							log.Warningf("Error on Interface.Addrs(): %v", err)
+							return false
+						}
+						for _, addr := range addrs {
+							var ifip net.IP
+							switch x := addr.(type) {
+								case *net.IPNet:
+									ifip = x.IP
+								case *net.IPAddr:
+									ifip = x.IP
+							}
+							if ss.local.ip.Equal(ifip) {
+								fmt.Printf("Matched on UDP socket bound to %v:%d\n",ifip,srcPort)
+								return true
+							}
+						}
+					}
+				}
+				return false
+				//return (ss.remote.ip.Equal(dstAddr) || ss.remote.ip.Equal(net.IPv4(0,0,0,0))) && ss.local.port == srcPort && (ss.local.ip.Equal(srcAddr) || ss.local.ip.Equal(net.IPv4(0,0,0,0)))
+				/*
+				return (ss.remote.ip.Equal(dstAddr) || addrMatchesAny(ss.remote.ip)) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr) ||
+					(ss.local.ip.Equal(dstAddr) || addrMatchesAny(ss.local.ip)) && ss.remote.port == srcPort && ss.remote.ip.Equal(srcAddr) */
+			})
+		}
+		return findSocket(proto, func(ss socketStatus) bool {
+			return (ss.remote.ip.Equal(dstAddr) || addrMatchesAny(ss.remote.ip)) && ss.local.port == srcPort && (ss.local.ip.Equal(srcAddr) || addrMatchesAny(ss.local.ip)) ||
+				(ss.local.ip.Equal(dstAddr) || addrMatchesAny(ss.local.ip)) && ss.remote.port == srcPort && (ss.remote.ip.Equal(srcAddr) || ss.remote.ip.Equal(srcAddr))
+		})
+
+	}
+
+	if strictness == MATCH_STRICT {
+		return findSocketCustom(proto, custdata, func(ss socketStatus) bool {
+			return ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
+		})
+	} else if strictness == MATCH_LOOSE {
+		return findSocketCustom(proto, custdata, func(ss socketStatus) bool {
+			return (ss.remote.ip.Equal(dstAddr) || addrMatchesAny(ss.remote.ip)) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr) ||
+				(ss.local.ip.Equal(dstAddr) || addrMatchesAny(ss.local.ip)) && ss.remote.port == srcPort && ss.remote.ip.Equal(srcAddr)
+		})
+	}
+
+	return findSocketCustom(proto, custdata, func(ss socketStatus) bool {
+		return (ss.remote.ip.Equal(dstAddr) || addrMatchesAny(ss.remote.ip)) && ss.local.port == srcPort && (ss.local.ip.Equal(srcAddr) || addrMatchesAny(ss.local.ip)) ||
+			(ss.local.ip.Equal(dstAddr) || addrMatchesAny(ss.local.ip)) && ss.remote.port == srcPort && (ss.remote.ip.Equal(srcAddr) || ss.remote.ip.Equal(srcAddr))
+	})
+}
+
 func findUDPSocket(srcPort uint16) *socketStatus {
 	return findSocket("udp", func(ss socketStatus) bool {
 		return ss.local.port == srcPort
@@ -85,8 +198,30 @@ func findUDPSocket(srcPort uint16) *socketStatus {
 }
 
 func findTCPSocket(srcPort uint16, dstAddr net.IP, dstPort uint16) *socketStatus {
-	return findSocket("tcp", func(ss socketStatus) bool {
+	proto := "tcp"
+	if dstAddr.To4() == nil {
+		proto += "6"
+	}
+
+	return findSocket(proto, func(ss socketStatus) bool {
 		return ss.remote.port == dstPort && ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort
+	})
+}
+
+func findTCPSocketAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort uint16, custdata []string) *socketStatus {
+	proto := "tcp"
+	if srcAddr.To4() == nil {
+		proto += "6"
+	}
+
+	if custdata == nil {
+		return findSocket(proto, func(ss socketStatus) bool {
+			return ss.remote.port == dstPort && ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
+		})
+	}
+
+	return findSocketCustom(proto, custdata, func(ss socketStatus) bool {
+		return ss.remote.port == dstPort && ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
 	})
 }
 
@@ -121,6 +256,24 @@ func findUNIXSocket(socketFile string) *socketStatus {
 		if ok {
 			ss := socketStatus{}
 			ss.inode = remoteInode
+			return &ss
+		}
+	}
+	return nil
+}
+
+func findSocketCustom(proto string, sockdata []string, matcher func(socketStatus) bool) *socketStatus {
+	var ss socketStatus
+	for _, line := range sockdata {
+		if len(line) == 0 {
+			continue
+		}
+		if err := ss.parseLine(line); err != nil {
+			log.Warningf("Unable to parse line from custom data source/%s [%s]: %v", proto, line, err)
+			continue
+		}
+		if matcher(ss) {
+			ss.line = line
 			return &ss
 		}
 	}
@@ -211,4 +364,14 @@ func getSocketLines(proto string) []string {
 		lines = lines[1:]
 	}
 	return lines
+}
+
+func addrMatchesAny(addr net.IP) bool {
+	wildcard := net.IP{0,0,0,0}
+
+	if addr.To4() == nil {
+		wildcard = net.IP{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
+	}
+
+        return wildcard.Equal(addr)
 }

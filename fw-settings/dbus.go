@@ -1,13 +1,25 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"github.com/subgraph/fw-daemon/sgfw"
-
 	"github.com/godbus/dbus"
+	"github.com/gotk3/gotk3/glib"
 )
+
 
 type dbusObject struct {
 	dbus.BusObject
+}
+
+type dbusObjectP struct {
+	dbus.BusObject
+}
+
+type dbusServer struct {
+	conn *dbus.Conn
+	run bool
 }
 
 func newDbusObject() (*dbusObject, error) {
@@ -16,6 +28,14 @@ func newDbusObject() (*dbusObject, error) {
 		return nil, err
 	}
 	return &dbusObject{conn.Object("com.subgraph.Firewall", "/com/subgraph/Firewall")}, nil
+}
+
+func newDbusObjectPrompt() (*dbusObjectP, error) {
+	conn, err := dbus.SystemBus()
+	if err != nil {
+		return nil, err
+	}
+	return &dbusObjectP{conn.Object("com.subgraph.fwprompt.EventNotifier", "/com/subgraph/fwprompt/EventNotifier")}, nil
 }
 
 func (ob *dbusObject) isEnabled() (bool, error) {
@@ -57,4 +77,42 @@ func (ob *dbusObject) getConfig() (map[string]interface{}, error) {
 
 func (ob *dbusObject) setConfig(key string, val interface{}) {
 	ob.Call("com.subgraph.Firewall.SetConfig", 0, key, dbus.MakeVariant(val))
+}
+
+func newDbusServer() (*dbusServer, error) {
+	conn, err := dbus.SystemBus()
+
+	if err != nil {
+		return nil, err
+	}
+
+	reply, err := conn.RequestName("com.subgraph.fwprompt.EventNotifier", dbus.NameFlagDoNotQueue)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if reply != dbus.RequestNameReplyPrimaryOwner {
+		return nil, errors.New("Bus name is already owned")
+	}
+
+	ds := &dbusServer{}
+
+	if err := conn.Export(ds, "/com/subgraph/fwprompt/EventNotifier", "com.subgraph.fwprompt.EventNotifier"); err != nil {
+		return nil, err
+	}
+
+	ds.conn = conn
+	ds.run = true
+	return ds, nil
+}
+
+func (ds *dbusServer) Alert(data string) *dbus.Error {
+	fmt.Println("Received Dbus update alert: ", data)
+	glib.IdleAdd(repopulateWin)
+	return nil
+}
+
+func (ob *dbusObjectP) alertRule(data string) {
+        ob.Call("com.subgraph.fwprompt.EventNotifier.Alert", 0, data)
 }

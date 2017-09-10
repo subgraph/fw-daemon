@@ -6,13 +6,22 @@ import (
 	"regexp"
 	"sync"
 	"syscall"
-	"time"
+	//	"time"
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"strings"
 
 	"github.com/op/go-logging"
-
-	"github.com/subgraph/fw-daemon/nfqueue"
+	nfqueue "github.com/subgraph/go-nfnetlink/nfqueue"
+	//	"github.com/subgraph/go-nfnetlink"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"github.com/subgraph/fw-daemon/proc-coroner"
 	"github.com/subgraph/go-procsnitch"
 )
+
+var dbusp *dbusObjectP = nil
 
 type Firewall struct {
 	dbus *dbusServer
@@ -85,20 +94,48 @@ func (fw *Firewall) reloadRules() {
 
 func (fw *Firewall) runFilter() {
 	q := nfqueue.NewNFQueue(0)
-	defer q.Destroy()
 
-	q.DefaultVerdict = nfqueue.DROP
-	q.Timeout = 5 * time.Minute
-	packets := q.Process()
+	// XXX: need to implement this
+	//	q.DefaultVerdict = nfqueue.DROP
+	// XXX: need this as well
+	//	q.Timeout = 5 * time.Minute
+
+	ps, err := q.Open()
+
+	if err != nil {
+		log.Fatal("Error opening NFQueue:", err)
+	}
+	q.EnableHWTrace()
+	defer q.Close()
+
+	go func() {
+		for p := range ps {
+			if fw.isEnabled() {
+				ipLayer := p.Packet.Layer(layers.LayerTypeIPv4)
+				if ipLayer == nil {
+					continue
+				}
+
+				ip, _ := ipLayer.(*layers.IPv4)
+				if ip == nil {
+					continue
+				}
+
+				if ip.Version == 6 {
+					ip6p := gopacket.NewPacket(ip.LayerContents(), layers.LayerTypeIPv6, gopacket.Default)
+					p.Packet = ip6p
+
+				}
+
+				fw.filterPacket(p)
+			} else {
+				p.Accept()
+			}
+		}
+	}()
 
 	for {
 		select {
-		case pkt := <-packets:
-			if fw.isEnabled() {
-				fw.filterPacket(pkt)
-			} else {
-				pkt.Accept()
-			}
 		case <-fw.reloadRulesChan:
 			fw.loadRules()
 		case <-fw.stopChan:
@@ -107,12 +144,66 @@ func (fw *Firewall) runFilter() {
 	}
 }
 
+type SocksJsonConfig struct {
+	Name          string
+	SocksListener string
+	TorSocks      string
+}
+
 var commentRegexp = regexp.MustCompile("^[ \t]*#")
+
+const defaultSocksCfgPath = "/etc/sgfw/fw-daemon-socks.json"
+
+func loadSocksConfiguration(configFilePath string) (*SocksJsonConfig, error) {
+	config := SocksJsonConfig{}
+	file, err := os.Open(configFilePath)
+	if err != nil {
+		return nil, err
+	}
+	scanner := bufio.NewScanner(file)
+	bs := ""
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !commentRegexp.MatchString(line) {
+			bs += line + "\n"
+		}
+	}
+	if err := json.Unmarshal([]byte(bs), &config); err != nil {
+		return nil, err
+	}
+	return &config, nil
+}
+
+func getSocksChainConfig(config *SocksJsonConfig) *socksChainConfig {
+	// TODO: fix this to support multiple named proxy forwarders of different types
+	fields := strings.Split(config.TorSocks, "|")
+	torSocksNet := fields[0]
+	torSocksAddr := fields[1]
+	fields = strings.Split(config.SocksListener, "|")
+	socksListenNet := fields[0]
+	socksListenAddr := fields[1]
+	socksConfig := socksChainConfig{
+		Name:            config.Name,
+		TargetSocksNet:  torSocksNet,
+		TargetSocksAddr: torSocksAddr,
+		ListenSocksNet:  socksListenNet,
+		ListenSocksAddr: socksListenAddr,
+	}
+	log.Notice("Loaded Socks chain config:")
+	log.Notice(socksConfig)
+	return &socksConfig
+}
 
 func Main() {
 	readConfig()
-	logBackend := setupLoggerBackend(FirewallConfig.LoggingLevel)
-	log.SetBackend(logBackend)
+	logBackend, logBackend2 := setupLoggerBackend(FirewallConfig.LoggingLevel)
+
+	if logBackend2 == nil {
+		logging.SetBackend(logBackend)
+	} else {
+		logging.SetBackend(logBackend, logBackend2)
+	}
+
 	procsnitch.SetLogger(log)
 
 	if os.Geteuid() != 0 {
@@ -138,8 +229,38 @@ func Main() {
 		stopChan:        make(chan bool, 0),
 	}
 	ds.fw = fw
+	go pcoroner.MonitorThread(procDeathCallbackDNS, fw.dns)
 
 	fw.loadRules()
+
+	/*
+	   go func() {
+	           http.ListenAndServe("localhost:6060", nil)
+	   }()
+	*/
+
+	wg := sync.WaitGroup{}
+
+	config, err := loadSocksConfiguration(defaultSocksCfgPath)
+	if err != nil && !os.IsNotExist(err) {
+		panic(err)
+	}
+	if config != nil {
+		socksConfig := getSocksChainConfig(config)
+		chain := NewSocksChain(socksConfig, &wg, fw)
+		chain.start()
+	} else {
+		log.Notice("Did not find SOCKS5 configuration file at", defaultSocksCfgPath, "; ignoring subsystem...")
+	}
+
+	dbusp, err = newDbusObjectPrompt()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to connect to dbus system bus for sgfw prompt events: %v", err))
+	}
+
+	dbusp.alertRule("fw-daemon initialization")
+
+	go OzReceiver(fw)
 
 	fw.runFilter()
 
