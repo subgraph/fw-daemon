@@ -1,3 +1,9 @@
+fw-daemon (0.0.8-2) unstable; urgency=low
+
+  * Packaging metadata
+
+ -- Subgraph <info@subgraph.com>  Sun, 10 Sep 2017 21:30:00 +0000
+
 fw-daemon (0.0.8-1) unstable; urgency=low
 
   * Bump version
