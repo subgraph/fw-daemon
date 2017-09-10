@@ -9,7 +9,7 @@ import (
 	"net"
 )
 
-const ReceiverSocketPath = "/tmp/fwoz.sock"
+const ReceiverSocketPath = "/var/run/fw-daemon/fwoz.sock"
 
 func reader(r io.Reader) {
 	buf := make([]byte, 1024)

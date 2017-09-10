@@ -12,7 +12,7 @@ import (
         "github.com/subgraph/oz/ipc"
 )
 
-const ReceiverSocketPath = "/tmp/fwoz.sock"
+const ReceiverSocketPath = "/var/run/fw-daemon/fwoz.sock"
 
 
 type OzInitProc struct {
