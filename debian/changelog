@@ -1,3 +1,9 @@
+fw-daemon (0.0.7-1) unstable; urgency=low
+
+  * Improvements of various kinds
+
+ -- Subgraph <info@subgraph.com>  Sun, 10 Sep 2017 17:34:00 +0000
+
 fw-daemon (0.0.6-1) unstable; urgency=low
 
   * NEW: Added .desktop launcher for fw-settings
