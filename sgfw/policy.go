@@ -175,6 +175,7 @@ func (pp *pendingPkt) print() string {
 type Policy struct {
 	fw               *Firewall
 	path             string
+	sandbox		 string
 	application      string
 	icon             string
 	rules            RuleList
@@ -188,6 +189,32 @@ func (fw *Firewall) PolicyForPath(path string) *Policy {
 	defer fw.lock.Unlock()
 
 	return fw.policyForPath(path)
+}
+
+func (fw *Firewall) PolicyForPathAndSandbox(path string, sandbox string) *Policy {
+	fw.lock.Lock()
+	defer fw.lock.Unlock()
+	
+	return fw.policyForPathAndSandbox(path, sandbox)
+}
+
+func (fw *Firewall) policyForPathAndSandbox(path string, sandbox string) *Policy {
+	policykey := sandbox + "|" + path
+	if _, ok := fw.policyMap[policykey]; !ok {
+		p := new(Policy)
+		p.fw = fw
+		p.path = path
+		p.application = path
+		p.sandbox = sandbox
+		entry := entryForPath(path)
+		if entry != nil {
+			p.application = entry.name
+			p.icon = entry.icon
+		}
+		fw.policyMap[policykey] = p
+		fw.policies = append(fw.policies, p)
+	}
+	return fw.policyMap[policykey]
 }
 
 func (fw *Firewall) policyForPath(path string) *Policy {
@@ -338,7 +365,7 @@ func (p *Policy) removeRule(r *Rule) {
 func (p *Policy) filterPending(rule *Rule) {
 	remaining := []pendingConnection{}
 	for _, pc := range p.pendingQueue {
-		if rule.match(pc.src(), pc.dst(), pc.dstPort(), pc.hostname(), pc.proto(), pc.procInfo().UID, pc.procInfo().GID, uidToUser(pc.procInfo().UID), gidToGroup(pc.procInfo().GID), pc.procInfo().Sandbox) {
+		if rule.match(pc.src(), pc.dst(), pc.dstPort(), pc.hostname(), pc.proto(), pc.procInfo().UID, pc.procInfo().GID, uidToUser(pc.procInfo().UID), gidToGroup(pc.procInfo().GID)) {
 			log.Infof("Adding rule for: %s", rule.getString(FirewallConfig.LogRedact))
 			log.Noticef("%s > %s", rule.getString(FirewallConfig.LogRedact), pc.print())
 			if rule.rtype == RULE_ACTION_ALLOW {
@@ -475,7 +502,7 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 			return
 		}
 	*/
-	policy := fw.PolicyForPath(ppath)
+	policy := fw.PolicyForPathAndSandbox(ppath,pinfo.Sandbox)
 	//log.Notice("XXX: flunked basicallowpacket; policy = ", policy)
 	policy.processPacket(pkt, pinfo, optstring)
 }
@@ -548,7 +575,7 @@ func getAllProcNetDataLocal() ([]string, error) {
 	return rlines, nil
 }
 
-func getRealRoot(pathname string, pid int) string {
+func GetRealRoot(pathname string, pid int) string {
 	pfname := fmt.Sprintf("/proc/%d/root", pid)
 	lnk, err := os.Readlink(pfname)
 
@@ -611,7 +638,7 @@ func LookupSandboxProc(srcip net.IP, srcp uint16, dstip net.IP, dstp uint16, pro
 			if res != nil {
 				// optstr = "Sandbox: " + OzInitPids[i].Name
 				res.Sandbox = OzInitPids[i].Name
-				res.ExePath = getRealRoot(res.ExePath, OzInitPids[i].Pid)
+				res.ExePath = GetRealRoot(res.ExePath, OzInitPids[i].Pid)
 				break
 			}
 		}
@@ -710,7 +737,7 @@ func findProcessForPacket(pkt *nfqueue.NFQPacket, reverse bool, strictness int) 
 
 				if res != nil {
 					optstr = "Sandbox: " + OzInitPids[i].Name
-					res.ExePath = getRealRoot(res.ExePath, OzInitPids[i].Pid)
+					res.ExePath = GetRealRoot(res.ExePath, OzInitPids[i].Pid)
 					break
 				}
 			}

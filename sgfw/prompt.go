@@ -38,11 +38,11 @@ type prompter struct {
 func (p *prompter) prompt(policy *Policy) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	_, ok := p.policyMap[policy.path]
+	_, ok := p.policyMap[policy.sandbox + "|" + policy.path]
 	if ok {
 		return
 	}
-	p.policyMap[policy.path] = policy
+	p.policyMap[policy.sandbox + "|" + policy.path] = policy
 	p.policyQueue = append(p.policyQueue, policy)
 	p.cond.Signal()
 }
@@ -268,7 +268,7 @@ func (p *prompter) removePolicy(policy *Policy) {
 		}
 	}
 	p.policyQueue = newQueue
-	delete(p.policyMap, policy.path)
+	delete(p.policyMap, policy.sandbox + "|" + policy.path)
 }
 
 var userMap = make(map[int]string)

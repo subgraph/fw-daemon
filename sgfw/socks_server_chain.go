@@ -36,6 +36,7 @@ type socksChainSession struct {
 	bndAddr      *Address
 	optData      []byte
 	procInfo     procsnitch.ProcInfo
+	pinfo	     *procsnitch.Info
 	server       *socksChain
 }
 
@@ -287,13 +288,16 @@ func (c *socksChainSession) filterConnect() (bool, bool) {
 		return false, false
 	}
 
+	c.pinfo = pinfo
+
 	if optstr == "" {
 		optstr = "Via SOCKS5: " + c.cfg.Name
 	} else {
 		optstr = "[Via SOCKS5: " + c.cfg.Name + "] " + optstr
 	}
 
-	policy := c.server.fw.PolicyForPath(pinfo.ExePath)
+	log.Warningf("Lookup policy for %v %v",pinfo.ExePath,pinfo.Sandbox)
+	policy := c.server.fw.PolicyForPathAndSandbox(GetRealRoot(pinfo.ExePath,pinfo.Pid),pinfo.Sandbox)
 
 	hostname, ip, port := c.addressDetails()
 	if ip == nil && hostname == "" {
@@ -387,7 +391,11 @@ func (c *socksChainSession) forwardTraffic(tls bool) {
 		err := TLSGuard(c.clientConn, c.upstreamConn, c.req.Addr.addrStr)
 
 		if err != nil {
-			log.Error("Dropping traffic due to TLSGuard violation: ", err)
+			if c.pinfo.Sandbox != "" {
+				log.Errorf("Dropping traffic from %s (sandbox: %s) to %s due to TLSGuard violation: %v", c.pinfo.ExePath, c.pinfo.Sandbox, c.req.Addr.addrStr, err)
+			} else {
+				log.Errorf("Dropping traffic from %s (unsandboxed) to %s due to TLSGuard violation: %v", c.pinfo.ExePath, c.req.Addr.addrStr, err)
+			}
 			return
 		} else {
 			log.Notice("TLSGuard approved certificate presented for connection to: ", c.req.Addr.addrStr)

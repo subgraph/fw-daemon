@@ -105,7 +105,7 @@ func (r *Rule) AddrString(redact bool) string {
 
 type RuleList []*Rule
 
-func (r *Rule) match(src net.IP, dst net.IP, dstPort uint16, hostname string, proto string, uid, gid int, uname, gname string, sandbox string) bool {
+func (r *Rule) match(src net.IP, dst net.IP, dstPort uint16, hostname string, proto string, uid, gid int, uname, gname string) bool {
 	if r.proto != proto {
 		return false
 	}
@@ -127,6 +127,7 @@ func (r *Rule) match(src net.IP, dst net.IP, dstPort uint16, hostname string, pr
 		return true
 	}
 	if r.hostname != "" {
+		log.Notice("comparing hostname")
 		if strings.ContainsAny(r.hostname, "*") {
 			regstr := strings.Replace(r.hostname, "*", ".?", -1)
 			match, err := regexp.MatchString(regstr, hostname)
@@ -168,25 +169,33 @@ func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint
 	}
 	// sandboxed := strings.HasPrefix(optstr, "SOCKS5|Tor / Sandbox")
 	for _, r := range *rl {
-
 		log.Notice("fuck ",r)
+		nfqproto := ""
 		log.Notice("------------ trying match of src ", src, " against: ", r, " | ", r.saddr, " / optstr = ", optstr, "; pid ", pinfo.Pid, " vs rule pid ", r.pid)
 		log.Notice("r.saddr: ", r.saddr, "src: ", src, "sandboxed ", sandboxed, "optstr: ", optstr)
 		if r.saddr == nil && src != nil && sandboxed {
 			log.Notice("! Skipping comparison against incompatible rule types: rule src = ", r.saddr, " / packet src = ", src)
-			continue
+			// continue
 		} else if r.saddr == nil && src == nil && sandboxed {
-			continue
+			// continue
+			// r.match(src, dst, dstPort, hostname, nil, pinfo.UID, pinfo.GID, uidToUser(pinfo.UID), gidToGroup(pinfo.GID))
+			nfqproto = "tcp"
 		} else if r.saddr != nil && !r.saddr.Equal(src) && r.proto != "icmp" {
 			log.Notice("! Skipping comparison of mismatching source ips")
 			continue
+		} else {
+			if pkt != nil {
+				nfqproto = getNFQProto(pkt)
+			} else {
+				log.Notice("Weird state.")
+			}
 		}
 		log.Notice("r.saddr = ", r.saddr, "src = ", src, "\n")
 		if r.pid >= 0 && r.pid != pinfo.Pid {
 			//log.Notice("! Skipping comparison of mismatching PIDs")
 			continue
 		}
-		if r.match(src, dst, dstPort, hostname, getNFQProto(pkt), pinfo.UID, pinfo.GID, uidToUser(pinfo.UID), gidToGroup(pinfo.GID), pinfo.Sandbox) {
+		if r.match(src, dst, dstPort, hostname, nfqproto, pinfo.UID, pinfo.GID, uidToUser(pinfo.UID), gidToGroup(pinfo.GID)) {
 			log.Notice("+ MATCH SUCCEEDED")
 			dstStr := dst.String()
 			if FirewallConfig.LogRedact {
@@ -211,11 +220,16 @@ func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint
 				return FILTER_DENY
 			} else if r.rtype == RULE_ACTION_ALLOW {
 				result = FILTER_ALLOW
-
+				return result
+				/*
 				if r.saddr != nil {
 					return result
 				}
-			}
+				*/
+			} else if r.rtype == RULE_ACTION_ALLOW_TLSONLY {
+				result = FILTER_ALLOW_TLSONLY
+					return result
+				}
 		} else {
 			log.Notice("+ MATCH FAILED")
 		}
@@ -425,8 +439,8 @@ func savePolicy(f *os.File, p *Policy) {
 	if !p.hasPersistentRules() {
 		return
 	}
-
-	if !writeLine(f, "["+p.path+"]") {
+	log.Warningf("p.path: ",p.path)
+	if !writeLine(f, "["+p.sandbox+"|"+p.path+"]") {
 		return
 	}
 	for _, r := range p.rules {
@@ -479,8 +493,9 @@ func (fw *Firewall) loadRules() {
 }
 
 func (fw *Firewall) processPathLine(line string) *Policy {
-	path := line[1 : len(line)-1]
-	policy := fw.policyForPath(path)
+	pathLine := line[1 : len(line)-1]
+	toks := strings.Split(pathLine, "|")
+	policy := fw.policyForPathAndSandbox(toks[1],toks[0])
 	policy.lock.Lock()
 	defer policy.lock.Unlock()
 	policy.rules = nil
@@ -489,7 +504,7 @@ func (fw *Firewall) processPathLine(line string) *Policy {
 
 func processRuleLine(policy *Policy, line string) {
 	if policy == nil {
-		log.Warningf("Cannot process rule line without first seeing path line: %s", line)
+		log.Warningf("Cannot process rule line without first seeing policy key line: %s", line)
 		return
 	}
 	_, err := policy.parseRule(line, true)
