@@ -102,6 +102,8 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 
 		data := string(buf)
 
+		log.Notice("Received incoming IPC:",data)
+
 		if data[len(data)-1] == '\n' {
 			data = data[0:len(data)-1]
 		}
@@ -176,13 +178,15 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 				sboxid, err := strconv.Atoi(tokens[3])
 				if err != nil {
 					log.Notice("IPC received invalid oz sbox number: ",tokens[3])
+					log.Notice("Data: %v", data)
 					c.Write([]byte("Bad command: sandbox id was invalid"))
 					return
 				}
 
 				// ozname := strings.Join(tokens[2:], " ")
+				log.Notice("IPC message for register-init OK.")
 				addInitPid(initpid, tokens[2], sboxid)
-				c.Write([]byte("OK.\n"))
+				c.Write([]byte("OK"))
 				return
 			} else if tokens[0] == "unregister-init" && len(tokens) == 2 {
 				initp := tokens[1]
