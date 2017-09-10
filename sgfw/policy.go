@@ -212,6 +212,7 @@ func (fw *Firewall) policyForPathAndSandbox(path string, sandbox string) *Policy
 			p.icon = entry.icon
 		}
 		fw.policyMap[policykey] = p
+		log.Infof("Creating new policy for path and sandbox: %s\n",policykey)
 		fw.policies = append(fw.policies, p)
 	}
 	return fw.policyMap[policykey]
@@ -322,7 +323,6 @@ func (p *Policy) processNewRule(r *Rule, scope FilterScope) bool {
 	if scope != APPLY_ONCE {
 		p.rules = append(p.rules, r)
 	}
-	log.Noticef("processNewRule: ",r)
 	p.filterPending(r)
 	if len(p.pendingQueue) == 0 {
 		p.promptInProgress = false

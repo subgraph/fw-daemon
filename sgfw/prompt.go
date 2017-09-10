@@ -2,6 +2,7 @@ package sgfw
 
 import (
 	"fmt"
+	"net"
 	"os/user"
 	"strconv"
 	"strings"
@@ -43,6 +44,7 @@ func (p *prompter) prompt(policy *Policy) {
 		return
 	}
 	p.policyMap[policy.sandbox + "|" + policy.path] = policy
+	fmt.Println("Saving policy key:"+policy.sandbox + "|" + policy.path)
 	p.policyQueue = append(p.policyQueue, policy)
 	p.cond.Signal()
 }
@@ -191,7 +193,7 @@ func (p *prompter) processConnection(pc pendingConnection) {
 	
 	tempRule := fmt.Sprintf("%s|%s",toks[0],toks[1])
 
-	if pc.src() != nil {
+	if (pc.src() != nil && !pc.src().Equal(net.ParseIP("127.0.0.1")) && sandbox != "") {
 
 		//if !strings.HasSuffix(rule, "SYSTEM") && !strings.HasSuffix(rule, "||") {
 			//rule += "||"
@@ -226,7 +228,7 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		r.mode = RULE_MODE_PERMANENT
 		policy.fw.saveRules()
 	}
-	log.Warningf("Creating rule: %v", rule)
+	log.Warningf("Prompt returning rule: %v", rule)
 	dbusp.alertRule("sgfw prompt added new rule")
 }
 

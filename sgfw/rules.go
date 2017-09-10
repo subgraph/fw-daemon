@@ -228,7 +228,7 @@ func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint
 				*/
 			} else if r.rtype == RULE_ACTION_ALLOW_TLSONLY {
 				result = FILTER_ALLOW_TLSONLY
-					return result
+				return result
 				}
 		} else {
 			log.Notice("+ MATCH FAILED")
