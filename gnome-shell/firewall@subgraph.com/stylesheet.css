@@ -8,8 +8,8 @@
 }
 
 .fw-prompt-dialog {
-    min-width: 450px;
-    max-width: 550px;
+    min-width: 600px;
+    max-width: 700px;
 }
 
 .fw-group-button:checked {
