@@ -1,31 +1,29 @@
 package sgfw
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
 	"net"
 	"os"
-	"bufio"
-	"strings"
 	"strconv"
-	"errors"
+	"strings"
 
-        "github.com/subgraph/oz/ipc"
+	"github.com/subgraph/oz/ipc"
 )
 
 const ReceiverSocketPath = "/var/run/fw-daemon/fwoz.sock"
 
-
 type OzInitProc struct {
-	Name string
-	Pid int
+	Name      string
+	Pid       int
 	SandboxID int
 }
 
 var OzInitPids []OzInitProc = []OzInitProc{}
 
-
 func addInitPid(pid int, name string, sboxid int) {
-fmt.Println("::::::::::: init pid added: ", pid, " -> ", name)
+	fmt.Println("::::::::::: init pid added: ", pid, " -> ", name)
 	for i := 0; i < len(OzInitPids); i++ {
 		if OzInitPids[i].Pid == pid {
 			return
@@ -37,7 +35,7 @@ fmt.Println("::::::::::: init pid added: ", pid, " -> ", name)
 }
 
 func removeInitPid(pid int) {
-fmt.Println("::::::::::: removing PID: ", pid)
+	fmt.Println("::::::::::: removing PID: ", pid)
 	for i := 0; i < len(OzInitPids); i++ {
 		if OzInitPids[i].Pid == pid {
 			OzInitPids = append(OzInitPids[:i], OzInitPids[i+1:]...)
@@ -63,7 +61,7 @@ func addFWRule(fw *Firewall, whitelist bool, srchost, dsthost, dstport string) e
 }
 
 func removeAllByIP(fw *Firewall, srcip string) bool {
-log.Notice("XXX: Attempting to remove all rules associated with Oz interface: ", srcip)
+	log.Notice("XXX: Attempting to remove all rules associated with Oz interface: ", srcip)
 	saddr := net.ParseIP(srcip)
 
 	if saddr == nil {
@@ -73,13 +71,13 @@ log.Notice("XXX: Attempting to remove all rules associated with Oz interface: ",
 	policy := fw.PolicyForPath("*")
 	nrm := 0
 
-        for _, rr := range policy.rules {
+	for _, rr := range policy.rules {
 		if rr.saddr != nil && rr.saddr.Equal(saddr) {
 			log.Notice("XXX: removing ephemeral rules by Oz interface ", srcip, ": ", rr)
 			policy.removeRule(rr)
 			nrm++
 		}
-        }
+	}
 
 	if nrm == 0 {
 		log.Notice("XXX: did not remove any rules for interface")
@@ -102,10 +100,10 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 
 		data := string(buf)
 
-		log.Notice("Received incoming IPC:",data)
+		log.Notice("Received incoming IPC:", data)
 
 		if data[len(data)-1] == '\n' {
-			data = data[0:len(data)-1]
+			data = data[0 : len(data)-1]
 		}
 
 		if data == "dump" {
@@ -141,18 +139,18 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 				c.Write([]byte(ruledesc))
 			}
 
-/*			for i := 0; i < len(sandboxRules); i++ {
-				rulestr := ""
+			/*			for i := 0; i < len(sandboxRules); i++ {
+						rulestr := ""
 
-				if sandboxRules[i].Whitelist {
-					rulestr += "whitelist"
-				} else {
-					rulestr += "blacklist"
-				}
+						if sandboxRules[i].Whitelist {
+							rulestr += "whitelist"
+						} else {
+							rulestr += "blacklist"
+						}
 
-				rulestr += " " + sandboxRules[i].SrcIf.String() + " -> " + sandboxRules[i].DstIP.String() + " : " + strconv.Itoa(int(sandboxRules[i].DstPort)) + "\n"
-				c.Write([]byte(rulestr))
-			} */
+						rulestr += " " + sandboxRules[i].SrcIf.String() + " -> " + sandboxRules[i].DstIP.String() + " : " + strconv.Itoa(int(sandboxRules[i].DstPort)) + "\n"
+						c.Write([]byte(rulestr))
+					} */
 
 			return
 		} else {
@@ -166,7 +164,7 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 
 			if tokens[0] == "register-init" && len(tokens) >= 3 {
 				initp := tokens[1]
-				
+
 				initpid, err := strconv.Atoi(initp)
 
 				if err != nil {
@@ -177,7 +175,7 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 
 				sboxid, err := strconv.Atoi(tokens[3])
 				if err != nil {
-					log.Notice("IPC received invalid oz sbox number: ",tokens[3])
+					log.Notice("IPC received invalid oz sbox number: ", tokens[3])
 					log.Notice("Data: %v", data)
 					c.Write([]byte("Bad command: sandbox id was invalid"))
 					return
@@ -234,30 +232,30 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 
 			if srcip == nil {
 				log.Notice("IP conversion failed: ", srchost)
-				srcip = net.IP{0,0,0,0}
+				srcip = net.IP{0, 0, 0, 0}
 			}
 
 			dstport := tokens[4]
 			dstp, err := strconv.Atoi(dstport)
 
-			if dstport != "*" && (err != nil || dstp < 0  || dstp > 65535) {
+			if dstport != "*" && (err != nil || dstp < 0 || dstp > 65535) {
 				log.Notice("IPC received invalid destination port: ", tokens[4])
 				c.Write([]byte("Bad command: dst port was invalid"))
 				return
 			}
 
-/*			initp := tokens[5]
-			initpid, err := strconv.Atoi(initp)
+			/*			initp := tokens[5]
+						initpid, err := strconv.Atoi(initp)
 
-			if err != nil {
-				log.Notice("IPC received invalid oz-init pid: ", initp)
-				c.Write([]byte("Bad command: init pid was invalid"))
-				return
-			} */
+						if err != nil {
+							log.Notice("IPC received invalid oz-init pid: ", initp)
+							c.Write([]byte("Bad command: init pid was invalid"))
+							return
+						} */
 
 			if add {
 				log.Noticef("Adding new rule to oz sandbox/fw: %v / %v -> %v : %v", w, srchost, dsthost, dstport)
-//				addInitPid(initpid)
+				//				addInitPid(initpid)
 				err := addFWRule(fw, w, srchost, dsthost, dstport)
 				if err != nil {
 					log.Error("Error adding dynamic OZ firewall rule to fw-daemon: ", err)
@@ -268,12 +266,10 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 				log.Notice("Removing new rule from oz sandbox/fw... ")
 			}
 
-
 			log.Notice("IPC received command: " + data)
 			c.Write([]byte("OK.\n"))
 			return
 		}
-
 
 	}
 
@@ -303,7 +299,7 @@ func OzReceiver(fw *Firewall) {
 	os.Remove(ReceiverSocketPath)
 	lfd, err := net.Listen("unix", ReceiverSocketPath)
 	if err != nil {
-	        log.Fatal("Could not open oz receiver socket:", err)
+		log.Fatal("Could not open oz receiver socket:", err)
 	}
 
 	for {
@@ -313,10 +309,9 @@ func OzReceiver(fw *Firewall) {
 		}
 
 		go ReceiverLoop(fw, fd)
-        }
+	}
 
 }
-
 
 type ListProxiesMsg struct {
 	_ string "ListProxies"
@@ -339,11 +334,12 @@ func ListProxies() ([]string, error) {
 }
 
 const OzSocketName = "@oz-control"
+
 var bSockName = OzSocketName
 
 var messageFactory = ipc.NewMsgFactory(
-        new(ListProxiesMsg),
-        new(ListProxiesResp),
+	new(ListProxiesMsg),
+	new(ListProxiesResp),
 )
 
 func clientConnect() (*ipc.MsgConn, error) {

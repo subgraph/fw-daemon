@@ -3,11 +3,10 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/subgraph/fw-daemon/sgfw"
 	"github.com/godbus/dbus"
 	"github.com/gotk3/gotk3/glib"
+	"github.com/subgraph/fw-daemon/sgfw"
 )
-
 
 type dbusObject struct {
 	dbus.BusObject
@@ -19,7 +18,7 @@ type dbusObjectP struct {
 
 type dbusServer struct {
 	conn *dbus.Conn
-	run bool
+	run  bool
 }
 
 func newDbusObject() (*dbusObject, error) {
@@ -114,5 +113,5 @@ func (ds *dbusServer) Alert(data string) *dbus.Error {
 }
 
 func (ob *dbusObjectP) alertRule(data string) {
-        ob.Call("com.subgraph.fwprompt.EventNotifier.Alert", 0, data)
+	ob.Call("com.subgraph.fwprompt.EventNotifier.Alert", 0, data)
 }

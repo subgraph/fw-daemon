@@ -1,37 +1,35 @@
 package main
 
-
 import (
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/gotk3/gotk3/glib"
-	"log"
-	"fmt"
-	"strings"
-	"strconv"
-	"os"
-	"io/ioutil"
 	"encoding/json"
-	"os/user"
-	"sync"
 	"errors"
+	"fmt"
+	"github.com/gotk3/gotk3/glib"
+	"github.com/gotk3/gotk3/gtk"
+	"io/ioutil"
+	"log"
+	"os"
+	"os/user"
+	"strconv"
+	"strings"
+	"sync"
 
 	"github.com/subgraph/fw-daemon/sgfw"
 )
 
-
 type fpPreferences struct {
 	Winheight uint
-	Winwidth uint
-	Wintop uint
-	Winleft uint
+	Winwidth  uint
+	Wintop    uint
+	Winleft   uint
 }
 
 type decisionWaiter struct {
-	Cond   *sync.Cond
-	Lock	sync.Locker
-	Ready  bool
-	Scope  int
-	Rule   string
+	Cond  *sync.Cond
+	Lock  sync.Locker
+	Ready bool
+	Scope int
+	Rule  string
 }
 
 type ruleColumns struct {
@@ -46,9 +44,8 @@ type ruleColumns struct {
 	Uname    string
 	Gname    string
 	Origin   string
-	Scope	 int
+	Scope    int
 }
-
 
 var userPrefs fpPreferences
 var mainWin *gtk.Window
@@ -62,7 +59,6 @@ var comboProto *gtk.ComboBoxText
 var radioOnce, radioProcess, radioParent, radioSession, radioPermanent *gtk.RadioButton
 var btnApprove, btnDeny, btnIgnore *gtk.Button
 var chkUser, chkGroup *gtk.CheckButton
-
 
 func dumpDecisions() {
 	fmt.Println("XXX Total of decisions pending: ", len(decisionWaiters))
@@ -80,7 +76,7 @@ func addDecision() *decisionWaiter {
 
 func promptInfo(msg string) {
 	dialog := gtk.MessageDialogNew(mainWin, 0, gtk.MESSAGE_INFO, gtk.BUTTONS_OK, "Displaying full log info:")
-//	dialog.SetDefaultGeometry(500, 200)
+	//	dialog.SetDefaultGeometry(500, 200)
 
 	tv, err := gtk.TextViewNew()
 
@@ -117,7 +113,7 @@ func promptInfo(msg string) {
 	dialog.ShowAll()
 	dialog.Run()
 	dialog.Destroy()
-//self.set_default_size(150, 100)
+	//self.set_default_size(150, 100)
 }
 
 func promptChoice(msg string) int {
@@ -137,7 +133,7 @@ func getConfigPath() string {
 	usr, err := user.Current()
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: could not determine location of user preferences file:", err, "\n");
+		fmt.Fprintf(os.Stderr, "Error: could not determine location of user preferences file:", err, "\n")
 		return ""
 	}
 
@@ -149,7 +145,7 @@ func savePreferences() bool {
 	usr, err := user.Current()
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: could not determine location of user preferences file:", err, "\n");
+		fmt.Fprintf(os.Stderr, "Error: could not determine location of user preferences file:", err, "\n")
 		return false
 	}
 
@@ -176,7 +172,7 @@ func loadPreferences() bool {
 	usr, err := user.Current()
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: could not determine location of user preferences file: %v", err, "\n");
+		fmt.Fprintf(os.Stderr, "Error: could not determine location of user preferences file: %v", err, "\n")
 		return false
 	}
 
@@ -192,7 +188,7 @@ func loadPreferences() bool {
 	err = json.Unmarshal(jfile, &userPrefs)
 
 	if err != nil {
-                fmt.Fprintf(os.Stderr, "Error: could not load preferences data from file: %v", err, "\n")
+		fmt.Fprintf(os.Stderr, "Error: could not load preferences data from file: %v", err, "\n")
 		return false
 	}
 
@@ -201,23 +197,23 @@ func loadPreferences() bool {
 }
 
 func get_hbox() *gtk.Box {
-        hbox, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	hbox, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 
-        if err != nil {
-                log.Fatal("Unable to create horizontal box:", err)
-        }
+	if err != nil {
+		log.Fatal("Unable to create horizontal box:", err)
+	}
 
-        return hbox
+	return hbox
 }
 
 func get_vbox() *gtk.Box {
-        vbox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	vbox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 
-        if err != nil {
-                log.Fatal("Unable to create vertical box:", err)
-        }
+	if err != nil {
+		log.Fatal("Unable to create vertical box:", err)
+	}
 
-        return vbox
+	return vbox
 }
 
 func get_checkbox(text string, activated bool) *gtk.CheckButton {
@@ -416,7 +412,7 @@ func setup_settings() {
 		fmt.Println("CLICKED")
 
 		if err != nil {
-			promptError("Unexpected error saving log file info: "+err.Error())
+			promptError("Unexpected error saving log file info: " + err.Error())
 			return
 		}
 
@@ -508,7 +504,6 @@ func toggleValidRuleState() {
 		}
 	}
 
-
 	btnApprove.SetSensitive(ok)
 	btnDeny.SetSensitive(ok)
 	btnIgnore.SetSensitive(ok)
@@ -554,8 +549,8 @@ func createCurrentRule() (ruleColumns, error) {
 
 	rule.UID, rule.GID = 0, 0
 	rule.Uname, rule.Gname = "", ""
-/*	Pid      int
-	Origin   string */
+	/*	Pid      int
+		Origin   string */
 
 	return rule, nil
 }
@@ -690,7 +685,7 @@ func getSelectedRule() (ruleColumns, int, error) {
 
 func main() {
 	decisionWaiters = make([]*decisionWaiter, 0)
-	_, err := newDbusServer();
+	_, err := newDbusServer()
 	if err != nil {
 		log.Fatal("Error:", err)
 		return
@@ -711,7 +706,7 @@ func main() {
 	mainWin.Connect("destroy", func() {
 		fmt.Println("Shutting down...")
 		savePreferences()
-	        gtk.MainQuit()
+		gtk.MainQuit()
 	})
 
 	mainWin.Connect("configure-event", func() {
@@ -750,7 +745,6 @@ func main() {
 	}
 
 	scrollbox.Add(box)
-
 
 	tv, err := gtk.TreeViewNew()
 
@@ -867,13 +861,13 @@ func main() {
 	btnApprove.Connect("clicked", func() {
 		rule, idx, err := getSelectedRule()
 		if err != nil {
-			promptError("Error occurred processing request: "+err.Error())
+			promptError("Error occurred processing request: " + err.Error())
 			return
 		}
 
 		rule, err = createCurrentRule()
 		if err != nil {
-			promptError("Error occurred constructing new rule: "+err.Error())
+			promptError("Error occurred constructing new rule: " + err.Error())
 			return
 		}
 
@@ -886,20 +880,20 @@ func main() {
 		if err == nil {
 			clearEditor()
 		} else {
-			promptError("Error setting new rule: "+err.Error())
+			promptError("Error setting new rule: " + err.Error())
 		}
 	})
 
 	btnDeny.Connect("clicked", func() {
 		rule, idx, err := getSelectedRule()
 		if err != nil {
-			promptError("Error occurred processing request: "+err.Error())
+			promptError("Error occurred processing request: " + err.Error())
 			return
 		}
 
 		rule, err = createCurrentRule()
 		if err != nil {
-			promptError("Error occurred constructing new rule: "+err.Error())
+			promptError("Error occurred constructing new rule: " + err.Error())
 			return
 		}
 
@@ -912,14 +906,14 @@ func main() {
 		if err == nil {
 			clearEditor()
 		} else {
-			promptError("Error setting new rule: "+err.Error())
+			promptError("Error setting new rule: " + err.Error())
 		}
 	})
 
 	btnIgnore.Connect("clicked", func() {
 		_, idx, err := getSelectedRule()
 		if err != nil {
-			promptError("Error occurred processing request: "+err.Error())
+			promptError("Error occurred processing request: " + err.Error())
 			return
 		}
 
@@ -929,15 +923,15 @@ func main() {
 		if err == nil {
 			clearEditor()
 		} else {
-			promptError("Error setting new rule: "+err.Error())
+			promptError("Error setting new rule: " + err.Error())
 		}
 	})
 
-//	tv.SetActivateOnSingleClick(true)
+	//	tv.SetActivateOnSingleClick(true)
 	tv.Connect("row-activated", func() {
 		seldata, _, err := getSelectedRule()
 		if err != nil {
-			promptError("Unexpected error reading selected rule: "+err.Error())
+			promptError("Unexpected error reading selected rule: " + err.Error())
 			return
 		}
 
@@ -980,14 +974,13 @@ func main() {
 		return
 	})
 
-
 	scrollbox.SetSizeRequest(600, 400)
 	Notebook.AppendPage(scrollbox, nbLabel)
-//	setup_settings()
+	//	setup_settings()
 	mainWin.Add(Notebook)
 
 	if userPrefs.Winheight > 0 && userPrefs.Winwidth > 0 {
-//		fmt.Printf("height was %d, width was %d\n", userPrefs.Winheight, userPrefs.Winwidth)
+		//		fmt.Printf("height was %d, width was %d\n", userPrefs.Winheight, userPrefs.Winwidth)
 		mainWin.Resize(int(userPrefs.Winwidth), int(userPrefs.Winheight))
 	} else {
 		mainWin.SetDefaultSize(850, 450)
@@ -998,6 +991,6 @@ func main() {
 	}
 
 	mainWin.ShowAll()
-//	mainWin.SetKeepAbove(true)
+	//	mainWin.SetKeepAbove(true)
 	gtk.Main()
 }

@@ -62,7 +62,6 @@ func newDbusObjectPrompt() (*dbusObjectP, error) {
 	return &dbusObjectP{conn.Object("com.subgraph.fwprompt.EventNotifier", "/com/subgraph/fwprompt/EventNotifier")}, nil
 }
 
-
 type dbusServer struct {
 	fw       *Firewall
 	conn     *dbus.Conn

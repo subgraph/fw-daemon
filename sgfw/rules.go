@@ -169,7 +169,7 @@ func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint
 	}
 	// sandboxed := strings.HasPrefix(optstr, "SOCKS5|Tor / Sandbox")
 	for _, r := range *rl {
-		log.Notice("fuck ",r)
+		log.Notice("fuck ", r)
 		nfqproto := ""
 		log.Notice("------------ trying match of src ", src, " against: ", r, " | ", r.saddr, " / optstr = ", optstr, "; pid ", pinfo.Pid, " vs rule pid ", r.pid)
 		log.Notice("r.saddr: ", r.saddr, "src: ", src, "sandboxed ", sandboxed, "optstr: ", optstr)
@@ -222,14 +222,14 @@ func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint
 				result = FILTER_ALLOW
 				return result
 				/*
-				if r.saddr != nil {
-					return result
-				}
+					if r.saddr != nil {
+						return result
+					}
 				*/
 			} else if r.rtype == RULE_ACTION_ALLOW_TLSONLY {
 				result = FILTER_ALLOW_TLSONLY
 				return result
-				}
+			}
 		} else {
 			log.Notice("+ MATCH FAILED")
 		}
@@ -439,7 +439,7 @@ func savePolicy(f *os.File, p *Policy) {
 	if !p.hasPersistentRules() {
 		return
 	}
-	log.Warningf("p.path: ",p.path)
+	log.Warningf("p.path: ", p.path)
 	if !writeLine(f, "["+p.sandbox+"|"+p.path+"]") {
 		return
 	}
@@ -495,7 +495,7 @@ func (fw *Firewall) loadRules() {
 func (fw *Firewall) processPathLine(line string) *Policy {
 	pathLine := line[1 : len(line)-1]
 	toks := strings.Split(pathLine, "|")
-	policy := fw.policyForPathAndSandbox(toks[1],toks[0])
+	policy := fw.policyForPathAndSandbox(toks[1], toks[0])
 	policy.lock.Lock()
 	defer policy.lock.Unlock()
 	policy.rules = nil

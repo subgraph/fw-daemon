@@ -108,7 +108,7 @@ func repopulateWin() {
 	rlSystem.loadRules(sgfw.RULE_MODE_SYSTEM)
 
 	loadConfig(win, fwsbuilder, dbus)
-//	app.AddWindow(win)
+	//	app.AddWindow(win)
 	win.ShowAll()
 }
 
@@ -179,11 +179,11 @@ func main() {
 	}
 	app.Connect("activate", activate)
 
-	_, err = newDbusServer();
+	_, err = newDbusServer()
 
 	if err != nil {
 		panic(fmt.Sprintf("Error initializing Dbus server: %v", err))
-        }
+	}
 
 	app.Run(os.Args)
 }

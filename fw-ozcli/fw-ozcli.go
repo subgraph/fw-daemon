@@ -1,12 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"flag"
-	"strconv"
+	"fmt"
 	"io"
 	"log"
 	"net"
+	"strconv"
 )
 
 const ReceiverSocketPath = "/var/run/fw-daemon/fwoz.sock"
@@ -19,8 +19,8 @@ func reader(r io.Reader) {
 		if err != nil {
 			return
 		}
-	fmt.Println(string(buf[0:n]))
-    }
+		fmt.Println(string(buf[0:n]))
+	}
 }
 
 func main() {
@@ -87,4 +87,3 @@ func main() {
 	}
 
 }
-

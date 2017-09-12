@@ -4,13 +4,12 @@ import (
 	"errors"
 	"github.com/godbus/dbus"
 	"log"
-//	"github.com/gotk3/gotk3/glib"
+	//	"github.com/gotk3/gotk3/glib"
 )
-
 
 type dbusServer struct {
 	conn *dbus.Conn
-	run bool
+	run  bool
 }
 
 type promptData struct {
@@ -33,7 +32,6 @@ type promptData struct {
 	Expert      bool
 	Action      int
 }
-
 
 func newDbusServer() (*dbusServer, error) {
 	conn, err := dbus.SystemBus()
@@ -65,7 +63,7 @@ func newDbusServer() (*dbusServer, error) {
 }
 
 func (ds *dbusServer) RequestPrompt(application, icon, path, address string, port int32, ip, origin, proto string, uid, gid int32, username, groupname string, pid int32, sandbox string,
-			optstring string, expanded, expert bool, action int32) (int32, string, *dbus.Error) {
+	optstring string, expanded, expert bool, action int32) (int32, string, *dbus.Error) {
 	log.Printf("request prompt: app = %s, icon = %s, path = %s, address = %s, action = %v\n", application, icon, path, address, action)
 	decision := addRequest(nil, path, proto, int(pid), ip, address, int(port), int(uid), int(gid), origin, optstring, sandbox)
 	log.Print("Waiting on decision...")
@@ -75,6 +73,6 @@ func (ds *dbusServer) RequestPrompt(application, icon, path, address string, por
 	}
 	log.Print("Decision returned: ", decision.Rule)
 	decision.Cond.L.Unlock()
-//	glib.IdleAdd(func, data)
+	//	glib.IdleAdd(func, data)
 	return int32(decision.Scope), decision.Rule, nil
 }

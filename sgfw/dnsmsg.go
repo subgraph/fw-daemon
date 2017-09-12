@@ -758,14 +758,14 @@ func unpackRR(msg []byte, off int) (rr dnsRR, off1 int, ok bool) {
 // A manually-unpacked version of (id, bits).
 // This is in its own struct for easy printing.
 type dnsMsgHdr struct {
-	id                  uint16
-	response            bool
-	opcode              int
-	authoritative       bool
-	truncated           bool
-	recursionDesired    bool
-	recursionAvailable  bool
-	rcode               int
+	id                 uint16
+	response           bool
+	opcode             int
+	authoritative      bool
+	truncated          bool
+	recursionDesired   bool
+	recursionAvailable bool
+	rcode              int
 }
 
 func (h *dnsMsgHdr) Walk(f func(v interface{}, name, tag string) bool) bool {

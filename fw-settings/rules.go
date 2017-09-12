@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 	"strconv"
+	"strings"
 
 	"github.com/subgraph/fw-daemon/sgfw"
 
@@ -122,7 +122,7 @@ func (rr *ruleRow) update() {
 	}
 	rr.gtkLabelApp.SetTooltipText(rr.rule.Path)
 	rr.gtkLabelVerb.SetText(getVerbText(rr.rule))
-	if (rr.rule.Proto == "tcp") {
+	if rr.rule.Proto == "tcp" {
 		rr.gtkLabelOrigin.SetText(rr.rule.Origin)
 	} else {
 		rr.gtkLabelOrigin.SetText(rr.rule.Origin + " (" + rr.rule.Proto + ")")

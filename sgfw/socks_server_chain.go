@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/subgraph/go-procsnitch"
-	"strings"
 	"strconv"
+	"strings"
 )
 
 type socksChainConfig struct {
@@ -17,7 +17,7 @@ type socksChainConfig struct {
 	TargetSocksAddr string
 	ListenSocksNet  string
 	ListenSocksAddr string
-	Name		string
+	Name            string
 }
 
 type socksChain struct {
@@ -36,27 +36,27 @@ type socksChainSession struct {
 	bndAddr      *Address
 	optData      []byte
 	procInfo     procsnitch.ProcInfo
-	pinfo	     *procsnitch.Info
+	pinfo        *procsnitch.Info
 	server       *socksChain
 }
 
 const (
-	socksVerdictDrop   = 1
-	socksVerdictAccept = 2
+	socksVerdictDrop          = 1
+	socksVerdictAccept        = 2
 	socksVerdictAcceptTLSOnly = 3
 )
 
 type pendingSocksConnection struct {
-	pol      *Policy
-	hname    string
-	srcIP   net.IP
-	destIP   net.IP
+	pol        *Policy
+	hname      string
+	srcIP      net.IP
+	destIP     net.IP
 	sourcePort uint16
-	destPort uint16
-	pinfo    *procsnitch.Info
-	verdict  chan int
-	prompting bool
-	optstr   string
+	destPort   uint16
+	pinfo      *procsnitch.Info
+	verdict    chan int
+	prompting  bool
+	optstr     string
 }
 
 func (sc *pendingSocksConnection) sandbox() string {
@@ -103,9 +103,9 @@ func (sc *pendingSocksConnection) deliverVerdict(v int) {
 
 func (sc *pendingSocksConnection) accept() { sc.deliverVerdict(socksVerdictAccept) }
 
-// need to generalize special accept 
+// need to generalize special accept
 
-func (sc *pendingSocksConnection) acceptTLSOnly() {sc.deliverVerdict(socksVerdictAcceptTLSOnly) }
+func (sc *pendingSocksConnection) acceptTLSOnly() { sc.deliverVerdict(socksVerdictAcceptTLSOnly) }
 
 func (sc *pendingSocksConnection) drop() { sc.deliverVerdict(socksVerdictDrop) }
 
@@ -172,7 +172,7 @@ func (c *socksChainSession) sessionWorker() {
 
 	if len(c.req.Auth.Uname) == 0 && len(c.req.Auth.Passwd) == 0 {
 		// Randomize username and password to force a new TOR circuit with each connection
-		rndbytes := []byte("sgfw" + strconv.Itoa(int(time.Now().UnixNano()) ^ os.Getpid()))
+		rndbytes := []byte("sgfw" + strconv.Itoa(int(time.Now().UnixNano())^os.Getpid()))
 		c.req.Auth.Uname = rndbytes
 		c.req.Auth.Passwd = rndbytes
 	}
@@ -230,7 +230,7 @@ func findProxyEndpoint(pdata []string, conn net.Conn) (*procsnitch.Info, string)
 		s1, d1, s2, d2 := toks[0], toks[2], toks[3], toks[5]
 
 		if strings.HasSuffix(d1, ",") {
-			d1 = d1[0:len(d1)-1]
+			d1 = d1[0 : len(d1)-1]
 		}
 
 		if conn.LocalAddr().String() == d2 && conn.RemoteAddr().String() == s2 {
@@ -296,15 +296,15 @@ func (c *socksChainSession) filterConnect() (bool, bool) {
 		optstr = "[Via SOCKS5: " + c.cfg.Name + "] " + optstr
 	}
 
-	log.Warningf("Lookup policy for %v %v",pinfo.ExePath,pinfo.Sandbox)
-	policy := c.server.fw.PolicyForPathAndSandbox(GetRealRoot(pinfo.ExePath,pinfo.Pid),pinfo.Sandbox)
+	log.Warningf("Lookup policy for %v %v", pinfo.ExePath, pinfo.Sandbox)
+	policy := c.server.fw.PolicyForPathAndSandbox(GetRealRoot(pinfo.ExePath, pinfo.Pid), pinfo.Sandbox)
 
 	hostname, ip, port := c.addressDetails()
 	if ip == nil && hostname == "" {
 		return false, false
 	}
 	result := policy.rules.filter(nil, nil, ip, port, hostname, pinfo, optstr)
-	log.Errorf("result %v",result)
+	log.Errorf("result %v", result)
 	switch result {
 	case FILTER_DENY:
 		return false, false
@@ -315,7 +315,7 @@ func (c *socksChainSession) filterConnect() (bool, bool) {
 	case FILTER_PROMPT:
 		caddr := c.clientConn.RemoteAddr().String()
 		caddrt := strings.Split(caddr, ":")
-		caddrIP := net.IP{0,0,0,0}
+		caddrIP := net.IP{0, 0, 0, 0}
 		caddrPort := uint16(0)
 
 		if len(caddrt) != 2 {

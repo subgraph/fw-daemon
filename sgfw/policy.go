@@ -175,7 +175,7 @@ func (pp *pendingPkt) print() string {
 type Policy struct {
 	fw               *Firewall
 	path             string
-	sandbox		 string
+	sandbox          string
 	application      string
 	icon             string
 	rules            RuleList
@@ -194,7 +194,7 @@ func (fw *Firewall) PolicyForPath(path string) *Policy {
 func (fw *Firewall) PolicyForPathAndSandbox(path string, sandbox string) *Policy {
 	fw.lock.Lock()
 	defer fw.lock.Unlock()
-	
+
 	return fw.policyForPathAndSandbox(path, sandbox)
 }
 
@@ -212,7 +212,7 @@ func (fw *Firewall) policyForPathAndSandbox(path string, sandbox string) *Policy
 			p.icon = entry.icon
 		}
 		fw.policyMap[policykey] = p
-		log.Infof("Creating new policy for path and sandbox: %s\n",policykey)
+		log.Infof("Creating new policy for path and sandbox: %s\n", policykey)
 		fw.policies = append(fw.policies, p)
 	}
 	return fw.policyMap[policykey]
@@ -502,7 +502,7 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 			return
 		}
 	*/
-	policy := fw.PolicyForPathAndSandbox(ppath,pinfo.Sandbox)
+	policy := fw.PolicyForPathAndSandbox(ppath, pinfo.Sandbox)
 	//log.Notice("XXX: flunked basicallowpacket; policy = ", policy)
 	policy.processPacket(pkt, pinfo, optstring)
 }

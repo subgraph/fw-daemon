@@ -1,10 +1,10 @@
 package sgfw
 
 import (
+	"fmt"
 	"os"
 	"syscall"
 	"unsafe"
-	"fmt"
 
 	"github.com/op/go-logging"
 )
