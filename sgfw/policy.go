@@ -584,6 +584,10 @@ func GetRealRoot(pathname string, pid int) string {
 		return pathname
 	}
 
+	if lnk == "/" {
+		return pathname
+	}
+		
 	if strings.HasPrefix(pathname, lnk) {
 		return pathname[len(lnk):]
 	}
@@ -633,6 +637,8 @@ func LookupSandboxProc(srcip net.IP, srcp uint16, dstip net.IP, dstp uint16, pro
 				res = procsnitch.LookupUDPSocketProcessAll(srcip, srcp, dstip, dstp, rlines, strictness)
 			} else if proto == "icmp" {
 				res = procsnitch.LookupICMPSocketProcessAll(srcip, dstip, icode, rlines)
+			} else {
+				fmt.Printf("unknown proto: %s",proto)
 			}
 
 			if res != nil {
@@ -640,6 +646,9 @@ func LookupSandboxProc(srcip net.IP, srcp uint16, dstip net.IP, dstp uint16, pro
 				res.Sandbox = OzInitPids[i].Name
 				res.ExePath = GetRealRoot(res.ExePath, OzInitPids[i].Pid)
 				break
+			}
+			else {
+				fmt.Printf("Couldn't find sandbox name.\n")
 			}
 		}
 
