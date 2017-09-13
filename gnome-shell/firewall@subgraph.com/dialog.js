@@ -458,7 +458,7 @@ const PromptDialog = new Lang.Class({
     Name: 'PromptDialog',
     Extends: ModalDialog.ModalDialog,
 
-    _init: function(invocation, pid_known, sandboxed) {
+    _init: function(invocation, pid_known, sandboxed, tlsguard) {
         this.parent({ styleClass: 'fw-prompt-dialog' });
         this._invocation = invocation;
         this.header = new PromptDialogHeader();
@@ -471,7 +471,7 @@ const PromptDialog = new Lang.Class({
         this.info = new DetailSection(sandboxed);
         box.add_child(this.info.actor);
 
-        this.optionList = new OptionList(pid_known, sandboxed);
+        this.optionList = new OptionList(pid_known, tlsguard);
         box.add_child(this.optionList.actor);
         this.optionList.addOptions([
             "Only PORT AND ADDRESS",
@@ -479,7 +479,7 @@ const PromptDialog = new Lang.Class({
             "Only PORT",
             "Any Connection"]);
 
-	if (sandboxed) {
+	if (tlsguard) {
 		this.optionList.addTLSOption(true);
 	}
 
@@ -548,12 +548,12 @@ const PromptDialog = new Lang.Class({
         return this.optionList.tlsGuard;
     },
 
-    update: function(application, icon, path, address, port, ip, origin, uid, gid, user, group, pid, proto, optstring, sandbox, expanded, expert, action) {
+    update: function(application, icon, path, address, port, ip, origin, uid, gid, user, group, pid, proto, tlsguard, optstring, sandbox, expanded, expert, action) {
         this._address = address;
         this._port = port;
 	this._proto = proto;
 	this._sandbox = sandbox;
-	this._tlsGuard;
+	this._tlsGuard = tlsguard;
 
         let port_str = (proto+"").toUpperCase() + " Port "+ port;
 

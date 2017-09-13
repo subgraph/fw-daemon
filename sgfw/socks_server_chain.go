@@ -63,6 +63,10 @@ func (sc *pendingSocksConnection) sandbox() string {
 	return sc.pinfo.Sandbox
 }
 
+func (sc *pendingSocksConnection) socks() bool {
+	return true
+}
+
 func (sc *pendingSocksConnection) policy() *Policy {
 	return sc.pol
 }
@@ -312,7 +316,7 @@ func (c *socksChainSession) filterConnect() (bool, bool) {
 		return false, false
 	}
 	result := policy.rules.filter(nil, nil, ip, port, hostname, pinfo, optstr)
-	log.Errorf("result %v", result)
+	log.Errorf("result %v len(RuleList): %d", result, len(policy.rules))
 	switch result {
 	case FILTER_DENY:
 		return false, false

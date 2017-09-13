@@ -162,6 +162,7 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		gidToGroup(pc.procInfo().GID),
 		int32(pc.procInfo().Pid),
 		pc.sandbox(),
+		pc.socks(),
 		pc.getOptString(),
 		FirewallConfig.PromptExpanded,
 		FirewallConfig.PromptExpert,
@@ -229,7 +230,7 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		r.mode = RULE_MODE_PERMANENT
 		policy.fw.saveRules()
 	}
-	log.Warningf("Prompt returning rule: %v", rule)
+	log.Warningf("Prompt returning rule: %v", tempRule)
 	dbusp.alertRule("sgfw prompt added new rule")
 }
 

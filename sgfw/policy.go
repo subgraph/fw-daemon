@@ -46,6 +46,7 @@ type pendingConnection interface {
 	dst() net.IP
 	dstPort() uint16
 	sandbox() string
+	socks() bool
 	accept()
 	acceptTLSOnly()
 	drop()
@@ -76,6 +77,10 @@ func getEmptyPInfo() *procsnitch.Info {
 
 func (pp *pendingPkt) sandbox() string {
 	return pp.pinfo.Sandbox
+}
+
+func (pp *pendingPkt) socks() bool {
+	return false
 }
 
 func (pp *pendingPkt) policy() *Policy {
