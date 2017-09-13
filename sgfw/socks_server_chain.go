@@ -282,9 +282,11 @@ func (c *socksChainSession) filterConnect() (bool, bool) {
 	if pinfo == nil {
 		pinfo = procsnitch.FindProcessForConnection(c.clientConn, c.procInfo)
 		// FIXME: TEMPORARY HACK
-		if pinfo.ExePath == "/usr/sbin/oz-daemon" {
-			log.Warningf("Rejecting unknown connection from /usr/bin/oz-daemon: %v", )	
-			return false, false
+		if pinfo != nil {
+			if pinfo.ExePath == "/usr/sbin/oz-daemon" {
+				log.Warningf("Rejecting unknown connection from /usr/bin/oz-daemon.")
+				return false, false
+			}
 		}
 
 	}
