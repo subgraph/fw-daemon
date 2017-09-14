@@ -1,3 +1,9 @@
+fw-daemon (0.0.10-1) unstable; urgency=low
+
+  * Bugfixes related to sgfw socks filtering, a temporary ugly hack
+
+ -- Subgraph <info@subgraph.com>  Thu, 14 Sep 2017 18:18:00 +0000
+
 fw-daemon (0.0.9-3) unstable; urgency=low
 
   * Adjust permissions on /var/run/fw-daemon
