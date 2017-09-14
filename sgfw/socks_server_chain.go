@@ -404,9 +404,9 @@ func (c *socksChainSession) forwardTraffic(tls bool) {
 
 		if err != nil {
 			if c.pinfo.Sandbox != "" {
-				log.Errorf("Dropping traffic from %s (sandbox: %s) to %s due to TLSGuard violation: %v", c.pinfo.ExePath, c.pinfo.Sandbox, c.req.Addr.addrStr, err)
+				log.Errorf("TLSGuard violation: Dropping traffic from %s (sandbox: %s) to %s: %v", c.pinfo.ExePath, c.pinfo.Sandbox, c.req.Addr.addrStr, err)
 			} else {
-				log.Errorf("Dropping traffic from %s (unsandboxed) to %s due to TLSGuard violation: %v", c.pinfo.ExePath, c.req.Addr.addrStr, err)
+				log.Errorf("TLSGuard violation: Dropping traffic from %s (unsandboxed) to %s: %v", c.pinfo.ExePath, c.req.Addr.addrStr, err)
 			}
 			return
 		} else {
