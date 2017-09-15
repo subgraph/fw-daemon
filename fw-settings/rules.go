@@ -135,6 +135,9 @@ func getVerbText(rule *sgfw.DbusRule) string {
 	if sgfw.RuleAction(rule.Verb) == sgfw.RULE_ACTION_ALLOW {
 		return sgfw.RuleActionString[sgfw.RULE_ACTION_ALLOW] + ":"
 	}
+	if sgfw.RuleAction(rule.Verb) == sgfw.RULE_ACTION_ALLOW_TLSONLY {
+		return sgfw.RuleActionString[sgfw.RULE_ACTION_ALLOW_TLSONLY] + ":"
+	}
 	return sgfw.RuleActionString[sgfw.RULE_ACTION_DENY] + ":"
 }
 
@@ -180,11 +183,24 @@ func (rr *ruleRow) onEdit() {
 }
 
 func (rr *ruleRow) onDelete() {
-	body := fmt.Sprintf(`Are you sure you want to delete this rule:
+	var body string
+	if rr.rule.Sandbox != "" {
+		ss := `Are you sure you want to delete this rule:
 
 	<b>Path:</b>   %s
 
-	<b>Rule:</b>   %s %s`, rr.rule.Path, getVerbText(rr.rule), getTargetText(rr.rule))
+	<b>Sandbox:</b>   %s
+
+	<b>Rule:</b>   %s %s`
+		body = fmt.Sprintf(ss, rr.rule.Path, rr.rule.Sandbox, getVerbText(rr.rule), getTargetText(rr.rule))
+	} else {
+		ss := `Are you sure you want to delete this rule:
+
+	<b>Path:</b>   %s
+
+	<b>Rule:</b>   %s %s`
+		body = fmt.Sprintf(ss, rr.rule.Path, getVerbText(rr.rule), getTargetText(rr.rule))
+	}
 	d := gtk.MessageDialogNewWithMarkup(
 		rr.rl.win,
 		gtk.DIALOG_DESTROY_WITH_PARENT,

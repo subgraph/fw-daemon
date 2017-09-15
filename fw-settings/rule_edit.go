@@ -18,13 +18,15 @@ const (
 )
 
 type ruleEdit struct {
-	row       *ruleRow
-	dialog    *gtk.Dialog
-	pathLabel *gtk.Label
-	verbCombo *gtk.ComboBoxText
-	hostEntry *gtk.Entry
-	portEntry *gtk.Entry
-	ok        *gtk.Button
+	row          *ruleRow
+	dialog       *gtk.Dialog
+	pathLabel    *gtk.Label
+	sandboxLabel *gtk.Label
+	sandboxTitle *gtk.Label
+	verbCombo    *gtk.ComboBoxText
+	hostEntry    *gtk.Entry
+	portEntry    *gtk.Entry
+	ok           *gtk.Button
 }
 
 func newRuleEdit(rr *ruleRow, saveasnew bool) *ruleEdit {
@@ -33,6 +35,8 @@ func newRuleEdit(rr *ruleRow, saveasnew bool) *ruleEdit {
 	b.getItems(
 		"dialog", &redit.dialog,
 		"path_label", &redit.pathLabel,
+		"sandbox_label", &redit.sandboxLabel,
+		"sandbox_title", &redit.sandboxTitle,
 		"verb_combo", &redit.verbCombo,
 		"host_entry", &redit.hostEntry,
 		"port_entry", &redit.portEntry,
@@ -54,8 +58,16 @@ func (re *ruleEdit) updateDialogFields() {
 	re.pathLabel.SetText(r.Path)
 	if sgfw.RuleAction(r.Verb) == sgfw.RULE_ACTION_ALLOW {
 		re.verbCombo.SetActiveID("allow")
+	} else if sgfw.RuleAction(r.Verb) == sgfw.RULE_ACTION_ALLOW_TLSONLY {
+		re.verbCombo.SetActiveID("allow_tls")
 	} else {
 		re.verbCombo.SetActiveID("deny")
+	}
+	if r.Sandbox != "" {
+		re.sandboxLabel.SetText(r.Sandbox)
+	} else {
+		re.sandboxLabel.SetVisible(false)
+		re.sandboxTitle.SetVisible(false)
 	}
 	target := strings.Split(r.Target, ":")
 	if len(target) != 2 {
@@ -67,7 +79,7 @@ func (re *ruleEdit) updateDialogFields() {
 
 func (re *ruleEdit) validateFields() bool {
 	id := re.verbCombo.GetActiveID()
-	if id != "allow" && id != "deny" {
+	if id != "allow" && id != "allow_tls" && id != "deny" {
 		return false
 	}
 	host, _ := re.hostEntry.GetText()
@@ -121,6 +133,8 @@ func (re *ruleEdit) updateRow() {
 	switch re.verbCombo.GetActiveID() {
 	case "allow":
 		r.Verb = uint16(sgfw.RULE_ACTION_ALLOW)
+	case "allow_tls":
+		r.Verb = uint16(sgfw.RULE_ACTION_ALLOW_TLSONLY)
 	case "deny":
 		r.Verb = uint16(sgfw.RULE_ACTION_DENY)
 	}

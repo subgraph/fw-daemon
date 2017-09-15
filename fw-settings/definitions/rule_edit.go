@@ -108,6 +108,7 @@ func (*defRuleEdit) String() string {
                     <property name="active">0</property>
                     <items>
                       <item id="allow" translatable="yes">Allow</item>
+                      <item id="allow_tls" translatable="yes">Allow TLS Only</item>
                       <item id="deny" translatable="yes">Deny</item>
                     </items>
                   </object>
@@ -172,7 +173,7 @@ func (*defRuleEdit) String() string {
               </object>
               <packing>
                 <property name="left_attach">0</property>
-                <property name="top_attach">2</property>
+                <property name="top_attach">3</property>
                 <property name="width">2</property>
               </packing>
             </child>
@@ -192,6 +193,34 @@ func (*defRuleEdit) String() string {
               <packing>
                 <property name="left_attach">0</property>
                 <property name="top_attach">1</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel" id="sandbox_title">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="halign">start</property>
+                <property name="hexpand">False</property>
+                <property name="label" translatable="yes">Sandbox:</property>
+                <attributes>
+                  <attribute name="weight" value="bold"/>
+                </attributes>
+              </object>
+              <packing>
+                <property name="left_attach">0</property>
+                <property name="top_attach">2</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel" id="sandbox_label">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="halign">start</property>
+                <property name="hexpand">True</property>
+              </object>
+              <packing>
+                <property name="left_attach">1</property>
+                <property name="top_attach">2</property>
               </packing>
             </child>
           </object>

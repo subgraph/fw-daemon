@@ -187,16 +187,16 @@ func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint
 			if pkt != nil {
 				nfqproto = getNFQProto(pkt)
 			} else {
-				log.Noticef("Weird state: %v %v %v %v",r.port, dstPort, hostname, r.hostname)
-				if (r.saddr == nil && src == nil && sandboxed == false && (r.port == dstPort || r.port == matchAny) && (r.addr.Equal(anyAddress) || r.hostname == "" || r.hostname == hostname)) {
+				log.Noticef("Weird state: %v %v %v %v", r.port, dstPort, hostname, r.hostname)
+				if r.saddr == nil && src == nil && sandboxed == false && (r.port == dstPort || r.port == matchAny) && (r.addr.Equal(anyAddress) || r.hostname == "" || r.hostname == hostname) {
 					log.Notice("+ Socks5 MATCH SUCCEEDED")
-						if r.rtype == RULE_ACTION_DENY {
-							return FILTER_DENY
-						} else if r.rtype == RULE_ACTION_ALLOW {
-							return FILTER_ALLOW
-						} else if r.rtype == RULE_ACTION_ALLOW_TLSONLY {
-							return FILTER_ALLOW_TLSONLY
-						}
+					if r.rtype == RULE_ACTION_DENY {
+						return FILTER_DENY
+					} else if r.rtype == RULE_ACTION_ALLOW {
+						return FILTER_ALLOW
+					} else if r.rtype == RULE_ACTION_ALLOW_TLSONLY {
+						return FILTER_ALLOW_TLSONLY
+					}
 				} else {
 					return FILTER_PROMPT
 				}
