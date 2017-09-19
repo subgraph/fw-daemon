@@ -529,18 +529,33 @@ func readFileDirect(filename string) ([]byte, error) {
 	fd := int(res)
 	data := make([]byte, 65535)
 
+        i := 0
+        val := 0
+        for i = 0; i < 65535; {
+                val, err = syscall.Read(fd, data[i:])
+                i += val
+                if err != nil  && val != 0 {
+                        return nil, err
+                }
+                if val == 0 {
+                        break
+                }
+        }
+
+        data = data[0:i]
+/*
 	val, err := syscall.Read(fd, data)
 
 	if err != nil {
 		return nil, err
 	}
-
+*/
 	syscall.Close(fd)
-
+/*
 	if val < 65535 {
 		data = data[0:val]
 	}
-
+*/
 	return data, nil
 }
 
@@ -624,7 +639,6 @@ func LookupSandboxProc(srcip net.IP, srcp uint16, dstip net.IP, dstp uint16, pro
 			data = string(bdata)
 			lines := strings.Split(data, "\n")
 			rlines := make([]string, 0)
-
 			for l := 0; l < len(lines); l++ {
 				lines[l] = strings.TrimSpace(lines[l])
 				ssplit := strings.Split(lines[l], ":")
@@ -632,9 +646,11 @@ func LookupSandboxProc(srcip net.IP, srcp uint16, dstip net.IP, dstp uint16, pro
 				if len(ssplit) != 6 {
 					continue
 				}
-
+				
 				rlines = append(rlines, strings.Join(ssplit, ":"))
 			}
+
+			log.Warningf("Looking for %s:%d => %s:%d \n %s\n******\n", srcip, srcp, dstip, dstp, data) 
 
 			if proto == "tcp" {
 				res = procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, rlines)
@@ -652,7 +668,7 @@ func LookupSandboxProc(srcip net.IP, srcp uint16, dstip net.IP, dstp uint16, pro
 				res.ExePath = GetRealRoot(res.ExePath, OzInitPids[i].Pid)
 				break
 			} else {
-				fmt.Printf("Couldn't find sandbox name.\n")
+				log.Warningf("*****\nCouldn't find proc for %s:%d => %s:%d \n %s\n******\n", srcip, srcp, dstip, dstp, data)
 			}
 		}
 
