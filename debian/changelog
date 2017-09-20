@@ -1,3 +1,9 @@
+fw-daemon (0.0.11-1) unstable; urgency=low
+
+  * Major bug fix re: failed connection lookups, cleanup, still more to do
+
+ -- Subgraph <info@subgraph.com>  Wed, 20 Sep 2017 04:07:00 +0000
+
 fw-daemon (0.0.10-1) unstable; urgency=low
 
   * Bugfixes related to sgfw socks filtering, a temporary ugly hack
