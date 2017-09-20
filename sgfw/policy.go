@@ -371,7 +371,7 @@ func (p *Policy) filterPending(rule *Rule) {
 	for _, pc := range p.pendingQueue {
 		if rule.match(pc.src(), pc.dst(), pc.dstPort(), pc.hostname(), pc.proto(), pc.procInfo().UID, pc.procInfo().GID, uidToUser(pc.procInfo().UID), gidToGroup(pc.procInfo().GID)) {
 			log.Infof("Adding rule for: %s", rule.getString(FirewallConfig.LogRedact))
-//			log.Noticef("%s > %s", rule.getString(FirewallConfig.LogRedact), pc.print())
+			//			log.Noticef("%s > %s", rule.getString(FirewallConfig.LogRedact), pc.print())
 			if rule.rtype == RULE_ACTION_ALLOW {
 				pc.accept()
 			} else if rule.rtype == RULE_ACTION_ALLOW_TLSONLY {
@@ -528,33 +528,33 @@ func readFileDirect(filename string) ([]byte, error) {
 	fd := int(res)
 	data := make([]byte, 65535)
 
-        i := 0
-        val := 0
-        for i = 0; i < 65535; {
-                val, err = syscall.Read(fd, data[i:])
-                i += val
-                if err != nil  && val != 0 {
-                        return nil, err
-                }
-                if val == 0 {
-                        break
-                }
-        }
-
-        data = data[0:i]
-/*
-	val, err := syscall.Read(fd, data)
-
-	if err != nil {
-		return nil, err
+	i := 0
+	val := 0
+	for i = 0; i < 65535; {
+		val, err = syscall.Read(fd, data[i:])
+		i += val
+		if err != nil && val != 0 {
+			return nil, err
+		}
+		if val == 0 {
+			break
+		}
 	}
-*/
+
+	data = data[0:i]
+	/*
+		val, err := syscall.Read(fd, data)
+
+		if err != nil {
+			return nil, err
+		}
+	*/
 	syscall.Close(fd)
-/*
-	if val < 65535 {
-		data = data[0:val]
-	}
-*/
+	/*
+		if val < 65535 {
+			data = data[0:val]
+		}
+	*/
 	return data, nil
 }
 
@@ -645,11 +645,11 @@ func LookupSandboxProc(srcip net.IP, srcp uint16, dstip net.IP, dstp uint16, pro
 				if len(ssplit) != 6 {
 					continue
 				}
-				
+
 				rlines = append(rlines, strings.Join(ssplit, ":"))
 			}
 
-		//	log.Warningf("Looking for %s:%d => %s:%d \n %s\n******\n", srcip, srcp, dstip, dstp, data) 
+			//	log.Warningf("Looking for %s:%d => %s:%d \n %s\n******\n", srcip, srcp, dstip, dstp, data)
 
 			if proto == "tcp" {
 				res = procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, rlines)
