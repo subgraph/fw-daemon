@@ -273,8 +273,7 @@ func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info, o
 
 func (p *Policy) processPromptResult(pc pendingConnection) {
 	p.pendingQueue = append(p.pendingQueue, pc)
-	fmt.Println("im here now.. processing prompt result..")
-	fmt.Println("processPromptResult(): p.promptInProgress = ", p.promptInProgress)
+	//fmt.Println("processPromptResult(): p.promptInProgress = ", p.promptInProgress)
 	if DoMultiPrompt || (!DoMultiPrompt && !p.promptInProgress) {
 		p.promptInProgress = true
 		go p.fw.dbus.prompt(p)
@@ -337,7 +336,7 @@ func (p *Policy) processNewRule(r *Rule, scope FilterScope) bool {
 }
 
 func (p *Policy) parseRule(s string, add bool) (*Rule, error) {
-	log.Noticef("XXX: attempt to parse rule: |%s|\n", s)
+	//log.Noticef("XXX: attempt to parse rule: |%s|\n", s)
 	r := new(Rule)
 	r.pid = -1
 	r.mode = RULE_MODE_PERMANENT
@@ -372,7 +371,7 @@ func (p *Policy) filterPending(rule *Rule) {
 	for _, pc := range p.pendingQueue {
 		if rule.match(pc.src(), pc.dst(), pc.dstPort(), pc.hostname(), pc.proto(), pc.procInfo().UID, pc.procInfo().GID, uidToUser(pc.procInfo().UID), gidToGroup(pc.procInfo().GID)) {
 			log.Infof("Adding rule for: %s", rule.getString(FirewallConfig.LogRedact))
-			log.Noticef("%s > %s", rule.getString(FirewallConfig.LogRedact), pc.print())
+//			log.Noticef("%s > %s", rule.getString(FirewallConfig.LogRedact), pc.print())
 			if rule.rtype == RULE_ACTION_ALLOW {
 				pc.accept()
 			} else if rule.rtype == RULE_ACTION_ALLOW_TLSONLY {
@@ -650,7 +649,7 @@ func LookupSandboxProc(srcip net.IP, srcp uint16, dstip net.IP, dstp uint16, pro
 				rlines = append(rlines, strings.Join(ssplit, ":"))
 			}
 
-			log.Warningf("Looking for %s:%d => %s:%d \n %s\n******\n", srcip, srcp, dstip, dstp, data) 
+		//	log.Warningf("Looking for %s:%d => %s:%d \n %s\n******\n", srcip, srcp, dstip, dstp, data) 
 
 			if proto == "tcp" {
 				res = procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, rlines)
@@ -667,9 +666,9 @@ func LookupSandboxProc(srcip net.IP, srcp uint16, dstip net.IP, dstp uint16, pro
 				res.Sandbox = OzInitPids[i].Name
 				res.ExePath = GetRealRoot(res.ExePath, OzInitPids[i].Pid)
 				break
-			} else {
+			} /*else {
 				log.Warningf("*****\nCouldn't find proc for %s:%d => %s:%d \n %s\n******\n", srcip, srcp, dstip, dstp, data)
-			}
+			} */
 		}
 
 	}
@@ -710,7 +709,7 @@ func findProcessForPacket(pkt *nfqueue.NFQPacket, reverse bool, strictness int) 
 		return nil, optstr
 	}
 
-	log.Noticef("XXX proto = %s, from %v : %v -> %v : %v\n", proto, srcip, srcp, dstip, dstp)
+	// log.Noticef("XXX proto = %s, from %v : %v -> %v : %v\n", proto, srcip, srcp, dstip, dstp)
 
 	var res *procsnitch.Info = nil
 
