@@ -279,21 +279,20 @@ func (c *socksChainSession) filterConnect() (bool, bool) {
 	var pinfo *procsnitch.Info = nil
 	var optstr = ""
 
+	// try to find process via oz-daemon known proxy endpoints
+
 	if err == nil {
 		pinfo, optstr = findProxyEndpoint(allProxies, c.clientConn)
 	}
 
+	// fall back to system-wide processes
+
 	if pinfo == nil {
 		pinfo = procsnitch.FindProcessForConnection(c.clientConn, c.procInfo)
-		// FIXME: TEMPORARY HACK
-		if pinfo != nil {
-			if pinfo.ExePath == "/usr/sbin/oz-daemon" {
-				log.Warningf("Rejecting unknown connection from /usr/bin/oz-daemon.")
-				return false, false
-			}
-		}
 
 	}
+
+	// connection maybe doesn't exist anymore
 
 	if pinfo == nil {
 		log.Warningf("No proc found for [socks5] connection from: %s", c.clientConn.RemoteAddr())
@@ -308,7 +307,6 @@ func (c *socksChainSession) filterConnect() (bool, bool) {
 		optstr = "[Via SOCKS5: " + c.cfg.Name + "] " + optstr
 	}
 
-	log.Warningf("Lookup policy for %v %v", pinfo.ExePath, pinfo.Sandbox)
 	policy := c.server.fw.PolicyForPathAndSandbox(GetRealRoot(pinfo.ExePath, pinfo.Pid), pinfo.Sandbox)
 
 	hostname, ip, port := c.addressDetails()
@@ -316,7 +314,6 @@ func (c *socksChainSession) filterConnect() (bool, bool) {
 		return false, false
 	}
 	result := policy.rules.filter(nil, nil, ip, port, hostname, pinfo, optstr)
-	log.Errorf("result %v len(RuleList): %d", result, len(policy.rules))
 	switch result {
 	case FILTER_DENY:
 		return false, false
