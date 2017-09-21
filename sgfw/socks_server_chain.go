@@ -101,6 +101,12 @@ func (sc *pendingSocksConnection) src() net.IP {
 }
 
 func (sc *pendingSocksConnection) deliverVerdict(v int) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Warning("SOCKS5 server recovered from panic while delivering firewall verdict:", r)
+		}
+	}()
+
 	sc.verdict <- v
 	close(sc.verdict)
 }

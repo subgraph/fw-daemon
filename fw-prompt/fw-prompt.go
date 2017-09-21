@@ -101,7 +101,7 @@ func promptInfo(msg string) {
 	}
 
 	scrollbox.Add(tv)
-	scrollbox.SetSizeRequest(600, 100)
+	scrollbox.SetSizeRequest(500, 100)
 
 	box, err := dialog.GetContentArea()
 
@@ -315,12 +315,20 @@ func createListStore(general bool) *gtk.ListStore {
 	return listStore
 }
 
-func addRequest(listStore *gtk.ListStore, path, proto string, pid int, ipaddr, hostname string, port, uid, gid int, origin, optstring string, sandbox string) *decisionWaiter {
+func addRequest(listStore *gtk.ListStore, path, proto string, pid int, ipaddr, hostname string, port, uid, gid int, origin string, is_socks bool, optstring string, sandbox string) *decisionWaiter {
 	if listStore == nil {
 		listStore = globalLS
 	}
 
 	iter := listStore.Append()
+
+	if (is_socks) {
+		if ((optstring != "") && (strings.Index(optstring, "SOCKS") == -1)) {
+			optstring = "SOCKS5 / " + optstring
+		} else if (optstring == "") {
+			optstring = "SOCKS5"
+		}
+	}
 
 	colVals := make([]interface{}, 11)
 	colVals[0] = 1
@@ -744,8 +752,6 @@ func main() {
 		log.Fatal("Unable to create scrolled window:", err)
 	}
 
-	scrollbox.Add(box)
-
 	tv, err := gtk.TreeViewNew()
 
 	if err != nil {
@@ -839,7 +845,9 @@ func main() {
 
 	box.PackStart(bb, false, false, 5)
 	box.PackStart(editbox, false, false, 5)
-	box.PackStart(tv, false, true, 5)
+	scrollbox.Add(tv)
+//	box.PackStart(tv, false, true, 5)
+	box.PackStart(scrollbox, false, true, 5)
 
 	tv.AppendColumn(createColumn("#", 0))
 	tv.AppendColumn(createColumn("Path", 1))
@@ -975,8 +983,9 @@ func main() {
 	})
 
 	scrollbox.SetSizeRequest(600, 400)
-	Notebook.AppendPage(scrollbox, nbLabel)
-	//	setup_settings()
+//	Notebook.AppendPage(scrollbox, nbLabel)
+	Notebook.AppendPage(box, nbLabel)
+//		setup_settings()
 	mainWin.Add(Notebook)
 
 	if userPrefs.Winheight > 0 && userPrefs.Winwidth > 0 {
