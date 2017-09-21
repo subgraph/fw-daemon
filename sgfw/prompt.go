@@ -53,11 +53,11 @@ func (p *prompter) prompt(policy *Policy) {
 func (p *prompter) promptLoop() {
 	p.lock.Lock()
 	for {
-		fmt.Println("promptLoop() outer")
+//		fmt.Println("XXX: promptLoop() outer")
 		for p.processNextPacket() {
-			fmt.Println("promptLoop() inner")
+//			fmt.Println("XXX: promptLoop() inner")
 		}
-		fmt.Println("promptLoop() wait")
+//		fmt.Println("promptLoop() wait")
 		p.cond.Wait()
 	}
 }

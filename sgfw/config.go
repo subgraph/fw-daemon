@@ -27,7 +27,13 @@ type FirewallConfigs struct {
 var FirewallConfig FirewallConfigs
 
 func _readConfig(file string) []byte {
-	f, err := os.Open(configDefaultPath)
+	envFile := os.Getenv("SGFW_CONF")
+
+        if envFile != "" {
+		file = envFile
+	}
+
+	f, err := os.Open(file)
 	if err != nil {
 		log.Warning(err.Error())
 		return []byte{}

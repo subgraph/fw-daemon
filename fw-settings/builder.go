@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"reflect"
 
 	"github.com/gotk3/gotk3/glib"
@@ -34,6 +35,19 @@ func builderForDefinition(uiName string) *gtk.Builder {
 	// assertInUIThread()
 
 	template := getDefinitionWithFileFallback(uiName)
+
+	maj := gtk.GetMajorVersion()
+	min := gtk.GetMinorVersion()
+
+	if ((maj == 3) && (min < 20)) {
+		fmt.Fprintf(os.Stderr,
+			"Attempting runtime work-around for older versions of libgtk-3...\n");
+		dep_re := regexp.MustCompile(`<\s?property\s+name\s?=\s?"icon_size"\s?>.+<\s?/property\s?>`)
+		template = dep_re.ReplaceAllString(template, ``)
+
+		dep_re2 := regexp.MustCompile(`version\s?=\s?"3.20"`)
+		template = dep_re2.ReplaceAllString(template, `version="3.18"`)
+	}
 
 	builder, err := gtk.BuilderNew()
 	if err != nil {
