@@ -15,7 +15,7 @@ import (
 
 var DoMultiPrompt = true
 
-const MAX_PROMPTS = 3
+const MAX_PROMPTS = 5
 
 var outstandingPrompts = 0
 var promptLock = &sync.Mutex{}

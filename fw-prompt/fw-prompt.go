@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/subgraph/fw-daemon/sgfw"
 )
@@ -318,6 +319,27 @@ func createListStore(general bool) *gtk.ListStore {
 func addRequest(listStore *gtk.ListStore, path, proto string, pid int, ipaddr, hostname string, port, uid, gid int, origin string, is_socks bool, optstring string, sandbox string) *decisionWaiter {
 	if listStore == nil {
 		listStore = globalLS
+		waitTimes := []int{ 1, 2, 5, 10 }
+
+		if listStore == nil {
+			log.Print("SGFW prompter was not ready to receive firewall request... waiting")
+		}
+
+		for _, wtime := range waitTimes {
+			time.Sleep(time.Duration(wtime) * time.Second)
+			listStore = globalLS
+
+			if listStore != nil {
+				break
+			}
+
+			log.Print("SGFW prompter is still waiting...")
+		}
+
+	}
+
+	if listStore == nil {
+		log.Fatal("SGFW prompter GUI failed to load for unknown reasons")
 	}
 
 	iter := listStore.Append()

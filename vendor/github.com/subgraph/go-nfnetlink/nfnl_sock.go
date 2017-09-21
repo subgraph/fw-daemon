@@ -347,10 +347,10 @@ func readErrno(data []byte) uint32 {
 // is returned as an error.
 func (s *NetlinkSocket) fillRecvBuffer() (int, error) {
 	n, from, err := syscall.Recvfrom(s.fd, s.recvBuffer, 0)
-	sa := from.(*syscall.SockaddrNetlink)
 	if err != nil {
 		return 0, err
 	}
+	sa := from.(*syscall.SockaddrNetlink)
 	if s.flags.isSet(FlagDebug) {
 		fmt.Printf("from: %d\n", sa.Groups)
 	}
