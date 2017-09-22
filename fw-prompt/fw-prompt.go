@@ -319,7 +319,7 @@ func createListStore(general bool) *gtk.ListStore {
 func addRequest(listStore *gtk.ListStore, path, proto string, pid int, ipaddr, hostname string, port, uid, gid int, origin string, is_socks bool, optstring string, sandbox string) *decisionWaiter {
 	if listStore == nil {
 		listStore = globalLS
-		waitTimes := []int{ 1, 2, 5, 10 }
+		waitTimes := []int{1, 2, 5, 10}
 
 		if listStore == nil {
 			log.Print("SGFW prompter was not ready to receive firewall request... waiting")
@@ -344,10 +344,10 @@ func addRequest(listStore *gtk.ListStore, path, proto string, pid int, ipaddr, h
 
 	iter := listStore.Append()
 
-	if (is_socks) {
-		if ((optstring != "") && (strings.Index(optstring, "SOCKS") == -1)) {
+	if is_socks {
+		if (optstring != "") && (strings.Index(optstring, "SOCKS") == -1) {
 			optstring = "SOCKS5 / " + optstring
-		} else if (optstring == "") {
+		} else if optstring == "" {
 			optstring = "SOCKS5"
 		}
 	}
@@ -868,7 +868,7 @@ func main() {
 	box.PackStart(bb, false, false, 5)
 	box.PackStart(editbox, false, false, 5)
 	scrollbox.Add(tv)
-//	box.PackStart(tv, false, true, 5)
+	//	box.PackStart(tv, false, true, 5)
 	box.PackStart(scrollbox, false, true, 5)
 
 	tv.AppendColumn(createColumn("#", 0))
@@ -1005,13 +1005,13 @@ func main() {
 	})
 
 	scrollbox.SetSizeRequest(600, 400)
-//	Notebook.AppendPage(scrollbox, nbLabel)
+	//	Notebook.AppendPage(scrollbox, nbLabel)
 	Notebook.AppendPage(box, nbLabel)
-//		setup_settings()
+	//		setup_settings()
 	mainWin.Add(Notebook)
 
 	if userPrefs.Winheight > 0 && userPrefs.Winwidth > 0 {
-		//		fmt.Printf("height was %d, width was %d\n", userPrefs.Winheight, userPrefs.Winwidth)
+		// fmt.Printf("height was %d, width was %d\n", userPrefs.Winheight, userPrefs.Winwidth)
 		mainWin.Resize(int(userPrefs.Winwidth), int(userPrefs.Winheight))
 	} else {
 		mainWin.SetDefaultSize(850, 450)

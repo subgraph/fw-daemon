@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"reflect"
+	"regexp"
 
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
@@ -39,9 +39,9 @@ func builderForDefinition(uiName string) *gtk.Builder {
 	maj := gtk.GetMajorVersion()
 	min := gtk.GetMinorVersion()
 
-	if ((maj == 3) && (min < 20)) {
+	if (maj == 3) && (min < 20) {
 		fmt.Fprintf(os.Stderr,
-			"Attempting runtime work-around for older versions of libgtk-3...\n");
+			"Attempting runtime work-around for older versions of libgtk-3...\n")
 		dep_re := regexp.MustCompile(`<\s?property\s+name\s?=\s?"icon_size"\s?>.+<\s?/property\s?>`)
 		template = dep_re.ReplaceAllString(template, ``)
 

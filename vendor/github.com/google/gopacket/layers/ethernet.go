@@ -55,7 +55,7 @@ func (eth *Ethernet) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) er
 			// Strip off bytes at the end, since we have too many bytes
 			eth.Payload = eth.Payload[:len(eth.Payload)-cmp]
 		}
-		//	fmt.Println(eth)
+		// fmt.Println(eth)
 	}
 	return nil
 }

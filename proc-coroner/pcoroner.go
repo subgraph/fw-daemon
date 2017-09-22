@@ -71,7 +71,7 @@ func MonitorThread(cbfunc procCB, param interface{}) {
 		pmutex.Unlock()
 
 		for pkey, pval := range pidMap {
-			//			fmt.Printf("PID %v -> %v\n", pkey, pval)
+			// fmt.Printf("PID %v -> %v\n", pkey, pval)
 			res := checkProcess(&pval, false)
 
 			if !res {
@@ -96,7 +96,7 @@ func checkProcess(proc *WatchProcess, init bool) bool {
 	ppath := fmt.Sprintf("/proc/%d/stat", proc.Pid)
 	f, err := os.Open(ppath)
 	if err != nil {
-		//		fmt.Printf("Error opening path %s: %s\n", ppath, err)
+		// fmt.Printf("Error opening path %s: %s\n", ppath, err)
 		return false
 	}
 	defer f.Close()
@@ -129,7 +129,7 @@ func checkProcess(proc *WatchProcess, init bool) bool {
 	}
 
 	bstr := string(buf[:])
-	//	fmt.Println("sstr = ", bstr)
+	// fmt.Println("sstr = ", bstr)
 
 	fields := strings.Split(bstr, " ")
 

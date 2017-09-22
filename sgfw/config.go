@@ -29,7 +29,7 @@ var FirewallConfig FirewallConfigs
 func _readConfig(file string) []byte {
 	envFile := os.Getenv("SGFW_CONF")
 
-        if envFile != "" {
+	if envFile != "" {
 		file = envFile
 	}
 

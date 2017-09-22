@@ -184,7 +184,7 @@ func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint
 				nfqproto = getNFQProto(pkt)
 			} else {
 				if r.saddr == nil && src == nil && sandboxed == false && (r.port == dstPort || r.port == matchAny) && (r.addr.Equal(anyAddress) || r.hostname == "" || r.hostname == hostname) {
-					//	log.Notice("+ Socks5 MATCH SUCCEEDED")
+					// log.Notice("+ Socks5 MATCH SUCCEEDED")
 					if r.rtype == RULE_ACTION_DENY {
 						return FILTER_DENY
 					} else if r.rtype == RULE_ACTION_ALLOW {
@@ -203,7 +203,7 @@ func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint
 			continue
 		}
 		if r.match(src, dst, dstPort, hostname, nfqproto, pinfo.UID, pinfo.GID, uidToUser(pinfo.UID), gidToGroup(pinfo.GID)) {
-			//	log.Notice("+ MATCH SUCCEEDED")
+			// log.Notice("+ MATCH SUCCEEDED")
 			dstStr := dst.String()
 			if FirewallConfig.LogRedact {
 				dstStr = STR_REDACTED
@@ -214,7 +214,7 @@ func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint
 				srcp, _ := getPacketPorts(pkt)
 				srcStr = fmt.Sprintf("%s:%d", srcip, srcp)
 			}
-			//	log.Noticef("%s > %s %s %s -> %s:%d",
+			// log.Noticef("%s > %s %s %s -> %s:%d",
 			//r.getString(FirewallConfig.LogRedact), pinfo.ExePath, r.proto, srcStr, dstStr, dstPort)
 			if r.rtype == RULE_ACTION_DENY {
 				//TODO: Optionally redact below log entry
