@@ -57,8 +57,8 @@ const FirewallPromptInterface = '<node> \
         <arg type="s" direction="in" name="user" /> \
         <arg type="s" direction="in" name="group" /> \
         <arg type="i" direction="in" name="pid" /> \
-	<arg type="s" direction="in" name="sandbox" /> \
-	<arg type="b" direction="in" name="tlsguard" /> \
+        <arg type="s" direction="in" name="sandbox" /> \
+        <arg type="b" direction="in" name="tlsguard" /> \
         <arg type="s" direction="in" name="optstring" /> \
         <arg type="b" direction="in" name="expanded" /> \
         <arg type="b" direction="in" name="expert" /> \
