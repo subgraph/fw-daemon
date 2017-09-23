@@ -458,7 +458,8 @@ const PromptDialog = new Lang.Class({
     Name: 'PromptDialog',
     Extends: ModalDialog.ModalDialog,
 
-    _init: function(invocation, pid_known, sandboxed, tlsguard) {
+    _init: function(invocation, pid_known, sandboxed, tlsguard, cbClose) {
+        this.cbClose = cbClose;
         this.parent({ styleClass: 'fw-prompt-dialog' });
         this._invocation = invocation;
         this.header = new PromptDialogHeader();
@@ -491,11 +492,17 @@ const PromptDialog = new Lang.Class({
     },
 
     onAllow: function() {
+        if (this.cbClose !== undefined && this.cbClose !== null) {
+            this.cbClose();
+        }
         this.close();
         this.sendReturnValue(true);
     },
 
     onDeny: function() {
+        if (this.cbClose !== undefined && this.cbClose !== null) {
+            this.cbClose();
+        }
         this.close();
         this.sendReturnValue(false);
     },

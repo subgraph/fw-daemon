@@ -78,39 +78,48 @@ const FirewallPromptHandler = new Lang.Class({
         this._dbusImpl = Gio.DBusExportedObject.wrapJSObject(FirewallPromptInterface, this);
         this._dbusImpl.export(Gio.DBus.system, '/com/subgraph/FirewallPrompt');
         Gio.bus_own_name_on_connection(Gio.DBus.system, 'com.subgraph.FirewallPrompt', Gio.BusNameOwnerFlags.REPLACE, null, null);
-        this._dialog = null;
+        this._dialogs = new Array();
     },
 
     destroy: function() {
-        this._closeDialog();
+        this._closeDialogs();
         this._dbusImpl.unexport();
     },
 
-    _closeDialog: function() {
-        if (this._dialog) {
-            this._dialog.close();
-            this._dialog = null;
+    _closeDialogs: function() {
+        if (this._dialogs.length > 0) {
+            dialog = this._dialogs.shift();
+            dialog.close();
         }
     },
 
     RequestPromptAsync: function(params, invocation) {
         let [app, icon, path, address, port, ip, origin, proto, uid, gid, user, group, pid, sandbox, tlsguard, optstring, expanded, expert, action] = params;
-//        this._closeDialog();
-        this._dialog = new Dialog.PromptDialog(invocation, (pid >= 0), (sandbox != ""), tlsguard);
-        this._invocation = invocation;
-        this._dialog.update(app, icon, path, address, port, ip, origin, uid, gid, user, group, pid, proto, tlsguard, optstring, sandbox, expanded, expert, action);
-        this._dialog.open();
+        let cbfn = function(self) {
+            return function() { return self.onCloseDialog(); }
+        }(this)
+
+        let l = this._dialogs.push(new Dialog.PromptDialog(invocation, (pid >= 0), (sandbox != ""), tlsguard, cbfn));
+        let dialog = this._dialogs[l-1]
+        dialog.update(app, icon, path, address, port, ip, origin, uid, gid, user, group, pid, proto, tlsguard, optstring, sandbox, expanded, expert, action);
+        if (this._dialogs.length == 1) {
+            dialog.open();
+        }
+    },
+
+    onCloseDialog: function() {
+        this._dialogs.shift();
+        if (this._dialogs.length > 0) {
+            this._dialogs[0].open();
+        }
     },
 
     CloseAsync: function(params, invocation) {
-        this._closeDialog();
+        this._closeDialogs();
     },
 
     TestPrompt: function(params, invocation) {
-        this._closeDialog();
-        this._dialog = new Dialog.PromptDialog(nil);
-        this._dialog.update("Firefox", "firefox", "/usr/bin/firefox-esr", "242.12.111.18", "443", "linux", "2342", "TCP", true, true);
-        this._dialog.open();
+        this.RequestPromptAsync(["Firefox", "firefox", "/usr/bin/firefox-esr", "242.12.111.18", "443", "linux", "2342", "TCP", true, true], nil);
     }
 });
 
