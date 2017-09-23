@@ -52,13 +52,7 @@ func (r *Rule) getString(redact bool) string {
 	} else if r.rtype == RULE_ACTION_ALLOW_TLSONLY {
 		rtype = RuleActionString[RULE_ACTION_ALLOW_TLSONLY]
 	}
-	rmode := ""
-	if r.mode == RULE_MODE_SYSTEM {
-		rmode = "|" + RuleModeString[RULE_MODE_SYSTEM]
-	}
-	if r.mode == RULE_MODE_PERMANENT {
-		rmode = "|" + RuleModeString[RULE_MODE_PERMANENT]
-	}
+	rmode := "|" + RuleModeString[r.mode]
 
 	protostr := ""
 
@@ -450,7 +444,7 @@ func savePolicy(f *os.File, p *Policy) {
 		return
 	}
 	for _, r := range p.rules {
-		if r.mode != RULE_MODE_SESSION {
+		if r.mode == RULE_MODE_PERMANENT || r.mode == RULE_MODE_SYSTEM {
 			if !writeLine(f, r.String()) {
 				return
 			}
