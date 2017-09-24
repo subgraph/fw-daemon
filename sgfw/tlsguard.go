@@ -41,7 +41,7 @@ func readTLSChunk(conn net.Conn) ([]byte, int, error) {
 
 	cbyte := cbytes[0]
 	mlen := int(int(cbytes[3])<<8 | int(cbytes[4]))
-//	fmt.Printf("TLS data chunk header read: type = %#x, maj = %v, min = %v, len = %v\n", cbyte, cbytes[1], cbytes[2], mlen)
+	// fmt.Printf("TLS data chunk header read: type = %#x, maj = %v, min = %v, len = %v\n", cbyte, cbytes[1], cbytes[2], mlen)
 
 	conn.SetReadDeadline(time.Now().Add(TLSGUARD_READ_TIMEOUT))
 	cbytes2, err := readNBytes(conn, mlen)
@@ -57,7 +57,7 @@ func readTLSChunk(conn net.Conn) ([]byte, int, error) {
 
 func TLSGuard(conn, conn2 net.Conn, fqdn string) error {
 	// Should this be a requirement?
-	//	if strings.HasSuffix(request.DestAddr.FQDN, "onion") {
+	// if strings.HasSuffix(request.DestAddr.FQDN, "onion") {
 
 	//conn client
 	//conn2 server
@@ -84,7 +84,7 @@ func TLSGuard(conn, conn2 net.Conn, fqdn string) error {
 	for 1 == 1 {
 		loop++
 
-//		fmt.Printf("SSL LOOP %v; trying to read: conn2\n", loop)
+		// fmt.Printf("SSL LOOP %v; trying to read: conn2\n", loop)
 		chunk, rtype, err = readTLSChunk(conn2)
 
 		if err != nil {
@@ -102,7 +102,7 @@ func TLSGuard(conn, conn2 net.Conn, fqdn string) error {
 
 		if rtype == SSL3_RT_CHANGE_CIPHER_SPEC || rtype == SSL3_RT_APPLICATION_DATA ||
 			rtype == SSL3_RT_ALERT {
-//			fmt.Println("OTHER DATA; PASSING THRU")
+			// fmt.Println("OTHER DATA; PASSING THRU")
 			passthru = true
 		} else if rtype == SSL3_RT_HANDSHAKE {
 			passthru = false
@@ -111,7 +111,7 @@ func TLSGuard(conn, conn2 net.Conn, fqdn string) error {
 		}
 
 		if passthru {
-//			fmt.Println("passthru writing buf again and continuing:")
+			// fmt.Println("passthru writing buf again and continuing:")
 			conn.Write(chunk)
 			continue
 		}
@@ -124,7 +124,7 @@ func TLSGuard(conn, conn2 net.Conn, fqdn string) error {
 			// Message len, 3 bytes
 			serverMessageLen := serverMsg[1:4]
 			serverMessageLenInt := int(int(serverMessageLen[0])<<16 | int(serverMessageLen[1])<<8 | int(serverMessageLen[2]))
-//			fmt.Printf("chunk len = %v, serverMsgLen = %v, slint = %v\n", len(chunk), len(serverMsg), serverMessageLenInt)
+			// fmt.Printf("chunk len = %v, serverMsgLen = %v, slint = %v\n", len(chunk), len(serverMsg), serverMessageLenInt)
 			if len(serverMsg) < serverMessageLenInt {
 				return errors.New(fmt.Sprintf("len(serverMsg) %v < serverMessageLenInt %v!\n", len(serverMsg), serverMessageLenInt))
 			}
@@ -145,7 +145,7 @@ func TLSGuard(conn, conn2 net.Conn, fqdn string) error {
 
 			for remaining > 0 {
 				certLen := int(int(pos[0])<<16 | int(pos[1])<<8 | int(pos[2]))
-				//				fmt.Printf("Certs chain len %d, cert 1 len %d:\n", certChainLen, certLen)
+				// fmt.Printf("Certs chain len %d, cert 1 len %d:\n", certChainLen, certLen)
 				cert := pos[3 : 3+certLen]
 				certs, err := x509.ParseCertificates(cert)
 				if remaining == certChainLen {
@@ -164,22 +164,22 @@ func TLSGuard(conn, conn2 net.Conn, fqdn string) error {
 			}
 			verifyOptions.Intermediates = pool
 
-//			fmt.Println("ATTEMPTING TO VERIFY: ", fqdn)
+			// fmt.Println("ATTEMPTING TO VERIFY: ", fqdn)
 			_, err = c.Verify(verifyOptions)
-//			fmt.Println("ATTEMPTING TO VERIFY RESULT: ", err)
+			// fmt.Println("ATTEMPTING TO VERIFY RESULT: ", err)
 			if err != nil {
 				return err
 			} else {
 				valid = true
 			}
-			//		else if s == 0x0d {		fmt.Printf("found a client cert request, sending buf to client\n") }
+			// lse if s == 0x0d { fmt.Printf("found a client cert request, sending buf to client\n") }
 		} else if s == SSL3_MT_SERVER_DONE {
 			conn.Write(chunk)
 			break
 		} else if s == SSL3_MT_CERTIFICATE_REQUEST {
 			break
 		}
-//		fmt.Printf("Sending chunk of type %d to client.\n", s)
+		// fmt.Printf("Sending chunk of type %d to client.\n", s)
 
 		conn.Write(chunk)
 	}
