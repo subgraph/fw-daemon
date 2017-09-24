@@ -98,7 +98,7 @@ func (r *Rule) AddrString(redact bool) string {
 type RuleList []*Rule
 
 func (r *Rule) match(src net.IP, dst net.IP, dstPort uint16, hostname string, proto string, uid, gid int, uname, gname string, sandbox string) bool {
-	if r.sandbox != sandbox {
+	if r.policy.sandbox != sandbox {
 		return false
 	}
 	if r.proto != proto {
