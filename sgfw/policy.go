@@ -252,6 +252,8 @@ func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info, o
 	dstip := net.IP(dstb)
 	srcip := net.IP(pkt.Packet.NetworkLayer().NetworkFlow().Src().Raw())
 	name := p.fw.dns.Lookup(dstip, pinfo.Pid)
+	log.Infof("Lookup(%s): %s", dstip.String(), name)
+
 	if !FirewallConfig.LogRedact {
 		log.Infof("Lookup(%s): %s", dstip.String(), name)
 	}
@@ -441,13 +443,22 @@ func printPacket(pkt *nfqueue.NFQPacket, hostname string, pinfo *procsnitch.Info
 }
 
 func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
+	isudp := pkt.Packet.Layer(layers.LayerTypeUDP) != nil
+
 	if basicAllowPacket(pkt) {
+		if isudp {
+			srcport, _ := getPacketUDPPorts(pkt)
+
+			if srcport == 53 {
+				fw.dns.processDNS(pkt)
+			}
+		}
+
 		pkt.Accept()
 		return
 	}
 
-	isudp := pkt.Packet.Layer(layers.LayerTypeUDP) != nil
-	if isudp {
+	/* if isudp {
 		srcport, _ := getPacketUDPPorts(pkt)
 
 		if srcport == 53 {
@@ -457,6 +468,7 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 		}
 
 	}
+	*/
 	_, dstip := getPacketIPAddrs(pkt)
 	/*	_, dstp := getPacketPorts(pkt)
 		fwo := eatchAgainstOzRules(srcip, dstip, dstp)
@@ -786,6 +798,7 @@ func basicAllowPacket(pkt *nfqueue.NFQPacket) bool {
 	if pkt.Packet.Layer(layers.LayerTypeUDP) != nil {
 		_, dport := getPacketUDPPorts(pkt)
 		if dport == 53 {
+			//                   fw.dns.processDNS(pkt)
 			return true
 		}
 	}
