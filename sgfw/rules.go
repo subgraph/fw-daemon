@@ -97,7 +97,10 @@ func (r *Rule) AddrString(redact bool) string {
 
 type RuleList []*Rule
 
-func (r *Rule) match(src net.IP, dst net.IP, dstPort uint16, hostname string, proto string, uid, gid int, uname, gname string) bool {
+func (r *Rule) match(src net.IP, dst net.IP, dstPort uint16, hostname string, proto string, uid, gid int, uname, gname string, sandbox string) bool {
+	if r.sandbox != sandbox {
+		return false
+	}
 	if r.proto != proto {
 		return false
 	}
@@ -196,7 +199,7 @@ func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint
 			//log.Notice("! Skipping comparison of mismatching PIDs")
 			continue
 		}
-		if r.match(src, dst, dstPort, hostname, nfqproto, pinfo.UID, pinfo.GID, uidToUser(pinfo.UID), gidToGroup(pinfo.GID)) {
+		if r.match(src, dst, dstPort, hostname, nfqproto, pinfo.UID, pinfo.GID, uidToUser(pinfo.UID), gidToGroup(pinfo.GID), pinfo.Sandbox) {
 			// log.Notice("+ MATCH SUCCEEDED")
 			dstStr := dst.String()
 			if FirewallConfig.LogRedact {
