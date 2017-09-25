@@ -21,7 +21,7 @@ const FirewallSupport = new Lang.Class({
     },
 
     _destroyHandler: function() {
-        if(this.handler) {
+        if (this.handler) {
             this.handler.destroy();
             this.handler = null;
         }

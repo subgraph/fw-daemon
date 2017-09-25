@@ -39,14 +39,14 @@ const ConnectionMonitor = new Lang.Class({
     },
 
     _toggle: function() {
-        if(this._open)
+        if (this._open)
             this.close();
         else
             this.open();
     },
 
     open: function() {
-        if(this._open) {
+        if (this._open) {
             return;
         }
         this.actor.show();
@@ -60,7 +60,7 @@ const ConnectionMonitor = new Lang.Class({
     },
 
     close: function() {
-        if(!this._open) {
+        if (!this._open) {
             return;
         }
         this._open = false;

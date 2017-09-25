@@ -24,7 +24,7 @@ const FirewallMenu = new Lang.Class({
     _init: function() {
         this.proxy = new FirewallProxy(Gio.DBus.system, "com.subgraph.Firewall",
         "/com/subgraph/Firewall", Lang.bind(this, function(proxy, error) {
-            if(error) {
+            if (error) {
                 log(error.message);
                 return;
             }
@@ -36,14 +36,14 @@ const FirewallMenu = new Lang.Class({
         this.createMenu();
         this.menu.connect('open-state-changed', Lang.bind(this, this.openStateChanged));
         let idx = this.findMenu(this.aggregate._power.menu);
-        if(idx >= 0) {
+        if (idx >= 0) {
             this.aggregate.menu.addMenuItem(this.menu, idx);
         }
     },
 
     openStateChanged: function() {
         this.proxy.IsEnabledRemote(Lang.bind(this, function(result, err) {
-            if(err) {
+            if (err) {
                 log(err.message);
                 return;
             }
@@ -53,7 +53,7 @@ const FirewallMenu = new Lang.Class({
     },
 
     destroy: function() {
-        if(this.menu) {
+        if (this.menu) {
             this.menu.destroy();
             this.menu = null;
         }
@@ -62,7 +62,7 @@ const FirewallMenu = new Lang.Class({
     findMenu: function(menu) {
         let items = this.aggregate.menu._getMenuItems();
         for(let i = 0; i < items.length; i++) {
-            if(items[i] == menu) {
+            if (items[i] == menu) {
                 return i;
             }
         }
@@ -70,7 +70,7 @@ const FirewallMenu = new Lang.Class({
     },
 
     createMenu: function() {
-        if(this.menu) {
+        if (this.menu) {
             this.menu.destroy();
         }
         this.menu = new PopupMenu.PopupMenuSection();
@@ -86,7 +86,7 @@ const FirewallMenu = new Lang.Class({
     },
 
     onToggle: function() {
-        if(this.toggle.state) {
+        if (this.toggle.state) {
             log("Toggle ON");
         } else {
             log("Toggle OFF");

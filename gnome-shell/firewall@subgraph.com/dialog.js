@@ -156,7 +156,7 @@ const OptionList = new Lang.Class({
     },
 
     setOptionText: function(idx, text) {
-        if(this.items.length <= idx) {
+        if (this.items.length <= idx) {
             //log("SGFW: attempt to setOptionText with idx = "+ idx + " when this.items.length = "+ this.items.length)
             return;
         }
@@ -190,7 +190,7 @@ const OptionList = new Lang.Class({
         for(let i = 0; i < options.length; i++) {
             this._addOption(options[i], i)
         }
-        if(this.items.length) {
+        if (this.items.length) {
             this._optionSelected(this.items[0])
         }
     },
@@ -208,7 +208,7 @@ const OptionList = new Lang.Class({
         if (item == this._selected) {
             return;
         }
-        if(this._selected) {
+        if (this._selected) {
             this._selected.actor.remove_style_pseudo_class('selected');
             this._selected.setSelected(false);
         }
@@ -278,11 +278,11 @@ const ButtonGroup = new Lang.Class({
 
     _setChecked: function(idx) {
 
-        if(idx == this._checked) {
+        if (idx == this._checked) {
             return;
         }
         this._buttons[idx].add_style_pseudo_class('checked');
-        if(this._checked >= 0) {
+        if (this._checked >= 0) {
             this._buttons[this._checked].remove_style_pseudo_class('checked');
         }
         this._checked = idx;
@@ -344,7 +344,7 @@ const ExpandingSection = new Lang.Class({
     },
 
     activate: function(event) {
-        if(!this.isOpen) {
+        if (!this.isOpen) {
             this.open();
         } else {
             this.close();
@@ -352,7 +352,7 @@ const ExpandingSection = new Lang.Class({
     },
 
     set_child: function(child) {
-        if(this.child) {
+        if (this.child) {
             this.child.destroy();
         }
         this.scroll.add_actor(child);
@@ -365,10 +365,10 @@ const ExpandingSection = new Lang.Class({
     },
 
     open: function() {
-        if(this.isOpen) {
+        if (this.isOpen) {
             return;
         }
-        if(!this.child) {
+        if (!this.child) {
             return;
         }
         this.isOpen = true;
@@ -394,7 +394,7 @@ const ExpandingSection = new Lang.Class({
     },
 
     close: function() {
-        if(!this.isOpen) {
+        if (!this.isOpen) {
             return;
         }
         this.isOpen = false;
@@ -434,7 +434,7 @@ const PromptDialogHeader = new Lang.Class({
     },
 
     setTitle: function(text) {
-        if(!text) {
+        if (!text) {
             text = "Unknown";
         }
         this.title.text = text;
@@ -514,11 +514,11 @@ const PromptDialog = new Lang.Class({
     },
 
     sendReturnValue: function(allow) {
-        if(!this._invocation) {
+        if (!this._invocation) {
             return;
         }
         let verb = "DENY";
-        if(allow) {
+        if (allow) {
             verb = "ALLOW";
             if (this.optionList.tlsGuard) {
                 verb = "ALLOW_TLSONLY";
@@ -535,7 +535,7 @@ const PromptDialog = new Lang.Class({
 
     ruleTarget: function() {
         let base = "";
-        if(this._proto != "tcp") {
+        if (this._proto != "tcp") {
             base = this._proto + ":";
         }
         switch(this.optionList.selectedIdx()) {
@@ -589,7 +589,7 @@ const PromptDialog = new Lang.Class({
             this.details.isOpen = false;
             this.details.activate()
         }
-        if(icon) {
+        if (icon) {
             this.header.setIcon(icon, sandbox);
         } else {
             this.header.setIcon(path.split(/\//).pop(), sandbox);
