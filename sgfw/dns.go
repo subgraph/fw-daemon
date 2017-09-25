@@ -166,7 +166,7 @@ func (dc *dnsCache) Lookup(ip net.IP, pid int) string {
 		entry, ok := dc.ipMap[pid][ip.String()]
 		if ok {
 			if now.Before(entry.exp) {
-				//				log.Noticef("XXX: LOOKUP on %v / %v = %v, ttl = %v / %v\n", pid, ip.String(), entry.name, entry.ttl, entry.exp)
+				// log.Noticef("XXX: LOOKUP on %v / %v = %v, ttl = %v / %v\n", pid, ip.String(), entry.name, entry.ttl, entry.exp)
 				return entry.name
 			} else {
 				log.Warningf("Skipping expired per-pid (%d) DNS cache entry: %s -> %s / exp. %v (%ds)\n",
@@ -180,7 +180,7 @@ func (dc *dnsCache) Lookup(ip net.IP, pid int) string {
 	if ok {
 		if now.Before(entry.exp) {
 			str = entry.name
-			//			log.Noticef("XXX: LOOKUP on %v / 0 RETURNING %v, ttl = %v / %v\n", ip.String(), str, entry.ttl, entry.exp)
+			// log.Noticef("XXX: LOOKUP on %v / 0 RETURNING %v, ttl = %v / %v\n", ip.String(), str, entry.ttl, entry.exp)
 		} else {
 			log.Warningf("Skipping expired global DNS cache entry: %s -> %s / exp. %v (%ds)\n",
 				ip.String(), entry.name, entry.exp, entry.ttl)

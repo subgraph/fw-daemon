@@ -29,14 +29,14 @@ const DetailSection = new Lang.Class({
         this.ipAddr = this._addDetails("IP Address:");
         this.path = this._addDetails("Path:");
         this.pid = this._addDetails("Process ID:");
-	this.origin = this._addDetails("Origin:");
+        this.origin = this._addDetails("Origin:");
         this.user = this._addDetails("User:");
         this.group = this._addDetails("Group:");
-	this.sandboxed = sandboxed;
+        this.sandboxed = sandboxed;
 
-	if (sandboxed) {
-		this.sandbox = this._addDetails("Sandbox:");
-	}
+        if (sandboxed) {
+            this.sandbox = this._addDetails("Sandbox:");
+        }
         this.optstring = this._addDetails("");
     },
 
@@ -52,37 +52,37 @@ const DetailSection = new Lang.Class({
         this.ipAddr.text = ip;
         this.path.text = path;
 
-	if (pid == -1) {
-		this.pid.text = '[unknown]';
-	} else {
-		this.pid.text = pid.toString();
-	}
+        if (pid == -1) {
+            this.pid.text = '[unknown]';
+        } else {
+            this.pid.text = pid.toString();
+        }
 
-	this.origin.text = origin;
+        this.origin.text = origin;
 
-	if (user != "") {
-		this.user.text = user;
-		if (uid != -1) {
-			this.user.text += " (" + uid.toString() + ")";
-		}
-	} else {
-		this.user.text = "uid:" + uid.toString();
-	}
+        if (user != "") {
+            this.user.text = user;
+            if (uid != -1) {
+                this.user.text += " (" + uid.toString() + ")";
+            }
+        } else {
+            this.user.text = "uid:" + uid.toString();
+        }
 
-	if (group != "") {
-		this.group.text = group;
-		if (gid != -1) {
-			this.group.text += " (" + gid.toString() + ")";
-		}
-	} else {
-		this.group.text = "gid:" + gid.toString();
-	}
+        if (group != "") {
+            this.group.text = group;
+            if (gid != -1) {
+                this.group.text += " (" + gid.toString() + ")";
+            }
+        } else {
+            this.group.text = "gid:" + gid.toString();
+        }
 
-	if (sandbox != "") {
-		this.sandbox.text = sandbox;
-	} 
+        if (sandbox != "") {
+            this.sandbox.text = sandbox;
+        }
 
-	this.optstring.text = optstring
+        this.optstring.text = optstring
     }
 });
 
@@ -141,23 +141,23 @@ const OptionList = new Lang.Class({
 
     _init: function(pid_known, sandboxed) {
         this.actor = new St.BoxLayout({vertical: true, style_class: 'fw-option-list'});
-	if (pid_known) {
-	        this.buttonGroup = new ButtonGroup("Forever", "Session", "Once", "PID");
-	} else {
-	        this.buttonGroup = new ButtonGroup("Forever", "Session", "Once");
-	}
+        if (pid_known) {
+                this.buttonGroup = new ButtonGroup("Forever", "Session", "Once", "PID");
+        } else {
+                this.buttonGroup = new ButtonGroup("Forever", "Session", "Once");
+        }
         this.actor.add_child(this.buttonGroup.actor);
         this.items = [];
         this._selected;
         this.tlsGuard = false;
-	if (sandboxed) {
-		this.tlsGuard = true;
-	}
+        if (sandboxed) {
+            this.tlsGuard = true;
+        }
     },
 
     setOptionText: function(idx, text) {
         if(this.items.length <= idx) {
-            log("attempt to setOptionText with idx = "+ idx + " when this.items.length = "+ this.items.length)
+            //log("SGFW: attempt to setOptionText with idx = "+ idx + " when this.items.length = "+ this.items.length)
             return;
         }
         this.items[idx].setText(text);
@@ -165,12 +165,12 @@ const OptionList = new Lang.Class({
  
     addTLSOption: function(tlsGuardEnabled) {
         let tlsg = new OptionListItem("Drop connection if not TLS with valid certificate",0);
-	tlsg.setSelected(tlsGuardEnabled);
-	tlsg.connect('selected', Lang.bind(this, function() {
-		this._toggleTLSGuard(tlsg);
-	}));
-	let emptyRow = new OptionListItem("",0);
-	this.actor.add_child(emptyRow.actor);
+        tlsg.setSelected(tlsGuardEnabled);
+        tlsg.connect('selected', Lang.bind(this, function() {
+            this._toggleTLSGuard(tlsg);
+        }));
+        let emptyRow = new OptionListItem("",0);
+        this.actor.add_child(emptyRow.actor);
         this.actor.add_child(tlsg.actor);
     },
 
@@ -182,7 +182,7 @@ const OptionList = new Lang.Class({
         } else {
             this.tlsGuard = true;
             item.actor.add_style_pseudo_class('selected'); 
-	    item.setSelected(true)
+            item.setSelected(true)
         }
     },
 
@@ -232,7 +232,7 @@ const OptionList = new Lang.Class({
         case 3:
             return RuleScope.APPLY_PROCESS;
         default:
-            log("unexpected scope value "+ this.buttonGroup._selected);
+            log("SGFW: unexpected scope value "+ this.buttonGroup._selected);
             return RuleScope.APPLY_SESSION;
         }
     },
@@ -248,7 +248,7 @@ const OptionList = new Lang.Class({
         case RuleScope.APPLY_FOREVER:
             return 0;
         default:
-            log("unexpected scope value "+ scope);
+            log("SGFW: unexpected scope value "+ scope);
             return 1;
         }
     }
@@ -458,7 +458,8 @@ const PromptDialog = new Lang.Class({
     Name: 'PromptDialog',
     Extends: ModalDialog.ModalDialog,
 
-    _init: function(invocation, pid_known, sandboxed, tlsguard) {
+    _init: function(invocation, pid_known, sandboxed, tlsguard, cbClose) {
+        this.cbClose = cbClose;
         this.parent({ styleClass: 'fw-prompt-dialog' });
         this._invocation = invocation;
         this.header = new PromptDialogHeader();
@@ -479,12 +480,9 @@ const PromptDialog = new Lang.Class({
             "Only PORT",
             "Any Connection"]);
 
-	if (tlsguard) {
-		this.optionList.addTLSOption(true);
-	}
-
-        // let tlsGuard = new OptionListItem("Drop connection if not TLS with valid certificate.",0);
-	//box.add_child(optionList.actor);
+        if (tlsguard) {
+            this.optionList.addTLSOption(true);
+        }
 
         this._initialKeyFocusDestroyId = 1;
         this.setButtons([
@@ -494,11 +492,17 @@ const PromptDialog = new Lang.Class({
     },
 
     onAllow: function() {
+        if (this.cbClose !== undefined && this.cbClose !== null) {
+            this.cbClose();
+        }
         this.close();
         this.sendReturnValue(true);
     },
 
     onDeny: function() {
+        if (this.cbClose !== undefined && this.cbClose !== null) {
+            this.cbClose();
+        }
         this.close();
         this.sendReturnValue(false);
     },
@@ -509,25 +513,25 @@ const PromptDialog = new Lang.Class({
         }
         let verb = "DENY";
         if(allow) {
-		verb = "ALLOW";
-		if (this.optionList.tlsGuard) {
-            		verb = "ALLOW_TLSONLY";
-		} else {
-			verb = "ALLOW";
-		}
+            verb = "ALLOW";
+            if (this.optionList.tlsGuard) {
+                        verb = "ALLOW_TLSONLY";
+            } else {
+                verb = "ALLOW";
+            }
         }
         let rule = verb + "|" + this.ruleTarget() + "|" + this.ruleSandbox();
-		
+
         let scope = this.optionList.selectedScope();
         this._invocation.return_value(GLib.Variant.new('(is)', [scope, rule]));
         this._invocation = null;
     },
 
     ruleTarget: function() {
-	let base = "";
-	if(this._proto != "tcp") {
-		base = this._proto + ":";
-	}
+        let base = "";
+        if(this._proto != "tcp") {
+            base = this._proto + ":";
+        }
         switch(this.optionList.selectedIdx()) {
         case 0:
             return base + this._address + ":" + this._port;
@@ -541,7 +545,7 @@ const PromptDialog = new Lang.Class({
     },
 
     ruleSandbox: function() {
-	return this._sandbox;
+        return this._sandbox;
     },
 
     ruleTLSGuard: function() {
@@ -551,29 +555,29 @@ const PromptDialog = new Lang.Class({
     update: function(application, icon, path, address, port, ip, origin, uid, gid, user, group, pid, proto, tlsguard, optstring, sandbox, expanded, expert, action) {
         this._address = address;
         this._port = port;
-	this._proto = proto;
-	this._sandbox = sandbox;
-	this._tlsGuard = tlsguard;
+        this._proto = proto;
+        this._sandbox = sandbox;
+        this._tlsGuard = tlsguard;
 
         let port_str = (proto+"").toUpperCase() + " Port "+ port;
 
         if (proto == "icmp") {
-                port_str = (proto+"").toUpperCase() + " Code "+ port;
-	}
+            port_str = (proto+"").toUpperCase() + " Code "+ port;
+        }
 
-	if (sandbox != "") {
-		application = application + " (sandboxed)"
-	}
+        if (sandbox != "") {
+            application = application + " (sandboxed)"
+        }
 
         this.header.setTitle(application);
 
-	if (proto == "tcp") {
-	        this.header.setMessage("Wants to connect to "+ address + " on " + port_str);
-	} else if (proto == "udp") {
-	        this.header.setMessage("Wants to send data to "+ address + " on " + port_str);
-	} else if (proto == "icmp") {
-	        this.header.setMessage("Wants to send data to "+ address + " with " + port_str);
-	}
+        if (proto == "tcp") {
+            this.header.setMessage("Wants to connect to "+ address + " on " + port_str);
+        } else if (proto == "udp") {
+            this.header.setMessage("Wants to send data to "+ address + " on " + port_str);
+        } else if (proto == "icmp") {
+            this.header.setMessage("Wants to send data to "+ address + " with " + port_str);
+        }
 
         if (expanded) {
             this.details.isOpen = false;
@@ -590,8 +594,8 @@ const PromptDialog = new Lang.Class({
         } else {
             this.optionList.setOptionText(0, "Only "+ address + " on "+ port_str);
         }
-        if (expert) {
 
+        if (expert) {
             if (proto == "icmp") {
                this.optionList.setOptionText(1, "Only "+ address + " with any ICMP code");
             } else if (proto == "udp") {
@@ -608,7 +612,7 @@ const PromptDialog = new Lang.Class({
 
         if (proto != "tcp") {
             this.optionList.setOptionText(3, "Any " + proto.toUpperCase() + " data");
-	}
+        }
 
         this.optionList.buttonGroup._setChecked(this.optionList.scopeToIdx(action))
         this.info.setDetails(ip, path, pid, uid, gid, user, group, origin, proto, optstring, sandbox);

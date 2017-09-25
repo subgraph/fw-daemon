@@ -71,7 +71,7 @@ func (p *prompter) prompt(policy *Policy) {
 		return
 	}
 	p.policyMap[policy.sandbox+"|"+policy.path] = policy
-	fmt.Println("Saving policy key:" + policy.sandbox + "|" + policy.path)
+	log.Debugf("Saving policy key:" + policy.sandbox + "|" + policy.path)
 	p.policyQueue = append(p.policyQueue, policy)
 	p.cond.Signal()
 }
@@ -79,11 +79,11 @@ func (p *prompter) prompt(policy *Policy) {
 func (p *prompter) promptLoop() {
 	p.lock.Lock()
 	for {
-		//		fmt.Println("XXX: promptLoop() outer")
+		// fmt.Println("XXX: promptLoop() outer")
 		for p.processNextPacket() {
-			//			fmt.Println("XXX: promptLoop() inner")
+			// fmt.Println("XXX: promptLoop() inner")
 		}
-		//		fmt.Println("promptLoop() wait")
+		// fmt.Println("promptLoop() wait")
 		p.cond.Wait()
 	}
 }
@@ -105,7 +105,7 @@ func (p *prompter) processNextPacket() bool {
 	empty := true
 	for {
 		pc, empty = p.nextConnection()
-		//		fmt.Println("XXX: processNextPacket() loop; empty = ", empty, " / pc = ", pc)
+		// fmt.Println("XXX: processNextPacket() loop; empty = ", empty, " / pc = ", pc)
 		if pc == nil && empty {
 			return false
 		} else if pc == nil {
@@ -116,7 +116,7 @@ func (p *prompter) processNextPacket() bool {
 	}
 	p.lock.Unlock()
 	defer p.lock.Lock()
-	//	fmt.Println("XXX: Waiting for prompt lock go...")
+	// fmt.Println("XXX: Waiting for prompt lock go...")
 	for {
 		promptLock.Lock()
 		if outstandingPrompts >= MAX_PROMPTS {
@@ -125,16 +125,16 @@ func (p *prompter) processNextPacket() bool {
 		}
 
 		if pc.getPrompting() {
-			fmt.Println("Skipping over already prompted connection")
+			log.Debugf("Skipping over already prompted connection")
 			promptLock.Unlock()
 			continue
 		}
 
 		break
 	}
-	//	fmt.Println("XXX: Passed prompt lock!")
+	// fmt.Println("XXX: Passed prompt lock!")
 	outstandingPrompts++
-	//	fmt.Println("XXX: Incremented outstanding to ", outstandingPrompts)
+	// fmt.Println("XXX: Incremented outstanding to ", outstandingPrompts)
 	promptLock.Unlock()
 	//	if !pc.getPrompting() {
 	pc.setPrompting(true)
@@ -146,7 +146,7 @@ func (p *prompter) processNextPacket() bool {
 func processReturn(pc pendingConnection) {
 	promptLock.Lock()
 	outstandingPrompts--
-	//	fmt.Println("XXX: Return decremented outstanding to ", outstandingPrompts)
+	// fmt.Println("XXX: Return decremented outstanding to ", outstandingPrompts)
 	promptLock.Unlock()
 	pc.setPrompting(false)
 }
@@ -342,7 +342,7 @@ func (p *prompter) nextConnection() (pendingConnection, bool) {
 			p.removePolicy(policy)
 		} else {
 			if pc == nil && !qempty {
-				fmt.Println("FIX ME: I NEED TO SLEEP ON A WAKEABLE CONDITION PROPERLY!!")
+				log.Errorf("FIX ME: I NEED TO SLEEP ON A WAKEABLE CONDITION PROPERLY!!")
 				time.Sleep(time.Millisecond * 300)
 			}
 			return pc, qempty
@@ -355,7 +355,7 @@ func (p *prompter) removePolicy(policy *Policy) {
 
 	if DoMultiPrompt {
 		if len(p.policyQueue) == 0 {
-			fmt.Println("Skipping over zero length policy queue")
+			log.Debugf("Skipping over zero length policy queue")
 			newQueue = make([]*Policy, 0, 0)
 		}
 	}

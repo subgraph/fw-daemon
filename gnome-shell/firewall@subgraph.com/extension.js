@@ -4,7 +4,7 @@ const Gio = imports.gi.Gio;
 const Extension = imports.misc.extensionUtils.getCurrentExtension();
 const Dialog = Extension.imports.dialog;
 const Menu = Extension.imports.menu;
-const ConnectionMonitor = Extension.imports.cmonitor;
+//const ConnectionMonitor = Extension.imports.cmonitor;
 
 
 function init() {
@@ -16,7 +16,7 @@ const FirewallSupport = new Lang.Class({
 
     _init: function() {
         this.menu = new Menu.FirewallMenu();
-        this.cmon = new ConnectionMonitor.ConnectionMonitor();
+        //this.cmon = new ConnectionMonitor.ConnectionMonitor();
         this.handler = null;
     },
 
@@ -29,12 +29,12 @@ const FirewallSupport = new Lang.Class({
     enable: function() {
         this._destroyHandler();
         this.handler = new FirewallPromptHandler();
-        this.cmon.install();
+        //this.cmon.install();
         this.menu.install();
     },
     disable: function() {
         this.menu.destroy();
-        this.cmon.remove();
+        //this.cmon.remove();
         this._destroyHandler();
     }
 });
@@ -57,8 +57,8 @@ const FirewallPromptInterface = '<node> \
         <arg type="s" direction="in" name="user" /> \
         <arg type="s" direction="in" name="group" /> \
         <arg type="i" direction="in" name="pid" /> \
-	<arg type="s" direction="in" name="sandbox" /> \
-	<arg type="b" direction="in" name="tlsguard" /> \
+        <arg type="s" direction="in" name="sandbox" /> \
+        <arg type="b" direction="in" name="tlsguard" /> \
         <arg type="s" direction="in" name="optstring" /> \
         <arg type="b" direction="in" name="expanded" /> \
         <arg type="b" direction="in" name="expert" /> \
@@ -78,39 +78,48 @@ const FirewallPromptHandler = new Lang.Class({
         this._dbusImpl = Gio.DBusExportedObject.wrapJSObject(FirewallPromptInterface, this);
         this._dbusImpl.export(Gio.DBus.system, '/com/subgraph/FirewallPrompt');
         Gio.bus_own_name_on_connection(Gio.DBus.system, 'com.subgraph.FirewallPrompt', Gio.BusNameOwnerFlags.REPLACE, null, null);
-        this._dialog = null;
+        this._dialogs = new Array();
     },
 
     destroy: function() {
-        this._closeDialog();
+        this._closeDialogs();
         this._dbusImpl.unexport();
     },
 
-    _closeDialog: function() {
-        if (this._dialog) {
-            this._dialog.close();
-            this._dialog = null;
+    _closeDialogs: function() {
+        if (this._dialogs.length > 0) {
+            dialog = this._dialogs.shift();
+            dialog.close();
         }
     },
 
     RequestPromptAsync: function(params, invocation) {
         let [app, icon, path, address, port, ip, origin, proto, uid, gid, user, group, pid, sandbox, tlsguard, optstring, expanded, expert, action] = params;
-//        this._closeDialog();
-        this._dialog = new Dialog.PromptDialog(invocation, (pid >= 0), (sandbox != ""), tlsguard);
-        this._invocation = invocation;
-        this._dialog.update(app, icon, path, address, port, ip, origin, uid, gid, user, group, pid, proto, tlsguard, optstring, sandbox, expanded, expert, action);
-        this._dialog.open();
+        let cbfn = function(self) {
+            return function() { return self.onCloseDialog(); }
+        }(this)
+
+        let l = this._dialogs.push(new Dialog.PromptDialog(invocation, (pid >= 0), (sandbox != ""), tlsguard, cbfn));
+        let dialog = this._dialogs[l-1]
+        dialog.update(app, icon, path, address, port, ip, origin, uid, gid, user, group, pid, proto, tlsguard, optstring, sandbox, expanded, expert, action);
+        if (this._dialogs.length == 1) {
+            dialog.open();
+        }
+    },
+
+    onCloseDialog: function() {
+        this._dialogs.shift();
+        if (this._dialogs.length > 0) {
+            this._dialogs[0].open();
+        }
     },
 
     CloseAsync: function(params, invocation) {
-        this._closeDialog();
+        this._closeDialogs();
     },
 
     TestPrompt: function(params, invocation) {
-        this._closeDialog();
-        this._dialog = new Dialog.PromptDialog(nil);
-        this._dialog.update("Firefox", "firefox", "/usr/bin/firefox-esr", "242.12.111.18", "443", "linux", "2342", "TCP", true, true);
-        this._dialog.open();
+        this.RequestPromptAsync(["Firefox", "firefox", "/usr/bin/firefox-esr", "242.12.111.18", "443", "linux", "2342", "TCP", true, true], nil);
     }
 });
 

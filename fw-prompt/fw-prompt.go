@@ -1194,7 +1194,7 @@ func main() {
 	mainWin.Add(Notebook)
 
 	if userPrefs.Winheight > 0 && userPrefs.Winwidth > 0 {
-		//		fmt.Printf("height was %d, width was %d\n", userPrefs.Winheight, userPrefs.Winwidth)
+		// fmt.Printf("height was %d, width was %d\n", userPrefs.Winheight, userPrefs.Winwidth)
 		mainWin.Resize(int(userPrefs.Winwidth), int(userPrefs.Winheight))
 	} else {
 		mainWin.SetDefaultSize(850, 450)
