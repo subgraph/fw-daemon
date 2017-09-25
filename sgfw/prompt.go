@@ -18,7 +18,9 @@ var DoMultiPrompt = true
 const MAX_PROMPTS = 5
 
 var outstandingPrompts = 0
+var outstandingPromptChans [](chan *dbus.Call)
 var promptLock = &sync.Mutex{}
+var promptChanLock = &sync.Mutex{}
 
 func newPrompter(conn *dbus.Conn) *prompter {
 	p := new(prompter)
@@ -37,6 +39,30 @@ type prompter struct {
 	policyQueue []*Policy
 }
 
+func saveChannel(ch chan *dbus.Call, add bool, do_close bool) {
+	promptChanLock.Lock()
+
+	if add {
+		outstandingPromptChans = append(outstandingPromptChans, ch)
+	} else {
+
+		for idx, och := range outstandingPromptChans {
+			if och == ch {
+				outstandingPromptChans = append(outstandingPromptChans[:idx], outstandingPromptChans[idx+1:]...)
+				break
+			}
+		}
+
+	}
+
+	if !add && do_close {
+		close(ch)
+	}
+
+	promptChanLock.Unlock()
+	return
+}
+
 func (p *prompter) prompt(policy *Policy) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
@@ -53,11 +79,11 @@ func (p *prompter) prompt(policy *Policy) {
 func (p *prompter) promptLoop() {
 	p.lock.Lock()
 	for {
-		// fmt.Println("XXX: promptLoop() outer")
+		//		fmt.Println("XXX: promptLoop() outer")
 		for p.processNextPacket() {
-			// fmt.Println("XXX: promptLoop() inner")
+			//			fmt.Println("XXX: promptLoop() inner")
 		}
-		// fmt.Println("promptLoop() wait")
+		//		fmt.Println("promptLoop() wait")
 		p.cond.Wait()
 	}
 }
@@ -79,7 +105,7 @@ func (p *prompter) processNextPacket() bool {
 	empty := true
 	for {
 		pc, empty = p.nextConnection()
-		// fmt.Println("XXX: processNextPacket() loop; empty = ", empty, " / pc = ", pc)
+		//		fmt.Println("XXX: processNextPacket() loop; empty = ", empty, " / pc = ", pc)
 		if pc == nil && empty {
 			return false
 		} else if pc == nil {
@@ -90,7 +116,7 @@ func (p *prompter) processNextPacket() bool {
 	}
 	p.lock.Unlock()
 	defer p.lock.Lock()
-	// fmt.Println("XXX: Waiting for prompt lock go...")
+	//	fmt.Println("XXX: Waiting for prompt lock go...")
 	for {
 		promptLock.Lock()
 		if outstandingPrompts >= MAX_PROMPTS {
@@ -106,9 +132,9 @@ func (p *prompter) processNextPacket() bool {
 
 		break
 	}
-	// fmt.Println("XXX: Passed prompt lock!")
+	//	fmt.Println("XXX: Passed prompt lock!")
 	outstandingPrompts++
-	// fmt.Println("XXX: Incremented outstanding to ", outstandingPrompts)
+	//	fmt.Println("XXX: Incremented outstanding to ", outstandingPrompts)
 	promptLock.Unlock()
 	//	if !pc.getPrompting() {
 	pc.setPrompting(true)
@@ -120,14 +146,33 @@ func (p *prompter) processNextPacket() bool {
 func processReturn(pc pendingConnection) {
 	promptLock.Lock()
 	outstandingPrompts--
-	// fmt.Println("XXX: Return decremented outstanding to ", outstandingPrompts)
+	//	fmt.Println("XXX: Return decremented outstanding to ", outstandingPrompts)
 	promptLock.Unlock()
 	pc.setPrompting(false)
+}
+
+func alertChannel(chidx int, scope int32, rule string) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Warning("SGFW recovered from panic while delivering out of band rule:", r)
+		}
+	}()
+
+	promptData := make([]interface{}, 3)
+	promptData[0] = scope
+	promptData[1] = rule
+	promptData[2] = 666
+
+	outstandingPromptChans[chidx] <- &dbus.Call{Body: promptData}
 }
 
 func (p *prompter) processConnection(pc pendingConnection) {
 	var scope int32
 	var rule string
+
+	if pc.getPrompter() == nil {
+		pc.setPrompter(&dbusObjectP{p.dbusObj})
+	}
 
 	if DoMultiPrompt {
 		defer processReturn(pc)
@@ -144,10 +189,14 @@ func (p *prompter) processConnection(pc pendingConnection) {
 	if pc.dst() != nil {
 		dststr = pc.dst().String()
 	} else {
-		dststr = addr + " (proxy to resolve)"
+		dststr = addr + " (via proxy resolver)"
 	}
 
-	call := p.dbusObj.Call("com.subgraph.FirewallPrompt.RequestPrompt", 0,
+	callChan := make(chan *dbus.Call, 10)
+	saveChannel(callChan, true, false)
+	fmt.Println("# outstanding prompt chans = ", len(outstandingPromptChans))
+	p.dbusObj.Go("com.subgraph.FirewallPrompt.RequestPrompt", 0, callChan,
+		pc.getGUID(),
 		policy.application,
 		policy.icon,
 		policy.path,
@@ -167,13 +216,61 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		FirewallConfig.PromptExpanded,
 		FirewallConfig.PromptExpert,
 		int32(FirewallConfig.DefaultActionID))
-	err := call.Store(&scope, &rule)
-	if err != nil {
-		log.Warningf("Error sending dbus RequestPrompt message: %v", err)
-		policy.removePending(pc)
-		pc.drop()
-		return
+
+	select {
+	case call := <-callChan:
+
+		if call.Err != nil {
+			fmt.Println("Error reading DBus channel (accepting packet): ", call.Err)
+			policy.removePending(pc)
+			pc.accept()
+			saveChannel(callChan, false, true)
+			time.Sleep(1 * time.Second)
+			return
+		}
+
+		if len(call.Body) != 2 {
+			log.Warning("SGFW got back response in unrecognized format, len = ", len(call.Body))
+			saveChannel(callChan, false, true)
+
+			if (len(call.Body) == 3) && (call.Body[2] == 666) {
+				fmt.Printf("+++++++++ AWESOME: %v | %v | %v\n", call.Body[0], call.Body[1], call.Body[2])
+				scope = call.Body[0].(int32)
+				rule = call.Body[1].(string)
+			}
+
+			return
+		}
+
+		fmt.Printf("DBUS GOT BACK: %v, %v\n", call.Body[0], call.Body[1])
+		scope = call.Body[0].(int32)
+		rule = call.Body[1].(string)
 	}
+
+	saveChannel(callChan, false, true)
+
+	// Try alerting every other channel
+	promptData := make([]interface{}, 3)
+	promptData[0] = scope
+	promptData[1] = rule
+	promptData[2] = 666
+	promptChanLock.Lock()
+	fmt.Println("# channels to alert: ", len(outstandingPromptChans))
+
+	for chidx, _ := range outstandingPromptChans {
+		alertChannel(chidx, scope, rule)
+		//		ch <- &dbus.Call{Body: promptData}
+	}
+
+	promptChanLock.Unlock()
+
+	/*	err := call.Store(&scope, &rule)
+		if err != nil {
+			log.Warningf("Error sending dbus RequestPrompt message: %v", err)
+			policy.removePending(pc)
+			pc.drop()
+			return
+		} */
 
 	// the prompt sends:
 	// ALLOW|dest or DENY|dest

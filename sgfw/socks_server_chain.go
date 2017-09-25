@@ -56,6 +56,8 @@ type pendingSocksConnection struct {
 	pinfo      *procsnitch.Info
 	verdict    chan int
 	prompting  bool
+	prompter   *dbusObjectP
+	guid       string
 	optstr     string
 }
 
@@ -107,8 +109,11 @@ func (sc *pendingSocksConnection) deliverVerdict(v int) {
 		}
 	}()
 
-	sc.verdict <- v
-	close(sc.verdict)
+	if sc.verdict != nil {
+		sc.verdict <- v
+		close(sc.verdict)
+		sc.verdict = nil
+	}
 }
 
 func (sc *pendingSocksConnection) accept() { sc.deliverVerdict(socksVerdictAccept) }
@@ -118,6 +123,18 @@ func (sc *pendingSocksConnection) accept() { sc.deliverVerdict(socksVerdictAccep
 func (sc *pendingSocksConnection) acceptTLSOnly() { sc.deliverVerdict(socksVerdictAcceptTLSOnly) }
 
 func (sc *pendingSocksConnection) drop() { sc.deliverVerdict(socksVerdictDrop) }
+
+func (sc *pendingSocksConnection) setPrompter(val *dbusObjectP) { sc.prompter = val }
+
+func (sc *pendingSocksConnection) getPrompter() *dbusObjectP { return sc.prompter }
+
+func (sc *pendingSocksConnection) getGUID() string {
+	if sc.guid == "" {
+		sc.guid = genGUID()
+	}
+
+	return sc.guid
+}
 
 func (sc *pendingSocksConnection) getPrompting() bool { return sc.prompting }
 
@@ -364,6 +381,7 @@ func (c *socksChainSession) filterConnect() (bool, bool) {
 			pinfo:      pinfo,
 			verdict:    make(chan int),
 			prompting:  false,
+			prompter:   nil,
 			optstr:     optstr,
 		}
 		policy.processPromptResult(pending)
@@ -409,7 +427,7 @@ func (c *socksChainSession) forwardTraffic(tls bool) {
 			if c.pinfo.Sandbox != "" {
 				log.Errorf("TLSGuard violation: Dropping traffic from %s (sandbox: %s) to %s: %v", c.pinfo.ExePath, c.pinfo.Sandbox, c.req.Addr.addrStr, err)
 			} else {
-				log.Errorf("TLSGuard violation: Dropping traffic from %s (unsandboxed) to %s: %v", c.pinfo.ExePath, c.req.Addr.addrStr, err)
+				log.Errorf("TLSGuard violation: Dropping traffic from %s (un-sandboxed) to %s: %v", c.pinfo.ExePath, c.req.Addr.addrStr, err)
 			}
 			return
 		} else {

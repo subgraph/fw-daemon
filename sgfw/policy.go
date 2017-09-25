@@ -52,6 +52,9 @@ type pendingConnection interface {
 	drop()
 	setPrompting(bool)
 	getPrompting() bool
+	setPrompter(*dbusObjectP)
+	getPrompter() *dbusObjectP
+	getGUID() string
 	print() string
 }
 
@@ -62,6 +65,23 @@ type pendingPkt struct {
 	pinfo     *procsnitch.Info
 	optstring string
 	prompting bool
+	prompter  *dbusObjectP
+	guid      string
+}
+
+/* Not a *REAL* GUID */
+func genGUID() string {
+	frnd, err := os.Open("/dev/urandom")
+	if err != nil {
+		log.Fatal("Error reading random data source:", err)
+	}
+
+	rndb := make([]byte, 16)
+	frnd.Read(rndb)
+	frnd.Close()
+
+	guid := fmt.Sprintf("%x-%x-%x-%x", rndb[0:4], rndb[4:8], rndb[8:12], rndb[12:])
+	return guid
 }
 
 func getEmptyPInfo() *procsnitch.Info {
@@ -165,6 +185,22 @@ func (pp *pendingPkt) drop() {
 	pp.pkt.Accept()
 }
 
+func (pp *pendingPkt) setPrompter(val *dbusObjectP) {
+	pp.prompter = val
+}
+
+func (pp *pendingPkt) getPrompter() *dbusObjectP {
+	return pp.prompter
+}
+
+func (pp *pendingPkt) getGUID() string {
+	if pp.guid == "" {
+		pp.guid = genGUID()
+	}
+
+	return pp.guid
+}
+
 func (pp *pendingPkt) getPrompting() bool {
 	return pp.prompting
 }
@@ -265,7 +301,7 @@ func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info, o
 	case FILTER_ALLOW:
 		pkt.Accept()
 	case FILTER_PROMPT:
-		p.processPromptResult(&pendingPkt{pol: p, name: name, pkt: pkt, pinfo: pinfo, optstring: optstr, prompting: false})
+		p.processPromptResult(&pendingPkt{pol: p, name: name, pkt: pkt, pinfo: pinfo, optstring: optstr, prompter: nil, prompting: false})
 	default:
 		log.Warningf("Unexpected filter result: %d", result)
 	}
@@ -327,6 +363,7 @@ func (p *Policy) processNewRule(r *Rule, scope FilterScope) bool {
 	if scope != APPLY_ONCE {
 		p.rules = append(p.rules, r)
 	}
+	fmt.Println("----------------------- processNewRule()")
 	p.filterPending(r)
 	if len(p.pendingQueue) == 0 {
 		p.promptInProgress = false
@@ -370,8 +407,19 @@ func (p *Policy) filterPending(rule *Rule) {
 	remaining := []pendingConnection{}
 	for _, pc := range p.pendingQueue {
 		if rule.match(pc.src(), pc.dst(), pc.dstPort(), pc.hostname(), pc.proto(), pc.procInfo().UID, pc.procInfo().GID, uidToUser(pc.procInfo().UID), gidToGroup(pc.procInfo().GID)) {
+			prompter := pc.getPrompter()
+
+			if prompter == nil {
+				fmt.Println("-------- prompter = NULL")
+			} else {
+				fmt.Println("---------- could send prompter")
+
+				call := prompter.Call("com.subgraph.FirewallPrompt.RemovePrompt", 0, pc.getGUID())
+				fmt.Println("CAAAAAAAAAAAAAAALL = ", call)
+			}
+
 			log.Infof("Adding rule for: %s", rule.getString(FirewallConfig.LogRedact))
-			// log.Noticef("%s > %s", rule.getString(FirewallConfig.LogRedact), pc.print())
+			//			log.Noticef("%s > %s", rule.getString(FirewallConfig.LogRedact), pc.print())
 			if rule.rtype == RULE_ACTION_ALLOW {
 				pc.accept()
 			} else if rule.rtype == RULE_ACTION_ALLOW_TLSONLY {
@@ -649,7 +697,7 @@ func LookupSandboxProc(srcip net.IP, srcp uint16, dstip net.IP, dstp uint16, pro
 				rlines = append(rlines, strings.Join(ssplit, ":"))
 			}
 
-			// log.Warningf("Looking for %s:%d => %s:%d \n %s\n******\n", srcip, srcp, dstip, dstp, data)
+			//	log.Warningf("Looking for %s:%d => %s:%d \n %s\n******\n", srcip, srcp, dstip, dstp, data)
 
 			if proto == "tcp" {
 				res = procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, rlines)
