@@ -444,12 +444,18 @@ const PromptDialogHeader = new Lang.Class({
         this.message.text = text;
     },
 
-    setIcon: function(name) {
-        this.icon.icon_name = name;
+    setIcon: function(name, sandbox) {
+        if (sandbox.length > 0 && Gtk.IconTheme.get_default().has_icon(sandbox)) {
+            this.icon.icon_name = sandbox;
+        } else if (name.length > 0 && Gtk.IconTheme.get_default().has_icon(name)) {
+            this.icon.icon_name = name;
+        } else {
+            this.icon.icon_name = 'security-high-symbolic';
+        }
     },
 
     setIconDefault: function() {
-        this.setIcon('security-high-symbolic');
+        this.icon.icon_name = 'security-high-symbolic';
     },
 
 });
@@ -515,7 +521,7 @@ const PromptDialog = new Lang.Class({
         if(allow) {
             verb = "ALLOW";
             if (this.optionList.tlsGuard) {
-                        verb = "ALLOW_TLSONLY";
+                verb = "ALLOW_TLSONLY";
             } else {
                 verb = "ALLOW";
             }
@@ -584,9 +590,10 @@ const PromptDialog = new Lang.Class({
             this.details.activate()
         }
         if(icon) {
-            this.header.setIcon(icon);
+            this.header.setIcon(icon, sandbox);
         } else {
-            this.header.setIconDefault();
+            this.header.setIcon(path.split(/\//).pop(), sandbox);
+            //this.header.setIconDefault();
         }
 
         if (proto == "icmp") {
