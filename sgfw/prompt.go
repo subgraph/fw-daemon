@@ -45,7 +45,7 @@ func (p *prompter) prompt(policy *Policy) {
 		return
 	}
 	p.policyMap[policy.sandbox+"|"+policy.path] = policy
-	fmt.Println("Saving policy key:" + policy.sandbox + "|" + policy.path)
+	log.Debugf("Saving policy key:" + policy.sandbox + "|" + policy.path)
 	p.policyQueue = append(p.policyQueue, policy)
 	p.cond.Signal()
 }
@@ -99,7 +99,7 @@ func (p *prompter) processNextPacket() bool {
 		}
 
 		if pc.getPrompting() {
-			fmt.Println("Skipping over already prompted connection")
+			log.Debugf("Skipping over already prompted connection")
 			promptLock.Unlock()
 			continue
 		}
@@ -245,7 +245,7 @@ func (p *prompter) nextConnection() (pendingConnection, bool) {
 			p.removePolicy(policy)
 		} else {
 			if pc == nil && !qempty {
-				fmt.Println("FIX ME: I NEED TO SLEEP ON A WAKEABLE CONDITION PROPERLY!!")
+				log.Errorf("FIX ME: I NEED TO SLEEP ON A WAKEABLE CONDITION PROPERLY!!")
 				time.Sleep(time.Millisecond * 300)
 			}
 			return pc, qempty
@@ -258,7 +258,7 @@ func (p *prompter) removePolicy(policy *Policy) {
 
 	if DoMultiPrompt {
 		if len(p.policyQueue) == 0 {
-			fmt.Println("Skipping over zero length policy queue")
+			log.Debugf("Skipping over zero length policy queue")
 			newQueue = make([]*Policy, 0, 0)
 		}
 	}

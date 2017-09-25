@@ -141,7 +141,7 @@ func (s *socksChain) start() {
 	var err error
 	s.listener, err = net.Listen(s.cfg.ListenSocksNet, s.cfg.ListenSocksAddr)
 	if err != nil {
-		log.Errorf("ERR/socks: Failed to listen on the socks address: %v", err)
+		log.Errorf("SOCKS: Failed to listen on the socks address: %v", err)
 		os.Exit(1)
 	}
 
@@ -157,7 +157,7 @@ func (s *socksChain) socksAcceptLoop() error {
 		conn, err := s.listener.Accept()
 		if err != nil {
 			if e, ok := err.(net.Error); ok && !e.Temporary() {
-				log.Infof("ERR/socks: Failed to Accept(): %v", err)
+				log.Errorf("SOCKS: Failed to Accept(): %v", err)
 				return err
 			}
 			continue
@@ -171,12 +171,12 @@ func (c *socksChainSession) sessionWorker() {
 	defer c.clientConn.Close()
 
 	clientAddr := c.clientConn.RemoteAddr()
-	log.Infof("INFO/socks: New connection from: %v", clientAddr)
+	log.Debugf("SOCKS: New connection from: %v", clientAddr)
 
 	// Do the SOCKS handshake with the client, and read the command.
 	var err error
 	if c.req, err = Handshake(c.clientConn); err != nil {
-		log.Infof("ERR/socks: Failed SOCKS5 handshake: %v", err)
+		log.Errorf("SOCKS: Failed SOCKS5 handshake: %v", err)
 		return
 	}
 
@@ -206,7 +206,7 @@ func (c *socksChainSession) sessionWorker() {
 		c.handleConnect(tls)
 	default:
 		// Should *NEVER* happen, validated as part of handshake.
-		log.Infof("BUG/socks: Unsupported SOCKS command: 0x%02x", c.req.Cmd)
+		log.Warningf("SOCKS: Unsupported SOCKS command: 0x%02x", c.req.Cmd)
 		c.req.Reply(ReplyCommandNotSupported)
 	}
 }
@@ -389,7 +389,7 @@ func (c *socksChainSession) handleConnect(tls bool) {
 
 	if c.optData != nil {
 		if _, err = c.upstreamConn.Write(c.optData); err != nil {
-			log.Infof("ERR/socks: Failed writing OptData: %v", err)
+			log.Errorf("SOCKS: Failed writing OptData: %v", err)
 			return
 		}
 		c.optData = nil
@@ -398,7 +398,7 @@ func (c *socksChainSession) handleConnect(tls bool) {
 	// A upstream connection has been established, push data back and forth
 	// till the session is done.
 	c.forwardTraffic(tls)
-	log.Infof("INFO/socks: Closed SOCKS connection from: %v", c.clientConn.RemoteAddr())
+	log.Debugf("SOCKS: Closed SOCKS connection from: %v", c.clientConn.RemoteAddr())
 }
 
 func (c *socksChainSession) forwardTraffic(tls bool) {
