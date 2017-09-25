@@ -62,7 +62,6 @@ func newDbusObjectPrompt() (*dbusObjectP, error) {
 	return &dbusObjectP{conn.Object("com.subgraph.fwprompt.EventNotifier", "/com/subgraph/fwprompt/EventNotifier")}, nil
 }
 
-
 type dbusServer struct {
 	fw       *Firewall
 	conn     *dbus.Conn
@@ -154,18 +153,20 @@ func createDbusRule(r *Rule) DbusRule {
 	} else if r.gid >= 0 {
 		pstr += ":" + strconv.Itoa(r.gid)
 	}
+	log.Debugf("SANDBOX SANDBOX SANDBOX: %s", r.sandbox)
 	return DbusRule{
-		ID:     uint32(r.id),
-		Net:    netstr,
-		Origin: ostr,
-		Proto:  r.proto,
-		Pid:    uint32(r.pid),
-		Privs:  pstr,
-		App:    path.Base(r.policy.path),
-		Path:   r.policy.path,
-		Verb:   uint16(r.rtype),
-		Target: r.AddrString(false),
-		Mode:   uint16(r.mode),
+		ID:      uint32(r.id),
+		Net:     netstr,
+		Origin:  ostr,
+		Proto:   r.proto,
+		Pid:     uint32(r.pid),
+		Privs:   pstr,
+		App:     path.Base(r.policy.path),
+		Path:    r.policy.path,
+		Verb:    uint16(r.rtype),
+		Target:  r.AddrString(false),
+		Mode:    uint16(r.mode),
+		Sandbox: r.sandbox,
 	}
 }
 
@@ -224,6 +225,7 @@ func (ds *dbusServer) UpdateRule(rule DbusRule) *dbus.Error {
 		r.addr = tmp.addr
 		r.port = tmp.port
 		r.mode = RuleMode(rule.Mode)
+		r.sandbox = rule.Sandbox
 		r.policy.lock.Unlock()
 		if r.mode != RULE_MODE_SESSION {
 			ds.fw.saveRules()

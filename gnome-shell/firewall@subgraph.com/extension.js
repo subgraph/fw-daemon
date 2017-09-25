@@ -58,6 +58,7 @@ const FirewallPromptInterface = '<node> \
         <arg type="s" direction="in" name="group" /> \
         <arg type="i" direction="in" name="pid" /> \
 	<arg type="s" direction="in" name="sandbox" /> \
+	<arg type="b" direction="in" name="tlsguard" /> \
         <arg type="s" direction="in" name="optstring" /> \
         <arg type="b" direction="in" name="expanded" /> \
         <arg type="b" direction="in" name="expert" /> \
@@ -93,11 +94,11 @@ const FirewallPromptHandler = new Lang.Class({
     },
 
     RequestPromptAsync: function(params, invocation) {
-        let [app, icon, path, address, port, ip, origin, proto, uid, gid, user, group, pid, sandbox, optstring, expanded, expert, action] = params;
+        let [app, icon, path, address, port, ip, origin, proto, uid, gid, user, group, pid, sandbox, tlsguard, optstring, expanded, expert, action] = params;
 //        this._closeDialog();
-        this._dialog = new Dialog.PromptDialog(invocation, (pid >= 0), (sandbox != ""));
+        this._dialog = new Dialog.PromptDialog(invocation, (pid >= 0), (sandbox != ""), tlsguard);
         this._invocation = invocation;
-        this._dialog.update(app, icon, path, address, port, ip, origin, uid, gid, user, group, pid, proto, optstring, sandbox, expanded, expert, action);
+        this._dialog.update(app, icon, path, address, port, ip, origin, uid, gid, user, group, pid, proto, tlsguard, optstring, sandbox, expanded, expert, action);
         this._dialog.open();
     },
 

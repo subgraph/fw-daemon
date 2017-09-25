@@ -252,6 +252,21 @@ const (
 	SCROLL_SMOOTH ScrollDirection = C.GDK_SCROLL_SMOOTH
 )
 
+// WindowState is a representation of GDK's GdkWindowState
+type WindowState int
+
+const (
+	WINDOW_STATE_WITHDRAWN  WindowState = C.GDK_WINDOW_STATE_WITHDRAWN
+	WINDOW_STATE_ICONIFIED  WindowState = C.GDK_WINDOW_STATE_ICONIFIED
+	WINDOW_STATE_MAXIMIZED  WindowState = C.GDK_WINDOW_STATE_MAXIMIZED
+	WINDOW_STATE_STICKY     WindowState = C.GDK_WINDOW_STATE_STICKY
+	WINDOW_STATE_FULLSCREEN WindowState = C.GDK_WINDOW_STATE_FULLSCREEN
+	WINDOW_STATE_ABOVE      WindowState = C.GDK_WINDOW_STATE_ABOVE
+	WINDOW_STATE_BELOW      WindowState = C.GDK_WINDOW_STATE_BELOW
+	WINDOW_STATE_FOCUSED    WindowState = C.GDK_WINDOW_STATE_FOCUSED
+	WINDOW_STATE_TILED      WindowState = C.GDK_WINDOW_STATE_TILED
+)
+
 // CURRENT_TIME is a representation of GDK_CURRENT_TIME
 
 const CURRENT_TIME = C.GDK_CURRENT_TIME
@@ -352,25 +367,6 @@ func marshalDevice(p uintptr) (interface{}, error) {
 	return &Device{obj}, nil
 }
 
-// Grab() is a wrapper around gdk_device_grab().
-func (v *Device) Grab(w *Window, ownership GrabOwnership, owner_events bool, event_mask EventMask, cursor *Cursor, time uint32) GrabStatus {
-	ret := C.gdk_device_grab(
-		v.native(),
-		w.native(),
-		C.GdkGrabOwnership(ownership),
-		gbool(owner_events),
-		C.GdkEventMask(event_mask),
-		cursor.native(),
-		C.guint32(time),
-	)
-	return GrabStatus(ret)
-}
-
-// Ungrab() is a wrapper around gdk_device_ungrab().
-func (v *Device) Ungrab(time uint32) {
-	C.gdk_device_ungrab(v.native(), C.guint32(time))
-}
-
 /*
  * GdkCursor
  */
@@ -378,6 +374,21 @@ func (v *Device) Ungrab(time uint32) {
 // Cursor is a representation of GdkCursor.
 type Cursor struct {
 	*glib.Object
+}
+
+// CursorNewFromName is a wrapper around gdk_cursor_new_from_name().
+func CursorNewFromName(display *Display, name string) (*Cursor, error) {
+	cstr := C.CString(name)
+	defer C.free(unsafe.Pointer(cstr))
+	c := C.gdk_cursor_new_from_name(display.native(), (*C.gchar)(cstr))
+	if c == nil {
+		return nil, nilPtrErr
+	}
+
+	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
+	runtime.SetFinalizer(obj, (*glib.Object).Unref)
+
+	return &Cursor{obj}, nil
 }
 
 // native returns a pointer to the underlying GdkCursor.
@@ -429,18 +440,6 @@ func marshalDeviceManager(p uintptr) (interface{}, error) {
 	return &DeviceManager{obj}, nil
 }
 
-// GetClientPointer() is a wrapper around gdk_device_manager_get_client_pointer().
-func (v *DeviceManager) GetClientPointer() (*Device, error) {
-	c := C.gdk_device_manager_get_client_pointer(v.native())
-	if c == nil {
-		return nil, nilPtrErr
-	}
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
-	obj.Ref()
-	runtime.SetFinalizer(obj, (*glib.Object).Unref)
-	return &Device{obj}, nil
-}
-
 // GetDisplay() is a wrapper around gdk_device_manager_get_display().
 func (v *DeviceManager) GetDisplay() (*Display, error) {
 	c := C.gdk_device_manager_get_display(v.native())
@@ -451,22 +450,6 @@ func (v *DeviceManager) GetDisplay() (*Display, error) {
 	obj.Ref()
 	runtime.SetFinalizer(obj, (*glib.Object).Unref)
 	return &Display{obj}, nil
-}
-
-// ListDevices() is a wrapper around gdk_device_manager_list_devices().
-func (v *DeviceManager) ListDevices(tp DeviceType) *glib.List {
-	clist := C.gdk_device_manager_list_devices(v.native(), C.GdkDeviceType(tp))
-	if clist == nil {
-		return nil
-	}
-	glist := glib.WrapList(uintptr(unsafe.Pointer(clist)))
-	glist.DataWrapper(func(ptr unsafe.Pointer) interface{} {
-		return &Device{&glib.Object{glib.ToGObject(ptr)}}
-	})
-	runtime.SetFinalizer(glist, func(glist *glib.List) {
-		glist.Free()
-	})
-	return glist
 }
 
 /*
@@ -543,19 +526,6 @@ func (v *Display) GetName() (string, error) {
 	return C.GoString((*C.char)(c)), nil
 }
 
-// GetScreen() is a wrapper around gdk_display_get_screen().
-func (v *Display) GetScreen(screenNum int) (*Screen, error) {
-	c := C.gdk_display_get_screen(v.native(), C.gint(screenNum))
-	if c == nil {
-		return nil, nilPtrErr
-	}
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
-	s := &Screen{obj}
-	obj.Ref()
-	runtime.SetFinalizer(obj, (*glib.Object).Unref)
-	return s, nil
-}
-
 // GetDefaultScreen() is a wrapper around gdk_display_get_default_screen().
 func (v *Display) GetDefaultScreen() (*Screen, error) {
 	c := C.gdk_display_get_default_screen(v.native())
@@ -567,19 +537,6 @@ func (v *Display) GetDefaultScreen() (*Screen, error) {
 	obj.Ref()
 	runtime.SetFinalizer(obj, (*glib.Object).Unref)
 	return s, nil
-}
-
-// GetDeviceManager() is a wrapper around gdk_display_get_device_manager().
-func (v *Display) GetDeviceManager() (*DeviceManager, error) {
-	c := C.gdk_display_get_device_manager(v.native())
-	if c == nil {
-		return nil, nilPtrErr
-	}
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
-	d := &DeviceManager{obj}
-	obj.Ref()
-	runtime.SetFinalizer(obj, (*glib.Object).Unref)
-	return d, nil
 }
 
 // DeviceIsGrabbed() is a wrapper around gdk_display_device_is_grabbed().
@@ -1168,6 +1125,58 @@ func (v *EventScroll) Direction() ScrollDirection {
 }
 
 /*
+ * GdkEventWindowState
+ */
+
+// EventWindowState is a representation of GDK's GdkEventWindowState.
+type EventWindowState struct {
+	*Event
+}
+
+func EventWindowStateNew() *EventWindowState {
+	ee := (*C.GdkEvent)(unsafe.Pointer(&C.GdkEventWindowState{}))
+	ev := Event{ee}
+	return &EventWindowState{&ev}
+}
+
+// EventWindowStateNewFromEvent returns an EventWindowState from an Event.
+//
+// Using widget.Connect() for the
+// "window-state-event" signal results in a *Event being passed as
+// the callback's second argument. The argument is actually a
+// *EventWindowState. EventWindowStateNewFromEvent provides a means of creating
+// an EventWindowState from the Event.
+func EventWindowStateNewFromEvent(event *Event) *EventWindowState {
+	ee := (*C.GdkEvent)(unsafe.Pointer(event.native()))
+	ev := Event{ee}
+	return &EventWindowState{&ev}
+}
+
+// Native returns a pointer to the underlying GdkEventWindowState.
+func (v *EventWindowState) Native() uintptr {
+	return uintptr(unsafe.Pointer(v.native()))
+}
+
+func (v *EventWindowState) native() *C.GdkEventWindowState {
+	return (*C.GdkEventWindowState)(unsafe.Pointer(v.Event.native()))
+}
+
+func (v *EventWindowState) Type() EventType {
+	c := v.native()._type
+	return EventType(c)
+}
+
+func (v *EventWindowState) ChangedMask() WindowState {
+	c := v.native().changed_mask
+	return WindowState(c)
+}
+
+func (v *EventWindowState) NewWindowState() WindowState {
+	c := v.native().new_window_state
+	return WindowState(c)
+}
+
+/*
  * GdkGravity
  */
 type GdkGravity int
@@ -1722,6 +1731,11 @@ func marshalVisual(p uintptr) (interface{}, error) {
 // Window is a representation of GDK's GdkWindow.
 type Window struct {
 	*glib.Object
+}
+
+// SetCursor is a wrapper around gdk_window_set_cursor().
+func (v *Window) SetCursor(cursor *Cursor) {
+	C.gdk_window_set_cursor(v.native(), cursor.native())
 }
 
 // native returns a pointer to the underlying GdkWindow.

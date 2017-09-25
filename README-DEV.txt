@@ -1,3 +1,15 @@
+*** Please also refer to the notes found in fw-prompt/README.txt: you will need to copy both files in sources/etc/dbus-1/system.d/ into /etc/dbus-1/system.d/
+
+Build complications:
+You may need to run the following first, esp. on Ubuntu 16.04:
+go install -tags gtk_3_18 github.com/gotk3/gotk3/gtk
+
+and build with the following:
+go build -v -tags gtk_3_18 -gcflags "-N -l" fw-prompt
+
+Otherwise standard go build and go install procedures should suffice.
+
+
 Before running fw-daemon, make sure to export: GODEBUG=cgocheck=0
 
 Also, here's a default fw-daemon-socks.json config file:

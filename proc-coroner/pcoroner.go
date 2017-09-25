@@ -2,14 +2,13 @@ package pcoroner
 
 import (
 	"fmt"
-	"time"
-	"strings"
-	"strconv"
-	"sync"
 	"os"
+	"strconv"
+	"strings"
+	"sync"
 	"syscall"
+	"time"
 )
-
 
 type WatchProcess struct {
 	Pid   int
@@ -25,13 +24,10 @@ type CallbackEntry struct {
 
 type procCB func(int, interface{})
 
-
 var Callbacks []CallbackEntry
-
 
 var pmutex = &sync.Mutex{}
 var pidMap map[int]WatchProcess = make(map[int]WatchProcess)
-
 
 func MonitorProcess(pid int) bool {
 	pmutex.Lock()
@@ -68,14 +64,14 @@ func AddCallback(cbfunc procCB, param interface{}) {
 
 func MonitorThread(cbfunc procCB, param interface{}) {
 	for {
-/*		if len(pidMap) == 0 {
-			fmt.Println("TICK")
-		} else { fmt.Println("len = ", len(pidMap)) } */
+		/*		if len(pidMap) == 0 {
+				fmt.Println("TICK")
+			} else { fmt.Println("len = ", len(pidMap)) } */
 		pmutex.Lock()
 		pmutex.Unlock()
 
 		for pkey, pval := range pidMap {
-//			fmt.Printf("PID %v -> %v\n", pkey, pval)
+			// fmt.Printf("PID %v -> %v\n", pkey, pval)
 			res := checkProcess(&pval, false)
 
 			if !res {
@@ -100,7 +96,7 @@ func checkProcess(proc *WatchProcess, init bool) bool {
 	ppath := fmt.Sprintf("/proc/%d/stat", proc.Pid)
 	f, err := os.Open(ppath)
 	if err != nil {
-//		fmt.Printf("Error opening path %s: %s\n", ppath, err)
+		// fmt.Printf("Error opening path %s: %s\n", ppath, err)
 		return false
 	}
 	defer f.Close()
@@ -133,7 +129,7 @@ func checkProcess(proc *WatchProcess, init bool) bool {
 	}
 
 	bstr := string(buf[:])
-//	fmt.Println("sstr = ", bstr)
+	// fmt.Println("sstr = ", bstr)
 
 	fields := strings.Split(bstr, " ")
 

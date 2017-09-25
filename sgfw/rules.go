@@ -1,7 +1,7 @@
 package sgfw
 
 import (
-	"encoding/binary"
+	//	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -71,8 +71,6 @@ func (r *Rule) getString(redact bool) string {
 	sbox := "|"
 	if r.sandbox != "" {
 		sbox = "|" + sbox
-	} else {
-		log.Notice("sandbox is ", r.sandbox)
 	}
 
 	return fmt.Sprintf("%s|%s%s%s%s%s", rtype, protostr, r.AddrString(redact), rmode, rpriv, sbox)
@@ -119,7 +117,7 @@ func (r *Rule) match(src net.IP, dst net.IP, dstPort uint16, hostname string, pr
 		return false
 	}
 
-	log.Notice("comparison: ", hostname, " / ", dst, " : ", dstPort, " -> ", r.addr, " / ", r.hostname, " : ", r.port)
+	// log.Notice("comparison: ", hostname, " / ", dst, " : ", dstPort, " -> ", r.addr, " / ", r.hostname, " : ", r.port)
 	if r.port != matchAny && r.port != dstPort {
 		return false
 	}
@@ -127,7 +125,6 @@ func (r *Rule) match(src net.IP, dst net.IP, dstPort uint16, hostname string, pr
 		return true
 	}
 	if r.hostname != "" {
-		log.Notice("comparing hostname")
 		if strings.ContainsAny(r.hostname, "*") {
 			regstr := strings.Replace(r.hostname, "*", ".?", -1)
 			match, err := regexp.MatchString(regstr, hostname)
@@ -144,7 +141,7 @@ func (r *Rule) match(src net.IP, dst net.IP, dstPort uint16, hostname string, pr
 		return true
 	}
 	if proto == "icmp" {
-		fmt.Printf("network = %v, src = %v, r.addr = %x, src to4 = %x\n", r.network, src, r.addr, binary.BigEndian.Uint32(src.To4()))
+		//fmt.Printf("network = %v, src = %v, r.addr = %x, src to4 = %x\n", r.network, src, r.addr, binary.BigEndian.Uint32(src.To4()))
 		if (r.network != nil && r.network.Contains(src)) || (r.addr.Equal(src)) {
 			return true
 		}
@@ -169,10 +166,9 @@ func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint
 	}
 	// sandboxed := strings.HasPrefix(optstr, "SOCKS5|Tor / Sandbox")
 	for _, r := range *rl {
-		log.Notice("fuck ",r)
 		nfqproto := ""
-		log.Notice("------------ trying match of src ", src, " against: ", r, " | ", r.saddr, " / optstr = ", optstr, "; pid ", pinfo.Pid, " vs rule pid ", r.pid)
-		log.Notice("r.saddr: ", r.saddr, "src: ", src, "sandboxed ", sandboxed, "optstr: ", optstr)
+		//log.Notice("------------ trying match of src ", src, " against: ", r, " | ", r.saddr, " / optstr = ", optstr, "; pid ", pinfo.Pid, " vs rule pid ", r.pid)
+		//log.Notice("r.saddr: ", r.saddr, "src: ", src, "sandboxed ", sandboxed, "optstr: ", optstr)
 		if r.saddr == nil && src != nil && sandboxed {
 			log.Notice("! Skipping comparison against incompatible rule types: rule src = ", r.saddr, " / packet src = ", src)
 			// continue
@@ -187,16 +183,27 @@ func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint
 			if pkt != nil {
 				nfqproto = getNFQProto(pkt)
 			} else {
-				log.Notice("Weird state.")
+				if r.saddr == nil && src == nil && sandboxed == false && (r.port == dstPort || r.port == matchAny) && (r.addr.Equal(anyAddress) || r.hostname == "" || r.hostname == hostname) {
+					// log.Notice("+ Socks5 MATCH SUCCEEDED")
+					if r.rtype == RULE_ACTION_DENY {
+						return FILTER_DENY
+					} else if r.rtype == RULE_ACTION_ALLOW {
+						return FILTER_ALLOW
+					} else if r.rtype == RULE_ACTION_ALLOW_TLSONLY {
+						return FILTER_ALLOW_TLSONLY
+					}
+				} else {
+					return FILTER_PROMPT
+				}
 			}
 		}
-		log.Notice("r.saddr = ", r.saddr, "src = ", src, "\n")
+		// log.Notice("r.saddr = ", r.saddr, "src = ", src, "\n")
 		if r.pid >= 0 && r.pid != pinfo.Pid {
 			//log.Notice("! Skipping comparison of mismatching PIDs")
 			continue
 		}
 		if r.match(src, dst, dstPort, hostname, nfqproto, pinfo.UID, pinfo.GID, uidToUser(pinfo.UID), gidToGroup(pinfo.GID)) {
-			log.Notice("+ MATCH SUCCEEDED")
+			// log.Notice("+ MATCH SUCCEEDED")
 			dstStr := dst.String()
 			if FirewallConfig.LogRedact {
 				dstStr = STR_REDACTED
@@ -207,12 +214,10 @@ func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint
 				srcp, _ := getPacketPorts(pkt)
 				srcStr = fmt.Sprintf("%s:%d", srcip, srcp)
 			}
-			log.Noticef("%s > %s %s %s -> %s:%d",
-				r.getString(FirewallConfig.LogRedact),
-				pinfo.ExePath, r.proto,
-				srcStr,
-				dstStr, dstPort)
+			// log.Noticef("%s > %s %s %s -> %s:%d",
+			//r.getString(FirewallConfig.LogRedact), pinfo.ExePath, r.proto, srcStr, dstStr, dstPort)
 			if r.rtype == RULE_ACTION_DENY {
+				//TODO: Optionally redact below log entry
 				log.Warningf("DENIED outgoing connection attempt by %s from %s %s -> %s:%d",
 					pinfo.ExePath, r.proto,
 					srcStr,
@@ -222,19 +227,20 @@ func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint
 				result = FILTER_ALLOW
 				return result
 				/*
-				if r.saddr != nil {
-					return result
-				}
+					if r.saddr != nil {
+						return result
+					}
 				*/
 			} else if r.rtype == RULE_ACTION_ALLOW_TLSONLY {
 				result = FILTER_ALLOW_TLSONLY
 				return result
-				}
-		} else {
-			log.Notice("+ MATCH FAILED")
+			}
 		}
+		/**else {
+			log.Notice("+ MATCH FAILED")
+		} */
 	}
-	log.Notice("--- RESULT = ", result)
+	// log.Notice("--- RESULT = ", result)
 	return result
 }
 
@@ -269,7 +275,7 @@ func (r *Rule) parse(s string) bool {
 		return false
 	}
 
-	fmt.Printf("uid = %v, gid = %v, user = %v, group = %v, hostname = %v, sandbox = %v\n", r.uid, r.gid, r.uname, r.gname, r.hostname, r.sandbox)
+	// fmt.Printf("uid = %v, gid = %v, user = %v, group = %v, hostname = %v, sandbox = %v\n", r.uid, r.gid, r.uname, r.gname, r.hostname, r.sandbox)
 
 	if len(parts) == 6 && len(strings.TrimSpace(parts[5])) > 0 {
 		r.saddr = net.ParseIP(parts[5])
@@ -439,7 +445,7 @@ func savePolicy(f *os.File, p *Policy) {
 	if !p.hasPersistentRules() {
 		return
 	}
-	log.Warningf("p.path: ",p.path)
+	log.Warningf("p.path: ", p.path)
 	if !writeLine(f, "["+p.sandbox+"|"+p.path+"]") {
 		return
 	}
@@ -495,7 +501,7 @@ func (fw *Firewall) loadRules() {
 func (fw *Firewall) processPathLine(line string) *Policy {
 	pathLine := line[1 : len(line)-1]
 	toks := strings.Split(pathLine, "|")
-	policy := fw.policyForPathAndSandbox(toks[1],toks[0])
+	policy := fw.policyForPathAndSandbox(toks[1], toks[0])
 	policy.lock.Lock()
 	defer policy.lock.Unlock()
 	policy.rules = nil

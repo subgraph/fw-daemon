@@ -46,6 +46,7 @@ type pendingConnection interface {
 	dst() net.IP
 	dstPort() uint16
 	sandbox() string
+	socks() bool
 	accept()
 	acceptTLSOnly()
 	drop()
@@ -76,6 +77,10 @@ func getEmptyPInfo() *procsnitch.Info {
 
 func (pp *pendingPkt) sandbox() string {
 	return pp.pinfo.Sandbox
+}
+
+func (pp *pendingPkt) socks() bool {
+	return false
 }
 
 func (pp *pendingPkt) policy() *Policy {
@@ -175,7 +180,7 @@ func (pp *pendingPkt) print() string {
 type Policy struct {
 	fw               *Firewall
 	path             string
-	sandbox		 string
+	sandbox          string
 	application      string
 	icon             string
 	rules            RuleList
@@ -194,7 +199,7 @@ func (fw *Firewall) PolicyForPath(path string) *Policy {
 func (fw *Firewall) PolicyForPathAndSandbox(path string, sandbox string) *Policy {
 	fw.lock.Lock()
 	defer fw.lock.Unlock()
-	
+
 	return fw.policyForPathAndSandbox(path, sandbox)
 }
 
@@ -212,7 +217,7 @@ func (fw *Firewall) policyForPathAndSandbox(path string, sandbox string) *Policy
 			p.icon = entry.icon
 		}
 		fw.policyMap[policykey] = p
-		log.Infof("Creating new policy for path and sandbox: %s\n",policykey)
+		log.Infof("Creating new policy for path and sandbox: %s\n", policykey)
 		fw.policies = append(fw.policies, p)
 	}
 	return fw.policyMap[policykey]
@@ -268,8 +273,7 @@ func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info, o
 
 func (p *Policy) processPromptResult(pc pendingConnection) {
 	p.pendingQueue = append(p.pendingQueue, pc)
-	fmt.Println("im here now.. processing prompt result..")
-	fmt.Println("processPromptResult(): p.promptInProgress = ", p.promptInProgress)
+	//fmt.Println("processPromptResult(): p.promptInProgress = ", p.promptInProgress)
 	if DoMultiPrompt || (!DoMultiPrompt && !p.promptInProgress) {
 		p.promptInProgress = true
 		go p.fw.dbus.prompt(p)
@@ -332,7 +336,7 @@ func (p *Policy) processNewRule(r *Rule, scope FilterScope) bool {
 }
 
 func (p *Policy) parseRule(s string, add bool) (*Rule, error) {
-	log.Noticef("XXX: attempt to parse rule: |%s|\n", s)
+	//log.Noticef("XXX: attempt to parse rule: |%s|\n", s)
 	r := new(Rule)
 	r.pid = -1
 	r.mode = RULE_MODE_PERMANENT
@@ -367,7 +371,7 @@ func (p *Policy) filterPending(rule *Rule) {
 	for _, pc := range p.pendingQueue {
 		if rule.match(pc.src(), pc.dst(), pc.dstPort(), pc.hostname(), pc.proto(), pc.procInfo().UID, pc.procInfo().GID, uidToUser(pc.procInfo().UID), gidToGroup(pc.procInfo().GID)) {
 			log.Infof("Adding rule for: %s", rule.getString(FirewallConfig.LogRedact))
-			log.Noticef("%s > %s", rule.getString(FirewallConfig.LogRedact), pc.print())
+			// log.Noticef("%s > %s", rule.getString(FirewallConfig.LogRedact), pc.print())
 			if rule.rtype == RULE_ACTION_ALLOW {
 				pc.accept()
 			} else if rule.rtype == RULE_ACTION_ALLOW_TLSONLY {
@@ -502,7 +506,7 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 			return
 		}
 	*/
-	policy := fw.PolicyForPathAndSandbox(ppath,pinfo.Sandbox)
+	policy := fw.PolicyForPathAndSandbox(ppath, pinfo.Sandbox)
 	//log.Notice("XXX: flunked basicallowpacket; policy = ", policy)
 	policy.processPacket(pkt, pinfo, optstring)
 }
@@ -524,18 +528,33 @@ func readFileDirect(filename string) ([]byte, error) {
 	fd := int(res)
 	data := make([]byte, 65535)
 
-	val, err := syscall.Read(fd, data)
-
-	if err != nil {
-		return nil, err
+	i := 0
+	val := 0
+	for i = 0; i < 65535; {
+		val, err = syscall.Read(fd, data[i:])
+		i += val
+		if err != nil && val != 0 {
+			return nil, err
+		}
+		if val == 0 {
+			break
+		}
 	}
 
+	data = data[0:i]
+	/*
+		val, err := syscall.Read(fd, data)
+
+		if err != nil {
+			return nil, err
+		}
+	*/
 	syscall.Close(fd)
-
-	if val < 65535 {
-		data = data[0:val]
-	}
-
+	/*
+		if val < 65535 {
+			data = data[0:val]
+		}
+	*/
 	return data, nil
 }
 
@@ -584,6 +603,10 @@ func GetRealRoot(pathname string, pid int) string {
 		return pathname
 	}
 
+	if lnk == "/" {
+		return pathname
+	}
+
 	if strings.HasPrefix(pathname, lnk) {
 		return pathname[len(lnk):]
 	}
@@ -615,7 +638,6 @@ func LookupSandboxProc(srcip net.IP, srcp uint16, dstip net.IP, dstp uint16, pro
 			data = string(bdata)
 			lines := strings.Split(data, "\n")
 			rlines := make([]string, 0)
-
 			for l := 0; l < len(lines); l++ {
 				lines[l] = strings.TrimSpace(lines[l])
 				ssplit := strings.Split(lines[l], ":")
@@ -627,12 +649,16 @@ func LookupSandboxProc(srcip net.IP, srcp uint16, dstip net.IP, dstp uint16, pro
 				rlines = append(rlines, strings.Join(ssplit, ":"))
 			}
 
+			// log.Warningf("Looking for %s:%d => %s:%d \n %s\n******\n", srcip, srcp, dstip, dstp, data)
+
 			if proto == "tcp" {
 				res = procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, rlines)
 			} else if proto == "udp" {
 				res = procsnitch.LookupUDPSocketProcessAll(srcip, srcp, dstip, dstp, rlines, strictness)
 			} else if proto == "icmp" {
 				res = procsnitch.LookupICMPSocketProcessAll(srcip, dstip, icode, rlines)
+			} else {
+				fmt.Printf("unknown proto: %s", proto)
 			}
 
 			if res != nil {
@@ -640,7 +666,9 @@ func LookupSandboxProc(srcip net.IP, srcp uint16, dstip net.IP, dstp uint16, pro
 				res.Sandbox = OzInitPids[i].Name
 				res.ExePath = GetRealRoot(res.ExePath, OzInitPids[i].Pid)
 				break
-			}
+			} /*else {
+				log.Warningf("*****\nCouldn't find proc for %s:%d => %s:%d \n %s\n******\n", srcip, srcp, dstip, dstp, data)
+			} */
 		}
 
 	}
@@ -681,7 +709,7 @@ func findProcessForPacket(pkt *nfqueue.NFQPacket, reverse bool, strictness int) 
 		return nil, optstr
 	}
 
-	log.Noticef("XXX proto = %s, from %v : %v -> %v : %v\n", proto, srcip, srcp, dstip, dstp)
+	// log.Noticef("XXX proto = %s, from %v : %v -> %v : %v\n", proto, srcip, srcp, dstip, dstp)
 
 	var res *procsnitch.Info = nil
 

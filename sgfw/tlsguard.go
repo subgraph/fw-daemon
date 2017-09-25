@@ -2,15 +2,14 @@ package sgfw
 
 import (
 	"crypto/x509"
+	"errors"
 	"io"
 	"net"
-	"errors"
 )
 
-
 func TLSGuard(conn, conn2 net.Conn, fqdn string) error {
-// Should this be a requirement?
-//	if strings.HasSuffix(request.DestAddr.FQDN, "onion") {
+	// Should this be a requirement?
+	//	if strings.HasSuffix(request.DestAddr.FQDN, "onion") {
 
 	handshakeByte, err := readNBytes(conn, 1)
 	if err != nil {
@@ -118,7 +117,7 @@ func TLSGuard(conn, conn2 net.Conn, fqdn string) error {
 
 			for remaining > 0 {
 				certLen := int(int(pos[0])<<16 | int(pos[1])<<8 | int(pos[2]))
-//				fmt.Printf("Certs chain len %d, cert 1 len %d:\n", certChainLen, certLen)
+				// fmt.Printf("Certs chain len %d, cert 1 len %d:\n", certChainLen, certLen)
 				cert := pos[3 : 3+certLen]
 				certs, err := x509.ParseCertificates(cert)
 				if remaining == certChainLen {
@@ -143,18 +142,18 @@ func TLSGuard(conn, conn2 net.Conn, fqdn string) error {
 			} else {
 				valid = true
 			}
-//		else if s == 0x0d {		fmt.Printf("found a client cert request, sending buf to client\n") }
+			//		else if s == 0x0d {		fmt.Printf("found a client cert request, sending buf to client\n") }
 		} else if s == 0x0e {
 			sendToClient = true
 		} else if s == 0x0d {
 			sendToClient = true
 		}
 
-//		fmt.Printf("Version bytes: %x %x\n", responseBuf[1], responseBuf[2])
-//		fmt.Printf("Len bytes: %x %x\n", responseBuf[3], responseBuf[4])
-//		fmt.Printf("Message type: %x\n", responseBuf[5])
-//		fmt.Printf("Message len: %x %x %x\n", responseBuf[6], responseBuf[7], responseBuf[8])
-//		fmt.Printf("Message body: %v\n", responseBuf[9:])
+		// fmt.Printf("Version bytes: %x %x\n", responseBuf[1], responseBuf[2])
+		// fmt.Printf("Len bytes: %x %x\n", responseBuf[3], responseBuf[4])
+		// fmt.Printf("Message type: %x\n", responseBuf[5])
+		// fmt.Printf("Message len: %x %x %x\n", responseBuf[6], responseBuf[7], responseBuf[8])
+		// fmt.Printf("Message body: %v\n", responseBuf[9:])
 		conn.Write(responseBuf)
 		responseBuf = []byte{}
 	}

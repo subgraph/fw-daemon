@@ -241,7 +241,13 @@ func Main() {
 
 	wg := sync.WaitGroup{}
 
-	config, err := loadSocksConfiguration(defaultSocksCfgPath)
+	scfile := os.Getenv("SGFW_SOCKS_CONFIG")
+
+	if scfile == "" {
+		scfile = defaultSocksCfgPath
+	}
+
+	config, err := loadSocksConfiguration(scfile)
 	if err != nil && !os.IsNotExist(err) {
 		panic(err)
 	}
@@ -250,7 +256,7 @@ func Main() {
 		chain := NewSocksChain(socksConfig, &wg, fw)
 		chain.start()
 	} else {
-		log.Notice("Did not find SOCKS5 configuration file at", defaultSocksCfgPath, "; ignoring subsystem...")
+		log.Notice("Did not find SOCKS5 configuration file at", scfile, "; ignoring subsystem...")
 	}
 
 	dbusp, err = newDbusObjectPrompt()

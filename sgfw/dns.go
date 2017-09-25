@@ -1,23 +1,23 @@
 package sgfw
 
 import (
+	"encoding/binary"
 	"net"
 	"strings"
 	"sync"
 	"time"
-	"encoding/binary"
 
-//	"github.com/subgraph/go-nfnetlink"
+	//	"github.com/subgraph/go-nfnetlink"
 	"github.com/google/gopacket/layers"
+	"github.com/subgraph/fw-daemon/proc-coroner"
 	nfqueue "github.com/subgraph/go-nfnetlink/nfqueue"
 	"github.com/subgraph/go-procsnitch"
-	"github.com/subgraph/fw-daemon/proc-coroner"
 )
 
 type dnsEntry struct {
 	name string
-	ttl uint32
-	exp time.Time
+	ttl  uint32
+	exp  time.Time
 }
 
 type dnsCache struct {
@@ -66,14 +66,14 @@ func (dc *dnsCache) processDNS(pkt *nfqueue.NFQPacket) {
 		srcip, _ := getPacketIPAddrs(pkt)
 		pinfo := getEmptyPInfo()
 		if !isNSTrusted(srcip) {
-			pinfo, _  = findProcessForPacket(pkt, true, procsnitch.MATCH_LOOSEST)
+			pinfo, _ = findProcessForPacket(pkt, true, procsnitch.MATCH_LOOSEST)
 
 			if pinfo == nil {
 				log.Warningf("Skipping attempted DNS cache entry for process that can't be found: %v -> %v\n", q.Name, dns.answer)
 				return
 			}
 		}
-//log.Notice("XXX: PROCESS LOOKUP -> ", pinfo)
+		//log.Notice("XXX: PROCESS LOOKUP -> ", pinfo)
 		dc.processRecordAddress(q.Name, dns.answer, pinfo.Pid)
 		return
 	}
@@ -166,7 +166,7 @@ func (dc *dnsCache) Lookup(ip net.IP, pid int) string {
 		entry, ok := dc.ipMap[pid][ip.String()]
 		if ok {
 			if now.Before(entry.exp) {
-//				log.Noticef("XXX: LOOKUP on %v / %v = %v, ttl = %v / %v\n", pid, ip.String(), entry.name, entry.ttl, entry.exp)
+				// log.Noticef("XXX: LOOKUP on %v / %v = %v, ttl = %v / %v\n", pid, ip.String(), entry.name, entry.ttl, entry.exp)
 				return entry.name
 			} else {
 				log.Warningf("Skipping expired per-pid (%d) DNS cache entry: %s -> %s / exp. %v (%ds)\n",
@@ -180,13 +180,13 @@ func (dc *dnsCache) Lookup(ip net.IP, pid int) string {
 	if ok {
 		if now.Before(entry.exp) {
 			str = entry.name
-//			log.Noticef("XXX: LOOKUP on %v / 0 RETURNING %v, ttl = %v / %v\n", ip.String(), str, entry.ttl, entry.exp)
+			// log.Noticef("XXX: LOOKUP on %v / 0 RETURNING %v, ttl = %v / %v\n", ip.String(), str, entry.ttl, entry.exp)
 		} else {
 			log.Warningf("Skipping expired global DNS cache entry: %s -> %s / exp. %v (%ds)\n",
 				ip.String(), entry.name, entry.exp, entry.ttl)
 		}
 	}
 
-//log.Noticef("XXX: LOOKUP on %v / 0 RETURNING %v\n", ip.String(), str)
+	//log.Noticef("XXX: LOOKUP on %v / 0 RETURNING %v\n", ip.String(), str)
 	return str
 }
