@@ -29,7 +29,7 @@ func readTLSChunk(conn net.Conn) ([]byte, int, error) {
 	conn.SetReadDeadline(time.Time{})
 
 	if err != nil {
-		fmt.Println("TLS data chunk read failure: ", err)
+		log.Errorf("TLS data chunk read failure: ", err)
 		return nil, 0, err
 	}
 
@@ -88,9 +88,9 @@ func TLSGuard(conn, conn2 net.Conn, fqdn string) error {
 		chunk, rtype, err = readTLSChunk(conn2)
 
 		if err != nil {
-			fmt.Printf("OTHER loop %v: trying to read: conn\n", loop)
+			log.Debugf("TLSGUARD: OTHER loop %v: trying to read: conn\n", loop)
 			chunk, rtype, err2 := readTLSChunk(conn)
-			fmt.Printf("read: %v, %v, %v\n", err2, rtype, len(chunk))
+			log.Debugf("TLSGUARD: read: %v, %v, %v\n", err2, rtype, len(chunk))
 
 			if err2 == nil {
 				conn2.Write(chunk)
@@ -118,7 +118,7 @@ func TLSGuard(conn, conn2 net.Conn, fqdn string) error {
 
 		serverMsg := chunk[5:]
 		s := serverMsg[0]
-		fmt.Printf("s = %#x\n", s)
+		log.Debugf("TLSGUARD: s = %#x\n", s)
 
 		if s == SSL3_MT_CERTIFICATE {
 			// Message len, 3 bytes
