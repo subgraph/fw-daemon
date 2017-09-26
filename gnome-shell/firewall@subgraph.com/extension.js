@@ -1,11 +1,16 @@
 const Lang = imports.lang;
+const Main = imports.ui.main;
+const Meta = imports.gi.Meta;
+const Shell = imports.gi.Shell;
+
 const Gio = imports.gi.Gio;
 
 const Extension = imports.misc.extensionUtils.getCurrentExtension();
+const Convenience = Extension.imports.convenience;
+
 const Dialog = Extension.imports.dialog;
 const Menu = Extension.imports.menu;
 //const ConnectionMonitor = Extension.imports.cmonitor;
-
 
 function init() {
     return new FirewallSupport();
@@ -75,18 +80,70 @@ const FirewallPromptHandler = new Lang.Class({
     Name: 'FirewallPromptHandler',
 
     _init: function() {
+        this._settings = Convenience.getSettings();
         this._dbusImpl = Gio.DBusExportedObject.wrapJSObject(FirewallPromptInterface, this);
         this._dbusImpl.export(Gio.DBus.system, '/com/subgraph/FirewallPrompt');
         Gio.bus_own_name_on_connection(Gio.DBus.system, 'com.subgraph.FirewallPrompt', Gio.BusNameOwnerFlags.REPLACE, null, null);
         this._dialogs = new Array();
+        this._initKeybindings();
     },
 
     destroy: function() {
+        log("SGFW: Exited");
         this._closeDialogs();
         this._dbusImpl.unexport();
+        this._destroyKeybindings();
+    },
+
+    _initKeybindings: function() {
+        this._keyBindings = new Array(
+            "prompt-scope-previous"
+            , "prompt-scope-next"
+            , "prompt-rule-next"
+            , "prompt-rule-previous"
+            , "prompt-rule-allow"
+            , "prompt-rule-deny"
+            , "prompt-toggle-details"
+            , "prompt-toggle-tlsguard"
+        );
+        for (var i = 0 , ii = this._keyBindings.length; i < ii; i++) {
+            Main.wm.addKeybinding(this._keyBindings[i],
+                          this._settings,
+                          Meta.KeyBindingFlags.NONE,
+                          Shell.ActionMode.ALL,
+                          Lang.bind(this, this._handleKeybinding, this._keyBindings[i]));
+        }
+    },
+
+    _handleKeybinding: function(a, b, c, d, binding) {
+        if (this._dialogs.length <= 0) {
+            return false;
+        }
+
+        let fname = binding.replace(/-([a-z])/g, function (g) { return g[1].toUpperCase(); });
+        let fname = "_on"+ fname[0].toUpperCase() + fname.substr(1);
+        if (!( fname in this._dialogs[0] )) {
+            log("SGFW: Invalid key binding (1)... " + fname);
+            return true;
+        }
+        let fn = this._dialogs[0][fname];
+        if (typeof fn !== "function") {
+            log("SGFW: Invalid key binding (2)... " + fname + " " + (typeof fn));
+            return true;
+        }
+
+        Lang.bind(this._dialogs[0], fn)();
+        return true;
+    },
+
+    _destroyKeybindings: function() {
+        for (var i = 0 , ii = keyBindings.length; i < ii; i++) {
+            Main.wm.removeKeybinding(this._keyBindings[i]);
+        }
     },
 
     _closeDialogs: function() {
+        log("SGFW: Closing all dialogs");
         if (this._dialogs.length > 0) {
             dialog = this._dialogs.shift();
             dialog.close();
@@ -108,17 +165,21 @@ const FirewallPromptHandler = new Lang.Class({
     },
 
     onCloseDialog: function() {
+        log("SGFW: Closed dialog");
         this._dialogs.shift();
         if (this._dialogs.length > 0) {
+            log("SGFW: Opening next dialogs (remaining: " + this._dialogs.length + ")");
             this._dialogs[0].open();
         }
     },
 
     CloseAsync: function(params, invocation) {
+        log("SGFW: Close Async Requested");
         this._closeDialogs();
     },
 
     TestPrompt: function(params, invocation) {
+        log("SGFW: Test Prompt Requested");
         this.RequestPromptAsync(["Firefox", "firefox", "/usr/bin/firefox-esr", "242.12.111.18", "443", "linux", "2342", "TCP", true, true], nil);
     }
 });

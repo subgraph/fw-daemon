@@ -1,9 +1,55 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist gettext-domain="gnome-shell-extensions">
     <schema path="/com/subgraph/firewall/" id="com.subgraph.firewall">
-        <key type="as" name="open-connection-monitor">
+        <!--key type="as" name="open-connection-monitor">
             <default><![CDATA[['<Control><Alt>space']]]></default>
             <summary>Key to open connection monitor</summary>
+            <description></description>
+        </key-->
+        <key type="as" name="prompt-toggle-show-shortcuts">
+            <default><![CDATA[['<Super></Super><Control><Alt>']]]></default>
+            <summary>Show prompt dialog shortcuts</summary>
+            <description></description>
+        </key>
+        <key type="as" name="prompt-scope-previous">
+            <default><![CDATA[['<Super><Control><Alt>left']]]></default>
+            <summary>Select previous scope</summary>
+            <description></description>
+        </key>
+        <key type="as" name="prompt-scope-next">
+            <default><![CDATA[['<Super><Control><Alt>right']]]></default>
+            <summary>Select next scope</summary>
+            <description></description>
+        </key>
+        <key type="as" name="prompt-rule-previous">
+            <default><![CDATA[['<Super><Control><Alt>up']]]></default>
+            <summary>Select previous rule</summary>
+            <description></description>
+        </key>
+        <key type="as" name="prompt-rule-next">
+            <default><![CDATA[['<Super><Control><Alt>down']]]></default>
+            <summary>Select next rule</summary>
+            <description></description>
+        </key>
+        <key type="as" name="prompt-rule-allow">
+            <default><![CDATA[['<Super><Control><Alt><Shift>a']]]></default>
+            <summary>Accept rule</summary>
+            <description></description>
+        </key>
+        <key type="as" name="prompt-rule-deny">
+            <default><![CDATA[['<Super><Control><Alt><Shift>d']]]></default>
+            <summary>Deny rule</summary>
+            <description></description>
+        </key>
+        <key type="as" name="prompt-toggle-details">
+            <default><![CDATA[['<Super><Control><Alt>space']]]></default>
+            <summary>Toggle details view</summary>
+            <description></description>
+        </key>
+        <key type="as" name="prompt-toggle-tlsguard">
+            <default><![CDATA[['<Super><Control><Alt><Shift>s']]]></default>
+            <summary>Toggle TLS Guard mode</summary>
+            <description></description>
         </key>
     </schema>
 </schemalist>

@@ -164,14 +164,14 @@ const OptionList = new Lang.Class({
     },
  
     addTLSOption: function(tlsGuardEnabled) {
-        let tlsg = new OptionListItem("Drop connection if not TLS with valid certificate",0);
-        tlsg.setSelected(tlsGuardEnabled);
-        tlsg.connect('selected', Lang.bind(this, function() {
-            this._toggleTLSGuard(tlsg);
+        this._tlsg = new OptionListItem("Drop connection if not TLS with valid certificate",0);
+        this._tlsg.setSelected(tlsGuardEnabled);
+        this._tlsg.connect('selected', Lang.bind(this, function() {
+            this._toggleTLSGuard(this._tlsg);
         }));
-        let emptyRow = new OptionListItem("",0);
+        let emptyRow = new OptionListItem("-------------------------------------------------", 0);
         this.actor.add_child(emptyRow.actor);
-        this.actor.add_child(tlsg.actor);
+        this.actor.add_child(this._tlsg.actor);
     },
 
     _toggleTLSGuard: function(item) {
@@ -251,6 +251,44 @@ const OptionList = new Lang.Class({
             log("SGFW: unexpected scope value "+ scope);
             return 1;
         }
+    },
+
+    scopeNext: function() {
+        this.buttonGroup.next();
+    },
+
+    scopePrevious: function() {
+        this.buttonGroup.previous();
+    },
+
+    ruleNext: function() {
+        let idx = this.selectedIdx()
+            , l = this.items.length;
+        idx++;
+        if (l == 0) {
+            return;
+        }
+        if (idx >= l) {
+            idx = 0;
+        }
+        this._optionSelected(this.items[idx]);
+    },
+
+    rulePrevious: function() {
+        let idx = this.selectedIdx()
+            , l = this.items.length;
+        idx--;
+        if (l == 0) {
+            return;
+        }
+        if (idx < 0) {
+            idx = (l - 1);
+        }
+        this._optionSelected(this.items[idx]);
+    },
+
+    ruleToggleTLSGuard: function() {
+        this._toggleTLSGuard(this._tlsg);
     }
 
 });
@@ -261,7 +299,7 @@ const ButtonGroup = new Lang.Class({
     _init: function() {
         this.actor = new St.BoxLayout({ style_class: 'fw-button-group'});
         this._checked = -1;
-        this._buttons= [];
+        this._buttons = [];
         for(let i = 0; i < arguments.length; i++) {
             let idx = i;
             this._buttons[i] = new St.Button({ style_class: 'fw-group-button button',
@@ -277,7 +315,6 @@ const ButtonGroup = new Lang.Class({
     },
 
     _setChecked: function(idx) {
-
         if (idx == this._checked) {
             return;
         }
@@ -287,6 +324,32 @@ const ButtonGroup = new Lang.Class({
         }
         this._checked = idx;
     },
+
+    next: function() {
+        let idx = this._checked
+            , l = this._buttons.length;
+        idx++;
+        if (l == 0) {
+            return
+        }
+        if (idx >= l) {
+            idx = 0;
+        }
+        this._setChecked(idx);
+    },
+
+    previous: function() {
+        let idx = this._checked
+            , l = this._buttons.length;
+        idx--;
+        if (l == 0) {
+            return
+        }
+        if (idx < 0) {
+            idx = (l - 1);
+        }
+        this._setChecked(idx);
+    }
 
 });
 
@@ -495,6 +558,48 @@ const PromptDialog = new Lang.Class({
             { label: "Allow", action: Lang.bind(this, this.onAllow) },
             { label: "Deny", action: Lang.bind(this, this.onDeny) }
         ]);
+    },
+
+    _onPromptScopeNext: function() {
+        if (this.details.isOpen) {
+            this.optionList.scopeNext();
+        }
+    },
+
+    _onPromptScopePrevious: function() {
+        if (this.details.isOpen) {
+            this.optionList.scopePrevious();
+        }
+    },
+
+    _onPromptRuleAllow: function() {
+        this.onAllow();
+    },
+
+    _onPromptRuleDeny: function() {
+        this.onDeny();
+    },
+
+    _onPromptRuleNext: function() {
+        if (this.details.isOpen) {
+            this.optionList.ruleNext();
+        }
+    },
+
+    _onPromptRulePrevious: function() {
+        if (this.details.isOpen) {
+            this.optionList.rulePrevious();
+        }
+    },
+
+    _onPromptToggleDetails: function() {
+        this.details.activate();
+    },
+
+    _onPromptToggleTlsguard: function() {
+        if (this.details.isOpen) {
+            this.optionList.ruleToggleTLSGuard();
+        }
     },
 
     onAllow: function() {
