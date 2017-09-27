@@ -241,7 +241,8 @@ func (ds *dbusServer) GetPendingRequests(policy string) ([]string, *dbus.Error) 
 			pstr += strconv.FormatInt(int64(pc.procInfo().Pid), 10) + "|"
 			pstr += pc.sandbox() + "|"
 			pstr += strconv.FormatBool(pc.socks()) + "|"
-			pstr += pc.getOptString()
+			pstr += pc.getOptString() + "|"
+			pstr += strconv.FormatUint(uint64(FirewallConfig.DefaultActionID), 10)
 			pending_data = append(pending_data, pstr)
 		}
 
@@ -334,10 +335,10 @@ func (ds *dbusServer) SetConfig(key string, val dbus.Variant) *dbus.Error {
 	return nil
 }
 
-func (ds *dbusServer) prompt(p *Policy) {
+/*func (ds *dbusServer) prompt(p *Policy) {
 	log.Info("prompting...")
 	ds.prompter.prompt(p)
-}
+} */
 
 func (ob *dbusObjectP) alertRule(data string) {
 	ob.Call("com.subgraph.fwprompt.EventNotifier.Alert", 0, data)

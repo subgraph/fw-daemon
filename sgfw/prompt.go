@@ -3,10 +3,12 @@ package sgfw
 import (
 	"fmt"
 	"net"
+	"os"
 	"os/user"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/godbus/dbus"
@@ -35,6 +37,7 @@ func (p *prompter) prompt(policy *Policy) {
 	defer p.lock.Unlock()
 	_, ok := p.policyMap[policy.sandbox+"|"+policy.path]
 	if ok {
+		p.cond.Signal()
 		return
 	}
 	p.policyMap[policy.sandbox+"|"+policy.path] = policy
@@ -44,21 +47,23 @@ func (p *prompter) prompt(policy *Policy) {
 }
 
 func (p *prompter) promptLoop() {
-	p.lock.Lock()
+	//	p.lock.Lock()
 	for {
 		// fmt.Println("XXX: promptLoop() outer")
+		p.lock.Lock()
 		for p.processNextPacket() {
 			// fmt.Println("XXX: promptLoop() inner")
 		}
+		p.lock.Unlock()
 		// fmt.Println("promptLoop() wait")
-		p.cond.Wait()
+		//		p.cond.Wait()
 	}
 }
 
 func (p *prompter) processNextPacket() bool {
 	var pc pendingConnection = nil
 
-	if 1 == 2 {
+	/*	if 1 == 2 {
 		//	if !DoMultiPrompt {
 		pc, _ = p.nextConnection()
 		if pc == nil {
@@ -68,12 +73,12 @@ func (p *prompter) processNextPacket() bool {
 		defer p.lock.Lock()
 		p.processConnection(pc)
 		return true
-	}
+	} */
 
 	empty := true
 	for {
 		pc, empty = p.nextConnection()
-		// fmt.Println("XXX: processNextPacket() loop; empty = ", empty, " / pc = ", pc)
+		fmt.Println("XXX: processNextPacket() loop; empty = ", empty, " / pc = ", pc)
 		if pc == nil && empty {
 			return false
 		} else if pc == nil {
@@ -85,18 +90,125 @@ func (p *prompter) processNextPacket() bool {
 	p.lock.Unlock()
 	defer p.lock.Lock()
 	// fmt.Println("XXX: Waiting for prompt lock go...")
-	for {
-
-		if pc.getPrompting() {
-			log.Debugf("Skipping over already prompted connection")
-			continue
-		}
-
-		break
+	if pc.getPrompting() {
+		log.Debugf("Skipping over already prompted connection")
 	}
+
 	pc.setPrompting(true)
 	go p.processConnection(pc)
 	return true
+}
+
+type PC2FDMapping struct {
+	guid     string
+	inode    uint64
+	fd       int
+	fdpath   string
+	prompter *prompter
+}
+
+var PC2FDMap = map[string]PC2FDMapping{}
+var PC2FDMapLock = &sync.Mutex{}
+var PC2FDMapRunning = false
+
+func monitorPromptFDs(pc pendingConnection) {
+	guid := pc.getGUID()
+	pid := pc.procInfo().Pid
+	inode := pc.procInfo().Inode
+	fd := pc.procInfo().FD
+	prompter := pc.getPrompter()
+
+	fmt.Printf("ADD TO MONITOR: %v | %v / %v / %v\n", pc.policy().application, guid, pid, fd)
+
+	if pid == -1 || fd == -1 || prompter == nil {
+		log.Warning("Unexpected error condition occurred while adding socket fd to monitor")
+		return
+	}
+
+	PC2FDMapLock.Lock()
+	defer PC2FDMapLock.Unlock()
+
+	fdpath := fmt.Sprintf("/proc/%d/fd/%d", pid, fd)
+	PC2FDMap[guid] = PC2FDMapping{guid: guid, inode: inode, fd: fd, fdpath: fdpath, prompter: prompter}
+	return
+}
+
+func monitorPromptFDLoop() {
+	fmt.Println("++++++++++= monitorPromptFDLoop()")
+
+	for true {
+		delete_guids := []string{}
+		PC2FDMapLock.Lock()
+		fmt.Println("++++ nentries = ", len(PC2FDMap))
+
+		for guid, fdmon := range PC2FDMap {
+			fmt.Println("ENTRY:", fdmon)
+
+			lsb, err := os.Stat(fdmon.fdpath)
+			if err != nil {
+				log.Warningf("Error looking up socket \"%s\": %v\n", fdmon.fdpath, err)
+				delete_guids = append(delete_guids, guid)
+				continue
+			}
+
+			sb, ok := lsb.Sys().(*syscall.Stat_t)
+			if !ok {
+				log.Warning("Not a syscall.Stat_t")
+				delete_guids = append(delete_guids, guid)
+				continue
+			}
+
+			inode := sb.Ino
+			fmt.Println("+++ INODE = ", inode)
+
+			if inode != fdmon.inode {
+				fmt.Printf("inode mismatch: %v vs %v\n", inode, fdmon.inode)
+				delete_guids = append(delete_guids, guid)
+			}
+
+		}
+
+		fmt.Println("guids to delete: ", delete_guids)
+		saved_mappings := []PC2FDMapping{}
+		for _, guid := range delete_guids {
+			saved_mappings = append(saved_mappings, PC2FDMap[guid])
+			delete(PC2FDMap, guid)
+		}
+
+		PC2FDMapLock.Unlock()
+
+		for _, mapping := range saved_mappings {
+			call := mapping.prompter.dbusObj.Call("com.subgraph.FirewallPrompt.RemovePrompt", 0, mapping.guid)
+			fmt.Println("DISPOSING CALL = ", call)
+			prompter := mapping.prompter
+
+			prompter.lock.Lock()
+
+			for _, policy := range prompter.policyQueue {
+				policy.lock.Lock()
+				pcind := 0
+
+				for pcind < len(policy.pendingQueue) {
+
+					if policy.pendingQueue[pcind].getGUID() == mapping.guid {
+						fmt.Println("-------------- found guid to remove")
+						policy.pendingQueue = append(policy.pendingQueue[:pcind], policy.pendingQueue[pcind+1:]...)
+					} else {
+						pcind++
+					}
+
+				}
+
+				policy.lock.Unlock()
+			}
+
+			prompter.lock.Unlock()
+		}
+
+		fmt.Println("++++++++++= monitorPromptFDLoop WAIT")
+		time.Sleep(5 * time.Second)
+	}
+
 }
 
 func (p *prompter) processConnection(pc pendingConnection) {
@@ -104,8 +216,19 @@ func (p *prompter) processConnection(pc pendingConnection) {
 	var dres bool
 	var rule string
 
+	if !PC2FDMapRunning {
+		PC2FDMapLock.Lock()
+
+		if !PC2FDMapRunning {
+			PC2FDMapRunning = true
+			PC2FDMapLock.Unlock()
+			go monitorPromptFDLoop()
+		}
+
+	}
+
 	if pc.getPrompter() == nil {
-		pc.setPrompter(&dbusObjectP{p.dbusObj})
+		pc.setPrompter(p)
 	}
 
 	addr := pc.hostname()
@@ -127,6 +250,7 @@ func (p *prompter) processConnection(pc pendingConnection) {
 	//	fmt.Println("# outstanding prompt chans = ", len(outstandingPromptChans))
 
 	//	fmt.Println("ABOUT TO CALL ASYNC PROMPT")
+	monitorPromptFDs(pc)
 	call := p.dbusObj.Call("com.subgraph.FirewallPrompt.RequestPromptAsync", 0,
 		pc.getGUID(),
 		policy.application,
@@ -300,15 +424,23 @@ func (p *prompter) processConnection(pc pendingConnection) {
 }
 
 func (p *prompter) nextConnection() (pendingConnection, bool) {
-	for {
-		if len(p.policyQueue) == 0 {
-			return nil, true
-		}
-		policy := p.policyQueue[0]
+	pind := 0
+
+	if len(p.policyQueue) == 0 {
+		return nil, true
+	}
+	fmt.Println("policy queue len = ", len(p.policyQueue))
+
+	for pind < len(p.policyQueue) {
+		fmt.Printf("pind = %v of %v\n", pind, len(p.policyQueue))
+		policy := p.policyQueue[pind]
 		pc, qempty := policy.nextPending()
+
 		if pc == nil && qempty {
 			p.removePolicy(policy)
+			continue
 		} else {
+			pind++
 			//			if pc == nil && !qempty {
 
 			if len(policy.rulesPending) > 0 {
@@ -360,17 +492,24 @@ func (p *prompter) nextConnection() (pendingConnection, bool) {
 					dbusp.alertRule("sgfw prompt added new rule")
 				}
 
-				//				}
-
-				if pc == nil && !qempty {
-					log.Errorf("FIX ME: I NEED TO SLEEP ON A WAKEABLE CONDITION PROPERLY!!")
-					time.Sleep(time.Millisecond * 300)
-				}
-
 			}
+
+			if pc == nil && !qempty {
+				//				log.Errorf("FIX ME: I NEED TO SLEEP ON A WAKEABLE CONDITION PROPERLY!!")
+				time.Sleep(time.Millisecond * 300)
+				continue
+			}
+
+			if pc != nil && pc.getPrompting() {
+				fmt.Println("SKIPPING PROMPTED")
+				continue
+			}
+
 			return pc, qempty
 		}
 	}
+
+	return nil, true
 }
 
 func (p *prompter) removePolicy(policy *Policy) {

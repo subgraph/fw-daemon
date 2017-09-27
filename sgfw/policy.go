@@ -50,8 +50,8 @@ type pendingConnection interface {
 	drop()
 	setPrompting(bool)
 	getPrompting() bool
-	setPrompter(*dbusObjectP)
-	getPrompter() *dbusObjectP
+	setPrompter(*prompter)
+	getPrompter() *prompter
 	getGUID() string
 	print() string
 }
@@ -63,7 +63,7 @@ type pendingPkt struct {
 	pinfo     *procsnitch.Info
 	optstring string
 	prompting bool
-	prompter  *dbusObjectP
+	prompter  *prompter
 	guid      string
 }
 
@@ -183,11 +183,11 @@ func (pp *pendingPkt) drop() {
 	pp.pkt.Accept()
 }
 
-func (pp *pendingPkt) setPrompter(val *dbusObjectP) {
+func (pp *pendingPkt) setPrompter(val *prompter) {
 	pp.prompter = val
 }
 
-func (pp *pendingPkt) getPrompter() *dbusObjectP {
+func (pp *pendingPkt) getPrompter() *prompter {
 	return pp.prompter
 }
 
@@ -320,32 +320,24 @@ func (p *Policy) processPromptResult(pc pendingConnection) {
 	//if DoMultiPrompt || (!DoMultiPrompt && !p.promptInProgress) {
 	//	if !p.promptInProgress {
 	p.promptInProgress = true
-	go p.fw.dbus.prompt(p)
+	go p.fw.dbus.prompter.prompt(p)
 	//	}
 }
 
 func (p *Policy) nextPending() (pendingConnection, bool) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	/*	if !DoMultiPrompt {
-		if len(p.pendingQueue) == 0 {
-			return nil, true
-		}
-		return p.pendingQueue[0], false
-	}*/
 
 	if len(p.pendingQueue) == 0 {
 		return nil, true
 	}
 
-	//	for len(p.pendingQueue) != 0 {
 	for i := 0; i < len(p.pendingQueue); i++ {
 		fmt.Printf("pendingQueue %v of %v: %v\n", i, len(p.pendingQueue), p.pendingQueue[i])
 		if !p.pendingQueue[i].getPrompting() {
 			return p.pendingQueue[i], false
 		}
 	}
-	//	}
 
 	return nil, false
 }
@@ -421,7 +413,7 @@ func (p *Policy) filterPending(rule *Rule) {
 			if prompter == nil {
 				fmt.Println("-------- prompter = NULL")
 			} else {
-				call := prompter.Call("com.subgraph.FirewallPrompt.RemovePrompt", 0, pc.getGUID())
+				call := prompter.dbusObj.Call("com.subgraph.FirewallPrompt.RemovePrompt", 0, pc.getGUID())
 				fmt.Println("CAAAAAAAAAAAAAAALL = ", call)
 			}
 

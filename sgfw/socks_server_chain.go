@@ -56,7 +56,7 @@ type pendingSocksConnection struct {
 	pinfo      *procsnitch.Info
 	verdict    chan int
 	prompting  bool
-	prompter   *dbusObjectP
+	prompter   *prompter
 	guid       string
 	optstr     string
 }
@@ -124,9 +124,9 @@ func (sc *pendingSocksConnection) acceptTLSOnly() { sc.deliverVerdict(socksVerdi
 
 func (sc *pendingSocksConnection) drop() { sc.deliverVerdict(socksVerdictDrop) }
 
-func (sc *pendingSocksConnection) setPrompter(val *dbusObjectP) { sc.prompter = val }
+func (sc *pendingSocksConnection) setPrompter(val *prompter) { sc.prompter = val }
 
-func (sc *pendingSocksConnection) getPrompter() *dbusObjectP { return sc.prompter }
+func (sc *pendingSocksConnection) getPrompter() *prompter { return sc.prompter }
 
 func (sc *pendingSocksConnection) getGUID() string {
 	if sc.guid == "" {

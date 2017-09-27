@@ -314,8 +314,8 @@ func createColumn(title string, id int) *gtk.TreeViewColumn {
 }
 
 func createListStore(general bool) *gtk.ListStore {
-	colData := []glib.Type{glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_INT,
-		glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_INT, glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_STRING}
+	colData := []glib.Type{glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_STRING,
+		glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_INT, glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_INT}
 	listStore, err := gtk.ListStoreNew(colData...)
 
 	if err != nil {
@@ -350,7 +350,8 @@ func removeRequest(listStore *gtk.ListStore, guid string) {
 
 }
 
-func addRequestInc(listStore *gtk.ListStore, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int, origin string, is_socks bool, optstring string, sandbox string) bool {
+func addRequestInc(listStore *gtk.ListStore, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int,
+	origin string, is_socks bool, optstring string, sandbox string, action int) bool {
 	duplicated := false
 
 	globalPromptLock.Lock()
@@ -383,7 +384,8 @@ func addRequestInc(listStore *gtk.ListStore, guid, path, icon, proto string, pid
 	return duplicated
 }
 
-func addRequestAsync(listStore *gtk.ListStore, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int, origin string, is_socks bool, optstring string, sandbox string) bool {
+func addRequestAsync(listStore *gtk.ListStore, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int,
+	origin string, is_socks bool, optstring string, sandbox string, action int) bool {
 	if listStore == nil {
 		listStore = globalLS
 		waitTimes := []int{1, 2, 5, 10}
@@ -410,7 +412,7 @@ func addRequestAsync(listStore *gtk.ListStore, guid, path, icon, proto string, p
 		log.Fatal("SGFW prompter GUI failed to load for unknown reasons")
 	}
 
-	if addRequestInc(listStore, guid, path, icon, proto, pid, ipaddr, hostname, port, uid, gid, origin, is_socks, optstring, sandbox) {
+	if addRequestInc(listStore, guid, path, icon, proto, pid, ipaddr, hostname, port, uid, gid, origin, is_socks, optstring, sandbox, action) {
 		fmt.Println("REQUEST WAS DUPLICATE")
 		return false
 	} else {
@@ -428,7 +430,7 @@ func addRequestAsync(listStore *gtk.ListStore, guid, path, icon, proto string, p
 		}
 	}
 
-	colVals := make([]interface{}, 14)
+	colVals := make([]interface{}, 15)
 	colVals[0] = 1
 	colVals[1] = guid
 	colVals[2] = path
@@ -454,6 +456,7 @@ func addRequestAsync(listStore *gtk.ListStore, guid, path, icon, proto string, p
 	}
 
 	colVals[13] = optstring
+	colVals[14] = action
 
 	colNums := make([]int, len(colVals))
 
@@ -472,7 +475,8 @@ func addRequestAsync(listStore *gtk.ListStore, guid, path, icon, proto string, p
 	return true
 }
 
-func addRequest(listStore *gtk.ListStore, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int, origin string, is_socks bool, optstring string, sandbox string) *decisionWaiter {
+func addRequest(listStore *gtk.ListStore, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int,
+	origin string, is_socks bool, optstring string, sandbox string, action int) *decisionWaiter {
 	if listStore == nil {
 		listStore = globalLS
 		waitTimes := []int{1, 2, 5, 10}
@@ -499,7 +503,7 @@ func addRequest(listStore *gtk.ListStore, guid, path, icon, proto string, pid in
 		log.Fatal("SGFW prompter GUI failed to load for unknown reasons")
 	}
 
-	if addRequestInc(listStore, guid, path, icon, proto, pid, ipaddr, hostname, port, uid, gid, origin, is_socks, optstring, sandbox) {
+	if addRequestInc(listStore, guid, path, icon, proto, pid, ipaddr, hostname, port, uid, gid, origin, is_socks, optstring, sandbox, action) {
 		fmt.Println("REQUEST WAS DUPLICATE")
 		decision := addDecision()
 		toggleHover()
@@ -519,7 +523,7 @@ func addRequest(listStore *gtk.ListStore, guid, path, icon, proto string, pid in
 		}
 	}
 
-	colVals := make([]interface{}, 14)
+	colVals := make([]interface{}, 15)
 	colVals[0] = 1
 	colVals[1] = guid
 	colVals[2] = path
@@ -545,6 +549,7 @@ func addRequest(listStore *gtk.ListStore, guid, path, icon, proto string, pid in
 	}
 
 	colVals[13] = optstring
+	colVals[14] = action
 
 	colNums := make([]int, len(colVals))
 
@@ -774,6 +779,7 @@ func createCurrentRule() (ruleColumns, error) {
 	rule.Uname, rule.Gname = "", ""
 
 	rule.ForceTLS = chkTLS.GetActive()
+
 	/*	Pid      int
 		Origin   string */
 
@@ -915,6 +921,11 @@ func getRuleByIdx(idx int) (ruleColumns, *gtk.TreeIter, error) {
 		rule.IsSocks = true
 	}
 
+	rule.Scope, err = lsGetInt(globalLS, iter, 14)
+	if err != nil {
+		return rule, nil, err
+	}
+
 	return rule, iter, nil
 }
 
@@ -953,7 +964,7 @@ func addPendingPrompts(rules []string) {
 	for _, rule := range rules {
 		fields := strings.Split(rule, "|")
 
-		if len(fields) != 17 {
+		if len(fields) != 18 {
 			log.Printf("Got saved prompt message with strange data: \"%s\"", rule)
 			continue
 		}
@@ -1001,7 +1012,13 @@ func addPendingPrompts(rules []string) {
 
 		optstring := fields[16]
 
-		addRequestAsync(nil, guid, path, icon, proto, int(pid), ip, address, int(port), int(uid), int(gid), origin, is_socks, optstring, sandbox)
+		action, err := strconv.Atoi(fields[17])
+		if err != nil {
+			log.Println("Error converting action in pending prompt message to integer:", err)
+			continue
+		}
+
+		addRequestAsync(nil, guid, path, icon, proto, int(pid), ip, address, int(port), int(uid), int(gid), origin, is_socks, optstring, sandbox, action)
 	}
 
 }
@@ -1206,6 +1223,10 @@ func main() {
 
 	tv.AppendColumn(createColumn("Details", 13))
 
+	acol := createColumn("Scope", 14)
+	acol.SetVisible(false)
+	tv.AppendColumn(acol)
+
 	listStore := createListStore(true)
 	globalLS = listStore
 
@@ -1322,12 +1343,12 @@ func main() {
 		}
 
 		editPort.SetText(strconv.Itoa(seldata.Port))
-		radioOnce.SetActive(true)
-		radioProcess.SetActive(false)
+		radioOnce.SetActive(seldata.Scope == int(sgfw.APPLY_ONCE))
 		radioProcess.SetSensitive(seldata.Pid > 0)
 		radioParent.SetActive(false)
-		radioSession.SetActive(false)
-		radioPermanent.SetActive(false)
+		radioSession.SetActive(seldata.Scope == int(sgfw.APPLY_SESSION))
+		radioPermanent.SetActive(seldata.Scope == int(sgfw.APPLY_FOREVER))
+
 		comboProto.SetActiveID(seldata.Proto)
 		chkTLS.SetActive(seldata.IsSocks)
 

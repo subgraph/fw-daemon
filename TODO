@@ -1,0 +1,6 @@
+fw-prompt:
+	This function needs to be updated because it no longer works:
+		func toggleHover() { mainWin.SetKeepAbove(len(decisionWaiters) > 0) }
+
+new go-procsnitch vendor package changes should be pushed into main project
+

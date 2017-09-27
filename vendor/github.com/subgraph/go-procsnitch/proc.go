@@ -1,8 +1,8 @@
 package procsnitch
 
 import (
-	"encoding/hex"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/op/go-logging"
@@ -169,7 +169,7 @@ func ParseIP(ip string) (net.IP, error) {
 	}
 
 	if isLittleEndian > 0 {
-		for i := 0; i < len(dst) / 4; i++ {
+		for i := 0; i < len(dst)/4; i++ {
 			start, end := i*4, (i+1)*4
 			word := dst[start:end]
 			lval := binary.LittleEndian.Uint32(word)
@@ -177,13 +177,13 @@ func ParseIP(ip string) (net.IP, error) {
 		}
 	}
 
-/*		if len(dst) == 16 {
-			dst2 := []byte{dst[3], dst[2], dst[1], dst[0], dst[7], dst[6], dst[5], dst[4], dst[11], dst[10], dst[9], dst[8], dst[15], dst[14], dst[13], dst[12]}
-			return net.IP(dst2), nil
-		}
-		for i, j := 0, len(dst)-1; i < j; i, j = i+1, j-1 {
-			dst[i], dst[j] = dst[j], dst[i]
-		} */
+	/*		if len(dst) == 16 {
+				dst2 := []byte{dst[3], dst[2], dst[1], dst[0], dst[7], dst[6], dst[5], dst[4], dst[11], dst[10], dst[9], dst[8], dst[15], dst[14], dst[13], dst[12]}
+				return net.IP(dst2), nil
+			}
+			for i, j := 0, len(dst)-1; i < j; i, j = i+1, j-1 {
+				dst[i], dst[j] = dst[j], dst[i]
+			} */
 
 	return net.IP(dst), nil
 }
@@ -312,6 +312,7 @@ func stripLabel(s string) string {
 
 // stolen from github.com/virtao/GoEndian
 const INT_SIZE int = int(unsafe.Sizeof(0))
+
 func setEndian() {
 	var i int = 0x1
 	bs := (*[INT_SIZE]byte)(unsafe.Pointer(&i))
