@@ -13,15 +13,6 @@ import (
 	"github.com/subgraph/fw-daemon/proc-coroner"
 )
 
-var DoMultiPrompt = true
-
-const MAX_PROMPTS = 5
-
-var outstandingPrompts = 0
-var outstandingPromptChans [](chan *dbus.Call)
-var promptLock = &sync.Mutex{}
-var promptChanLock = &sync.Mutex{}
-
 func newPrompter(conn *dbus.Conn) *prompter {
 	p := new(prompter)
 	p.cond = sync.NewCond(&p.lock)
@@ -37,30 +28,6 @@ type prompter struct {
 	cond        *sync.Cond
 	policyMap   map[string]*Policy
 	policyQueue []*Policy
-}
-
-func saveChannel(ch chan *dbus.Call, add bool, do_close bool) {
-	promptChanLock.Lock()
-
-	if add {
-		outstandingPromptChans = append(outstandingPromptChans, ch)
-	} else {
-
-		for idx, och := range outstandingPromptChans {
-			if och == ch {
-				outstandingPromptChans = append(outstandingPromptChans[:idx], outstandingPromptChans[idx+1:]...)
-				break
-			}
-		}
-
-	}
-
-	if !add && do_close {
-		close(ch)
-	}
-
-	promptChanLock.Unlock()
-	return
 }
 
 func (p *prompter) prompt(policy *Policy) {
@@ -91,7 +58,8 @@ func (p *prompter) promptLoop() {
 func (p *prompter) processNextPacket() bool {
 	var pc pendingConnection = nil
 
-	if !DoMultiPrompt {
+	if 1 == 2 {
+		//	if !DoMultiPrompt {
 		pc, _ = p.nextConnection()
 		if pc == nil {
 			return false
@@ -118,64 +86,26 @@ func (p *prompter) processNextPacket() bool {
 	defer p.lock.Lock()
 	// fmt.Println("XXX: Waiting for prompt lock go...")
 	for {
-		promptLock.Lock()
-		if outstandingPrompts >= MAX_PROMPTS {
-			promptLock.Unlock()
-			continue
-		}
 
 		if pc.getPrompting() {
 			log.Debugf("Skipping over already prompted connection")
-			promptLock.Unlock()
 			continue
 		}
 
 		break
 	}
-	// fmt.Println("XXX: Passed prompt lock!")
-	outstandingPrompts++
-	// fmt.Println("XXX: Incremented outstanding to ", outstandingPrompts)
-	promptLock.Unlock()
-	//	if !pc.getPrompting() {
 	pc.setPrompting(true)
 	go p.processConnection(pc)
-	//	}
 	return true
-}
-
-func processReturn(pc pendingConnection) {
-	promptLock.Lock()
-	outstandingPrompts--
-	// fmt.Println("XXX: Return decremented outstanding to ", outstandingPrompts)
-	promptLock.Unlock()
-	pc.setPrompting(false)
-}
-
-func alertChannel(chidx int, scope int32, rule string) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Warning("SGFW recovered from panic while delivering out of band rule:", r)
-		}
-	}()
-
-	promptData := make([]interface{}, 3)
-	promptData[0] = scope
-	promptData[1] = rule
-	promptData[2] = 666
-
-	outstandingPromptChans[chidx] <- &dbus.Call{Body: promptData}
 }
 
 func (p *prompter) processConnection(pc pendingConnection) {
 	var scope int32
+	var dres bool
 	var rule string
 
 	if pc.getPrompter() == nil {
 		pc.setPrompter(&dbusObjectP{p.dbusObj})
-	}
-
-	if DoMultiPrompt {
-		defer processReturn(pc)
 	}
 
 	addr := pc.hostname()
@@ -192,10 +122,12 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		dststr = addr + " (via proxy resolver)"
 	}
 
-	callChan := make(chan *dbus.Call, 10)
-	saveChannel(callChan, true, false)
-	fmt.Println("# outstanding prompt chans = ", len(outstandingPromptChans))
-	p.dbusObj.Go("com.subgraph.FirewallPrompt.RequestPrompt", 0, callChan,
+	//	callChan := make(chan *dbus.Call, 10)
+	//	saveChannel(callChan, true, false)
+	//	fmt.Println("# outstanding prompt chans = ", len(outstandingPromptChans))
+
+	//	fmt.Println("ABOUT TO CALL ASYNC PROMPT")
+	call := p.dbusObj.Call("com.subgraph.FirewallPrompt.RequestPromptAsync", 0,
 		pc.getGUID(),
 		policy.application,
 		policy.icon,
@@ -217,52 +149,88 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		FirewallConfig.PromptExpert,
 		int32(FirewallConfig.DefaultActionID))
 
-	select {
-	case call := <-callChan:
+	err := call.Store(&dres)
+	if err != nil {
+		log.Warningf("Error sending dbus async RequestPrompt message: %v", err)
+		policy.removePending(pc)
+		pc.drop()
+		return
+	}
 
-		if call.Err != nil {
-			fmt.Println("Error reading DBus channel (accepting packet): ", call.Err)
-			policy.removePending(pc)
-			pc.accept()
-			saveChannel(callChan, false, true)
-			time.Sleep(1 * time.Second)
-			return
-		}
+	if !dres {
+		fmt.Println("Unexpected: fw-prompt async RequestPrompt message returned:", dres)
+	}
 
-		if len(call.Body) != 2 {
-			log.Warning("SGFW got back response in unrecognized format, len = ", len(call.Body))
-			saveChannel(callChan, false, true)
+	return
 
-			if (len(call.Body) == 3) && (call.Body[2] == 666) {
-				fmt.Printf("+++++++++ AWESOME: %v | %v | %v\n", call.Body[0], call.Body[1], call.Body[2])
-				scope = call.Body[0].(int32)
-				rule = call.Body[1].(string)
+	/*	p.dbusObj.Go("com.subgraph.FirewallPrompt.RequestPrompt", 0, callChan,
+			pc.getGUID(),
+			policy.application,
+			policy.icon,
+			policy.path,
+			addr,
+			int32(pc.dstPort()),
+			dststr,
+			pc.src().String(),
+			pc.proto(),
+			int32(pc.procInfo().UID),
+			int32(pc.procInfo().GID),
+			uidToUser(pc.procInfo().UID),
+			gidToGroup(pc.procInfo().GID),
+			int32(pc.procInfo().Pid),
+			pc.sandbox(),
+			pc.socks(),
+			pc.getOptString(),
+			FirewallConfig.PromptExpanded,
+			FirewallConfig.PromptExpert,
+			int32(FirewallConfig.DefaultActionID))
+
+		select {
+		case call := <-callChan:
+
+			if call.Err != nil {
+				fmt.Println("Error reading DBus channel (accepting packet): ", call.Err)
+				policy.removePending(pc)
+				pc.accept()
+				saveChannel(callChan, false, true)
+				time.Sleep(1 * time.Second)
+				return
 			}
 
-			return
+			if len(call.Body) != 2 {
+				log.Warning("SGFW got back response in unrecognized format, len = ", len(call.Body))
+				saveChannel(callChan, false, true)
+
+				if (len(call.Body) == 3) && (call.Body[2] == 666) {
+					fmt.Printf("+++++++++ AWESOME: %v | %v | %v\n", call.Body[0], call.Body[1], call.Body[2])
+					scope = call.Body[0].(int32)
+					rule = call.Body[1].(string)
+				}
+
+				return
+			}
+
+			fmt.Printf("DBUS GOT BACK: %v, %v\n", call.Body[0], call.Body[1])
+			scope = call.Body[0].(int32)
+			rule = call.Body[1].(string)
 		}
 
-		fmt.Printf("DBUS GOT BACK: %v, %v\n", call.Body[0], call.Body[1])
-		scope = call.Body[0].(int32)
-		rule = call.Body[1].(string)
-	}
+		saveChannel(callChan, false, true)
 
-	saveChannel(callChan, false, true)
+		// Try alerting every other channel
+		promptData := make([]interface{}, 3)
+		promptData[0] = scope
+		promptData[1] = rule
+		promptData[2] = 666
+		promptChanLock.Lock()
+		fmt.Println("# channels to alert: ", len(outstandingPromptChans))
 
-	// Try alerting every other channel
-	promptData := make([]interface{}, 3)
-	promptData[0] = scope
-	promptData[1] = rule
-	promptData[2] = 666
-	promptChanLock.Lock()
-	fmt.Println("# channels to alert: ", len(outstandingPromptChans))
+		for chidx, _ := range outstandingPromptChans {
+			alertChannel(chidx, scope, rule)
+			//		ch <- &dbus.Call{Body: promptData}
+		}
 
-	for chidx, _ := range outstandingPromptChans {
-		alertChannel(chidx, scope, rule)
-		//		ch <- &dbus.Call{Body: promptData}
-	}
-
-	promptChanLock.Unlock()
+		promptChanLock.Unlock() */
 
 	/*	err := call.Store(&scope, &rule)
 		if err != nil {
@@ -341,9 +309,64 @@ func (p *prompter) nextConnection() (pendingConnection, bool) {
 		if pc == nil && qempty {
 			p.removePolicy(policy)
 		} else {
-			if pc == nil && !qempty {
-				log.Errorf("FIX ME: I NEED TO SLEEP ON A WAKEABLE CONDITION PROPERLY!!")
-				time.Sleep(time.Millisecond * 300)
+			//			if pc == nil && !qempty {
+
+			if len(policy.rulesPending) > 0 {
+				fmt.Println("policy rules pending = ", len(policy.rulesPending))
+
+				prule := policy.rulesPending[0]
+				policy.rulesPending = append(policy.rulesPending[:0], policy.rulesPending[1:]...)
+
+				toks := strings.Split(prule.rule, "|")
+				sandbox := ""
+
+				if len(toks) > 2 {
+					sandbox = toks[2]
+				}
+
+				tempRule := fmt.Sprintf("%s|%s", toks[0], toks[1])
+
+				/*					if pc.src() != nil && !pc.src().Equal(net.ParseIP("127.0.0.1")) && sandbox != "" {
+									tempRule += "||-1:-1|" + sandbox + "|" + pc.src().String()
+								} else {*/
+				tempRule += "||-1:-1|" + sandbox + "|"
+				//					}
+
+				r, err := policy.parseRule(tempRule, false)
+				if err != nil {
+					log.Warningf("Error parsing rule string returned from dbus RequestPrompt: %v", err)
+					//						policy.removePending(pc)
+					//						pc.drop()
+					//						return
+				} else {
+					fscope := FilterScope(prule.scope)
+					if fscope == APPLY_SESSION {
+						r.mode = RULE_MODE_SESSION
+					} else if fscope == APPLY_PROCESS {
+						r.mode = RULE_MODE_PROCESS
+						//							r.pid = pc.procInfo().Pid
+						//							pcoroner.MonitorProcess(r.pid)
+					}
+					if !policy.processNewRule(r, fscope) {
+						//							p.lock.Lock()
+						//							defer p.lock.Unlock()
+						//							p.removePolicy(pc.policy())
+					}
+					if fscope == APPLY_FOREVER {
+						r.mode = RULE_MODE_PERMANENT
+						policy.fw.saveRules()
+					}
+					log.Warningf("Prompt returning rule: %v", tempRule)
+					dbusp.alertRule("sgfw prompt added new rule")
+				}
+
+				//				}
+
+				if pc == nil && !qempty {
+					log.Errorf("FIX ME: I NEED TO SLEEP ON A WAKEABLE CONDITION PROPERLY!!")
+					time.Sleep(time.Millisecond * 300)
+				}
+
 			}
 			return pc, qempty
 		}
@@ -353,14 +376,15 @@ func (p *prompter) nextConnection() (pendingConnection, bool) {
 func (p *prompter) removePolicy(policy *Policy) {
 	var newQueue []*Policy = nil
 
-	if DoMultiPrompt {
-		if len(p.policyQueue) == 0 {
-			log.Debugf("Skipping over zero length policy queue")
-			newQueue = make([]*Policy, 0, 0)
-		}
+	//	if DoMultiPrompt {
+	if len(p.policyQueue) == 0 {
+		log.Debugf("Skipping over zero length policy queue")
+		newQueue = make([]*Policy, 0, 0)
 	}
+	//	}
 
-	if !DoMultiPrompt || newQueue == nil {
+	//	if !DoMultiPrompt || newQueue == nil {
+	if newQueue == nil {
 		newQueue = make([]*Policy, 0, len(p.policyQueue)-1)
 	}
 	for _, pol := range p.policyQueue {
@@ -374,11 +398,17 @@ func (p *prompter) removePolicy(policy *Policy) {
 
 var userMap = make(map[int]string)
 var groupMap = make(map[int]string)
+var userMapLock = &sync.Mutex{}
+var groupMapLock = &sync.Mutex{}
 
 func lookupUser(uid int) string {
 	if uid == -1 {
 		return "[unknown]"
 	}
+
+	userMapLock.Lock()
+	defer userMapLock.Unlock()
+
 	u, err := user.LookupId(strconv.Itoa(uid))
 	if err != nil {
 		return fmt.Sprintf("%d", uid)
@@ -390,6 +420,10 @@ func lookupGroup(gid int) string {
 	if gid == -1 {
 		return "[unknown]"
 	}
+
+	groupMapLock.Lock()
+	defer groupMapLock.Unlock()
+
 	g, err := user.LookupGroupId(strconv.Itoa(gid))
 	if err != nil {
 		return fmt.Sprintf("%d", gid)

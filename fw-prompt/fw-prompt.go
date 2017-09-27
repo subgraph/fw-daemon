@@ -53,6 +53,7 @@ type ruleColumns struct {
 	Scope    int
 }
 
+var dbuso *dbusObject
 var userPrefs fpPreferences
 var mainWin *gtk.Window
 var Notebook *gtk.Notebook
@@ -327,6 +328,7 @@ func createListStore(general bool) *gtk.ListStore {
 func removeRequest(listStore *gtk.ListStore, guid string) {
 	removed := false
 	globalPromptLock.Lock()
+	defer globalPromptLock.Unlock()
 
 	/* XXX: This is horrible. Figure out how to do this properly. */
 	for ridx := 0; ridx < 2000; ridx++ {
@@ -342,8 +344,6 @@ func removeRequest(listStore *gtk.ListStore, guid string) {
 
 	}
 
-	globalPromptLock.Unlock()
-
 	if !removed {
 		log.Printf("Unexpected condition: SGFW requested prompt removal for non-existent GUID %v\n", guid)
 	}
@@ -354,6 +354,7 @@ func addRequestInc(listStore *gtk.ListStore, guid, path, icon, proto string, pid
 	duplicated := false
 
 	globalPromptLock.Lock()
+	defer globalPromptLock.Unlock()
 
 	for ridx := 0; ridx < 2000; ridx++ {
 
@@ -368,7 +369,7 @@ func addRequestInc(listStore *gtk.ListStore, guid, path, icon, proto string, pid
 
 			err := globalLS.SetValue(iter, 0, rule.nrefs)
 			if err != nil {
-				log.Print("Error creating duplicate firewall prompt entry:", err)
+				log.Println("Error creating duplicate firewall prompt entry:", err)
 				break
 			}
 
@@ -379,8 +380,96 @@ func addRequestInc(listStore *gtk.ListStore, guid, path, icon, proto string, pid
 
 	}
 
-	globalPromptLock.Unlock()
 	return duplicated
+}
+
+func addRequestAsync(listStore *gtk.ListStore, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int, origin string, is_socks bool, optstring string, sandbox string) bool {
+	if listStore == nil {
+		listStore = globalLS
+		waitTimes := []int{1, 2, 5, 10}
+
+		if listStore == nil {
+			log.Println("SGFW prompter was not ready to receive firewall request... waiting")
+
+			for _, wtime := range waitTimes {
+				time.Sleep(time.Duration(wtime) * time.Second)
+				listStore = globalLS
+
+				if listStore != nil {
+					break
+				}
+
+				log.Println("SGFW prompter is still waiting...")
+			}
+
+		}
+
+	}
+
+	if listStore == nil {
+		log.Fatal("SGFW prompter GUI failed to load for unknown reasons")
+	}
+
+	if addRequestInc(listStore, guid, path, icon, proto, pid, ipaddr, hostname, port, uid, gid, origin, is_socks, optstring, sandbox) {
+		fmt.Println("REQUEST WAS DUPLICATE")
+		return false
+	} else {
+		fmt.Println("NOT DUPLICATE")
+	}
+
+	globalPromptLock.Lock()
+	iter := listStore.Append()
+
+	if is_socks {
+		if (optstring != "") && (strings.Index(optstring, "SOCKS") == -1) {
+			optstring = "SOCKS5 / " + optstring
+		} else if optstring == "" {
+			optstring = "SOCKS5"
+		}
+	}
+
+	colVals := make([]interface{}, 14)
+	colVals[0] = 1
+	colVals[1] = guid
+	colVals[2] = path
+	colVals[3] = icon
+	colVals[4] = proto
+	colVals[5] = pid
+
+	if ipaddr == "" {
+		colVals[6] = "---"
+	} else {
+		colVals[6] = ipaddr
+	}
+
+	colVals[7] = hostname
+	colVals[8] = port
+	colVals[9] = uid
+	colVals[10] = gid
+	colVals[11] = origin
+	colVals[12] = 0
+
+	if is_socks {
+		colVals[12] = 1
+	}
+
+	colVals[13] = optstring
+
+	colNums := make([]int, len(colVals))
+
+	for n := 0; n < len(colVals); n++ {
+		colNums[n] = n
+	}
+
+	err := listStore.Set(iter, colNums, colVals)
+	globalPromptLock.Unlock()
+
+	if err != nil {
+		log.Fatal("Unable to add row:", err)
+	}
+
+	toggleHover()
+	return true
 }
 
 func addRequest(listStore *gtk.ListStore, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int, origin string, is_socks bool, optstring string, sandbox string) *decisionWaiter {
@@ -389,18 +478,19 @@ func addRequest(listStore *gtk.ListStore, guid, path, icon, proto string, pid in
 		waitTimes := []int{1, 2, 5, 10}
 
 		if listStore == nil {
-			log.Print("SGFW prompter was not ready to receive firewall request... waiting")
-		}
+			log.Println("SGFW prompter was not ready to receive firewall request... waiting")
 
-		for _, wtime := range waitTimes {
-			time.Sleep(time.Duration(wtime) * time.Second)
-			listStore = globalLS
+			for _, wtime := range waitTimes {
+				time.Sleep(time.Duration(wtime) * time.Second)
+				listStore = globalLS
 
-			if listStore != nil {
-				break
+				if listStore != nil {
+					break
+				}
+
+				log.Println("SGFW prompter is still waiting...")
 			}
 
-			log.Print("SGFW prompter is still waiting...")
 		}
 
 	}
@@ -565,13 +655,26 @@ func lsGetInt(ls *gtk.ListStore, iter *gtk.TreeIter, idx int) (int, error) {
 	return ival.(int), nil
 }
 
-func makeDecision(idx int, rule string, scope int) {
+func makeDecision(idx int, rule string, scope int) error {
+	var dres bool
+	call := dbuso.Call("AddRuleAsync", 0, uint32(scope), rule, "*")
+
+	err := call.Store(&dres)
+	if err != nil {
+		log.Println("Error notifying SGFW of asynchronous rule addition:", err)
+		return err
+	}
+
+	fmt.Println("makeDecision remote result:", dres)
+
+	return nil
 	decisionWaiters[idx].Cond.L.Lock()
 	decisionWaiters[idx].Rule = rule
 	decisionWaiters[idx].Scope = scope
 	decisionWaiters[idx].Ready = true
 	decisionWaiters[idx].Cond.Signal()
 	decisionWaiters[idx].Cond.L.Unlock()
+	return nil
 }
 
 func toggleHover() {
@@ -581,7 +684,9 @@ func toggleHover() {
 func toggleValidRuleState() {
 	ok := true
 
-	globalPromptLock.Lock()
+	// Unfortunately, this can cause deadlock since it's a part ofi the item removal cascade
+	//	globalPromptLock.Lock()
+	//	defer globalPromptLock.Unlock()
 
 	if numSelections() <= 0 {
 		ok = false
@@ -625,7 +730,6 @@ func toggleValidRuleState() {
 	btnApprove.SetSensitive(ok)
 	btnDeny.SetSensitive(ok)
 	btnIgnore.SetSensitive(ok)
-	globalPromptLock.Unlock()
 }
 
 func createCurrentRule() (ruleColumns, error) {
@@ -710,7 +814,7 @@ func removeSelectedRule(idx int, rmdecision bool) error {
 	globalLS.Remove(iter)
 
 	if rmdecision {
-		decisionWaiters = append(decisionWaiters[:idx], decisionWaiters[idx+1:]...)
+		//		decisionWaiters = append(decisionWaiters[:idx], decisionWaiters[idx+1:]...)
 	}
 
 	toggleHover()
@@ -844,12 +948,75 @@ func getSelectedRule() (ruleColumns, int, error) {
 	return rule, lIndex, nil
 }
 
+func addPendingPrompts(rules []string) {
+
+	for _, rule := range rules {
+		fields := strings.Split(rule, "|")
+
+		if len(fields) != 17 {
+			log.Printf("Got saved prompt message with strange data: \"%s\"", rule)
+			continue
+		}
+
+		guid := fields[0]
+		icon := fields[2]
+		path := fields[3]
+		address := fields[4]
+
+		port, err := strconv.Atoi(fields[5])
+		if err != nil {
+			log.Println("Error converting port in pending prompt message to integer:", err)
+			continue
+		}
+
+		ip := fields[6]
+		origin := fields[7]
+		proto := fields[8]
+
+		uid, err := strconv.Atoi(fields[9])
+		if err != nil {
+			log.Println("Error converting UID in pending prompt message to integer:", err)
+			continue
+		}
+
+		gid, err := strconv.Atoi(fields[10])
+		if err != nil {
+			log.Println("Error converting GID in pending prompt message to integer:", err)
+			continue
+		}
+
+		pid, err := strconv.Atoi(fields[13])
+		if err != nil {
+			log.Println("Error converting pid in pending prompt message to integer:", err)
+			continue
+		}
+
+		sandbox := fields[14]
+
+		is_socks, err := strconv.ParseBool(fields[15])
+		if err != nil {
+			log.Println("Error converting SOCKS flag in pending prompt message to boolean:", err)
+			continue
+		}
+
+		optstring := fields[16]
+
+		addRequestAsync(nil, guid, path, icon, proto, int(pid), ip, address, int(port), int(uid), int(gid), origin, is_socks, optstring, sandbox)
+	}
+
+}
+
 func main() {
 	decisionWaiters = make([]*decisionWaiter, 0)
 	_, err := newDbusServer()
 	if err != nil {
 		log.Fatal("Error:", err)
 		return
+	}
+
+	dbuso, err = newDbusObjectAdd()
+	if err != nil {
+		log.Fatal("Failed to connect to dbus system bus: %v", err)
 	}
 
 	loadPreferences()
@@ -1045,17 +1212,17 @@ func main() {
 	tv.SetModel(listStore)
 
 	btnApprove.Connect("clicked", func() {
-		//		globalPromptLock.Lock()
+		globalPromptLock.Lock()
 		rule, idx, err := getSelectedRule()
 		if err != nil {
-			//			globalPromptLock.Unlock()
+			globalPromptLock.Unlock()
 			promptError("Error occurred processing request: " + err.Error())
 			return
 		}
 
 		rule, err = createCurrentRule()
 		if err != nil {
-			//			globalPromptLock.Unlock()
+			globalPromptLock.Unlock()
 			promptError("Error occurred constructing new rule: " + err.Error())
 			return
 		}
@@ -1071,7 +1238,7 @@ func main() {
 		fmt.Println("RULESTR = ", rulestr)
 		makeDecision(idx, rulestr, int(rule.Scope))
 		fmt.Println("Decision made.")
-		//		globalPromptLock.Unlock()
+		globalPromptLock.Unlock()
 		err = removeSelectedRule(idx, true)
 		if err == nil {
 			clearEditor()
@@ -1081,17 +1248,17 @@ func main() {
 	})
 
 	btnDeny.Connect("clicked", func() {
-		//		globalPromptLock.Lock()
+		globalPromptLock.Lock()
 		rule, idx, err := getSelectedRule()
 		if err != nil {
-			//			globalPromptLock.Unlock()
+			globalPromptLock.Unlock()
 			promptError("Error occurred processing request: " + err.Error())
 			return
 		}
 
 		rule, err = createCurrentRule()
 		if err != nil {
-			//			globalPromptLock.Unlock()
+			globalPromptLock.Unlock()
 			promptError("Error occurred constructing new rule: " + err.Error())
 			return
 		}
@@ -1101,7 +1268,7 @@ func main() {
 		fmt.Println("RULESTR = ", rulestr)
 		makeDecision(idx, rulestr, int(rule.Scope))
 		fmt.Println("Decision made.")
-		//		globalPromptLock.Unlock()
+		globalPromptLock.Unlock()
 		err = removeSelectedRule(idx, true)
 		if err == nil {
 			clearEditor()
@@ -1111,17 +1278,17 @@ func main() {
 	})
 
 	btnIgnore.Connect("clicked", func() {
-		//		globalPromptLock.Lock()
+		globalPromptLock.Lock()
 		_, idx, err := getSelectedRule()
 		if err != nil {
-			//			globalPromptLock.Unlock()
+			globalPromptLock.Unlock()
 			promptError("Error occurred processing request: " + err.Error())
 			return
 		}
 
 		makeDecision(idx, "", 0)
 		fmt.Println("Decision made.")
-		//		globalPromptLock.Unlock()
+		globalPromptLock.Unlock()
 		err = removeSelectedRule(idx, true)
 		if err == nil {
 			clearEditor()
@@ -1132,10 +1299,10 @@ func main() {
 
 	//	tv.SetActivateOnSingleClick(true)
 	tv.Connect("row-activated", func() {
-		//		globalPromptLock.Lock()
+		globalPromptLock.Lock()
 		seldata, _, err := getSelectedRule()
+		globalPromptLock.Unlock()
 		if err != nil {
-			//			globalPromptLock.Unlock()
 			promptError("Unexpected error reading selected rule: " + err.Error())
 			return
 		}
@@ -1182,8 +1349,6 @@ func main() {
 
 		chkUser.SetActive(false)
 		chkGroup.SetActive(false)
-
-		//		globalPromptLock.Unlock()
 		return
 	})
 
@@ -1206,5 +1371,16 @@ func main() {
 
 	mainWin.ShowAll()
 	//	mainWin.SetKeepAbove(true)
+
+	var dres = []string{}
+	call := dbuso.Call("GetPendingRequests", 0, "*")
+	err = call.Store(&dres)
+	if err != nil {
+		errmsg := "Could not query running SGFW instance (maybe it's not running?): " + err.Error()
+		promptError(errmsg)
+	} else {
+		addPendingPrompts(dres)
+	}
+
 	gtk.Main()
 }

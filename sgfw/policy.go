@@ -6,8 +6,6 @@ import (
 	"strings"
 	"sync"
 
-	//	"encoding/binary"
-
 	//	nfnetlink "github.com/subgraph/go-nfnetlink"
 	"github.com/google/gopacket/layers"
 	nfqueue "github.com/subgraph/go-nfnetlink/nfqueue"
@@ -213,6 +211,12 @@ func (pp *pendingPkt) print() string {
 	return printPacket(pp.pkt, pp.name, pp.pinfo)
 }
 
+type PendingRule struct {
+	rule   string
+	scope  int
+	policy string
+}
+
 type Policy struct {
 	fw               *Firewall
 	path             string
@@ -223,6 +227,7 @@ type Policy struct {
 	pendingQueue     []pendingConnection
 	promptInProgress bool
 	lock             sync.Mutex
+	rulesPending     []PendingRule
 }
 
 func (fw *Firewall) PolicyForPath(path string) *Policy {
@@ -312,21 +317,22 @@ func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info, o
 func (p *Policy) processPromptResult(pc pendingConnection) {
 	p.pendingQueue = append(p.pendingQueue, pc)
 	//fmt.Println("processPromptResult(): p.promptInProgress = ", p.promptInProgress)
-	if DoMultiPrompt || (!DoMultiPrompt && !p.promptInProgress) {
-		p.promptInProgress = true
-		go p.fw.dbus.prompt(p)
-	}
+	//if DoMultiPrompt || (!DoMultiPrompt && !p.promptInProgress) {
+	//	if !p.promptInProgress {
+	p.promptInProgress = true
+	go p.fw.dbus.prompt(p)
+	//	}
 }
 
 func (p *Policy) nextPending() (pendingConnection, bool) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	if !DoMultiPrompt {
+	/*	if !DoMultiPrompt {
 		if len(p.pendingQueue) == 0 {
 			return nil, true
 		}
 		return p.pendingQueue[0], false
-	}
+	}*/
 
 	if len(p.pendingQueue) == 0 {
 		return nil, true
@@ -334,6 +340,7 @@ func (p *Policy) nextPending() (pendingConnection, bool) {
 
 	//	for len(p.pendingQueue) != 0 {
 	for i := 0; i < len(p.pendingQueue); i++ {
+		fmt.Printf("pendingQueue %v of %v: %v\n", i, len(p.pendingQueue), p.pendingQueue[i])
 		if !p.pendingQueue[i].getPrompting() {
 			return p.pendingQueue[i], false
 		}
@@ -414,8 +421,6 @@ func (p *Policy) filterPending(rule *Rule) {
 			if prompter == nil {
 				fmt.Println("-------- prompter = NULL")
 			} else {
-				fmt.Println("---------- could send prompter")
-
 				call := prompter.Call("com.subgraph.FirewallPrompt.RemovePrompt", 0, pc.getGUID())
 				fmt.Println("CAAAAAAAAAAAAAAALL = ", call)
 			}
