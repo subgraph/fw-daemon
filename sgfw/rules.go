@@ -479,7 +479,10 @@ func (fw *Firewall) loadRules() {
 	if err != nil {
 		if !os.IsNotExist(err) {
 			log.Warningf("Failed to open %s for reading: %v", p, err)
+		} else {
+			log.Warningf("Did not find a rules file at %s: SGFW loaded with no rules\n", p)
 		}
+
 		return
 	}
 	var policy *Policy
@@ -497,7 +500,13 @@ func (fw *Firewall) loadRules() {
 
 func (fw *Firewall) processPathLine(line string) *Policy {
 	pathLine := line[1 : len(line)-1]
+
 	toks := strings.Split(pathLine, "|")
+	if len(toks) != 2 {
+		log.Warning("Error parsing rules directive:", line)
+		return nil
+	}
+
 	policy := fw.policyForPathAndSandbox(toks[1], toks[0])
 	policy.lock.Lock()
 	defer policy.lock.Unlock()

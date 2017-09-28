@@ -34,34 +34,44 @@ type decisionWaiter struct {
 }
 
 type ruleColumns struct {
-	Path     string
-	Proto    string
-	Pid      int
-	Target   string
-	Hostname string
-	Port     int
-	UID      int
-	GID      int
-	Uname    string
-	Gname    string
-	Origin   string
-	Scope    int
+	nrefs     int
+	Path      string
+	GUID      string
+	Icon      string
+	Proto     string
+	Pid       int
+	Target    string
+	Hostname  string
+	Port      int
+	UID       int
+	GID       int
+	Uname     string
+	Gname     string
+	Origin    string
+	Timestamp string
+	IsSocks   bool
+	ForceTLS  bool
+	Scope     int
 }
 
+var dbuso *dbusObject
 var userPrefs fpPreferences
 var mainWin *gtk.Window
 var Notebook *gtk.Notebook
-var globalLS *gtk.ListStore
+var globalLS *gtk.ListStore = nil
 var globalTV *gtk.TreeView
+var globalPromptLock = &sync.Mutex{}
+var globalIcon *gtk.Image
 var decisionWaiters []*decisionWaiter
 
 var editApp, editTarget, editPort, editUser, editGroup *gtk.Entry
 var comboProto *gtk.ComboBoxText
 var radioOnce, radioProcess, radioParent, radioSession, radioPermanent *gtk.RadioButton
 var btnApprove, btnDeny, btnIgnore *gtk.Button
-var chkUser, chkGroup *gtk.CheckButton
+var chkTLS, chkUser, chkGroup *gtk.CheckButton
 
 func dumpDecisions() {
+	return
 	fmt.Println("XXX Total of decisions pending: ", len(decisionWaiters))
 	for i := 0; i < len(decisionWaiters); i++ {
 		fmt.Printf("XXX %d ready = %v, rule = %v\n", i+1, decisionWaiters[i].Ready, decisionWaiters[i].Rule)
@@ -69,6 +79,7 @@ func dumpDecisions() {
 }
 
 func addDecision() *decisionWaiter {
+	return nil
 	decision := decisionWaiter{Lock: &sync.Mutex{}, Ready: false, Scope: int(sgfw.APPLY_ONCE), Rule: ""}
 	decision.Cond = sync.NewCond(decision.Lock)
 	decisionWaiters = append(decisionWaiters, &decision)
@@ -306,7 +317,8 @@ func createColumn(title string, id int) *gtk.TreeViewColumn {
 }
 
 func createListStore(general bool) *gtk.ListStore {
-	colData := []glib.Type{glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_INT, glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_STRING}
+	colData := []glib.Type{glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_STRING,
+		glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_INT, glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_INT}
 	listStore, err := gtk.ListStoreNew(colData...)
 
 	if err != nil {
@@ -316,24 +328,92 @@ func createListStore(general bool) *gtk.ListStore {
 	return listStore
 }
 
-func addRequest(listStore *gtk.ListStore, path, proto string, pid int, ipaddr, hostname string, port, uid, gid int, origin string, is_socks bool, optstring string, sandbox string) *decisionWaiter {
+func removeRequest(listStore *gtk.ListStore, guid string) {
+	removed := false
+	globalPromptLock.Lock()
+	defer globalPromptLock.Unlock()
+
+	/* XXX: This is horrible. Figure out how to do this properly. */
+	for ridx := 0; ridx < globalLS.IterNChildren(nil); ridx++ {
+
+		rule, _, err := getRuleByIdx(ridx)
+		if err != nil {
+			break
+		} else if rule.GUID == guid {
+			removeSelectedRule(ridx, true)
+			removed = true
+			break
+		}
+
+	}
+
+	if !removed {
+		log.Printf("Unexpected condition: SGFW requested prompt removal for non-existent GUID %v\n", guid)
+	}
+
+}
+
+func addRequestInc(listStore *gtk.ListStore, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int,
+	origin string, is_socks bool, optstring string, sandbox string, action int) bool {
+	duplicated := false
+
+	globalPromptLock.Lock()
+	defer globalPromptLock.Unlock()
+
+	for ridx := 0; ridx < globalLS.IterNChildren(nil); ridx++ {
+
+		/* XXX: This is horrible. Figure out how to do this properly. */
+		rule, iter, err := getRuleByIdx(ridx)
+		if err != nil {
+			break
+			// XXX: not compared: optstring/sandbox
+		} else if (rule.Path == path) && (rule.Proto == proto) && (rule.Pid == pid) && (rule.Target == ipaddr) && (rule.Hostname == hostname) &&
+			(rule.Port == port) && (rule.UID == uid) && (rule.GID == gid) && (rule.Origin == origin) && (rule.IsSocks == is_socks) {
+			rule.nrefs++
+
+			err := globalLS.SetValue(iter, 0, rule.nrefs)
+			if err != nil {
+				log.Println("Error creating duplicate firewall prompt entry:", err)
+				break
+			}
+
+			fmt.Println("YES REALLY DUPLICATE: ", rule.nrefs)
+			duplicated = true
+			break
+		}
+
+	}
+
+	return duplicated
+}
+
+func addRequestAsync(listStore *gtk.ListStore, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int,
+	origin, timestamp string, is_socks bool, optstring string, sandbox string, action int) bool {
+	addRequest(listStore, guid, path, icon, proto, pid, ipaddr, hostname, port, uid, gid, origin, timestamp, is_socks,
+		optstring, sandbox, action)
+	return true
+}
+
+func addRequest(listStore *gtk.ListStore, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int,
+	origin, timestamp string, is_socks bool, optstring string, sandbox string, action int) *decisionWaiter {
 	if listStore == nil {
 		listStore = globalLS
 		waitTimes := []int{1, 2, 5, 10}
 
 		if listStore == nil {
-			log.Print("SGFW prompter was not ready to receive firewall request... waiting")
-		}
+			log.Println("SGFW prompter was not ready to receive firewall request... waiting")
 
-		for _, wtime := range waitTimes {
-			time.Sleep(time.Duration(wtime) * time.Second)
-			listStore = globalLS
+			for _, wtime := range waitTimes {
+				time.Sleep(time.Duration(wtime) * time.Second)
+				listStore = globalLS
 
-			if listStore != nil {
-				break
+				if listStore != nil {
+					break
+				}
+
+				log.Println("SGFW prompter is still waiting...")
 			}
 
-			log.Print("SGFW prompter is still waiting...")
 		}
 
 	}
@@ -342,6 +422,18 @@ func addRequest(listStore *gtk.ListStore, path, proto string, pid int, ipaddr, h
 		log.Fatal("SGFW prompter GUI failed to load for unknown reasons")
 	}
 
+	if addRequestInc(listStore, guid, path, icon, proto, pid, ipaddr, hostname, port, uid, gid, origin, is_socks, optstring, sandbox, action) {
+		fmt.Println("REQUEST WAS DUPLICATE")
+		decision := addDecision()
+		globalPromptLock.Lock()
+		toggleHover()
+		globalPromptLock.Unlock()
+		return decision
+	} else {
+		fmt.Println("NOT DUPLICATE")
+	}
+
+	globalPromptLock.Lock()
 	iter := listStore.Append()
 
 	if is_socks {
@@ -352,24 +444,34 @@ func addRequest(listStore *gtk.ListStore, path, proto string, pid int, ipaddr, h
 		}
 	}
 
-	colVals := make([]interface{}, 11)
+	colVals := make([]interface{}, 16)
 	colVals[0] = 1
-	colVals[1] = path
-	colVals[2] = proto
-	colVals[3] = pid
+	colVals[1] = guid
+	colVals[2] = path
+	colVals[3] = icon
+	colVals[4] = proto
+	colVals[5] = pid
 
 	if ipaddr == "" {
-		colVals[4] = "---"
+		colVals[6] = "---"
 	} else {
-		colVals[4] = ipaddr
+		colVals[6] = ipaddr
 	}
 
-	colVals[5] = hostname
-	colVals[6] = port
-	colVals[7] = uid
-	colVals[8] = gid
-	colVals[9] = origin
-	colVals[10] = optstring
+	colVals[7] = hostname
+	colVals[8] = port
+	colVals[9] = uid
+	colVals[10] = gid
+	colVals[11] = origin
+	colVals[12] = timestamp
+	colVals[13] = 0
+
+	if is_socks {
+		colVals[13] = 1
+	}
+
+	colVals[14] = optstring
+	colVals[15] = action
 
 	colNums := make([]int, len(colVals))
 
@@ -386,6 +488,7 @@ func addRequest(listStore *gtk.ListStore, path, proto string, pid int, ipaddr, h
 	decision := addDecision()
 	dumpDecisions()
 	toggleHover()
+	globalPromptLock.Unlock()
 	return decision
 }
 
@@ -479,21 +582,41 @@ func lsGetInt(ls *gtk.ListStore, iter *gtk.TreeIter, idx int) (int, error) {
 	return ival.(int), nil
 }
 
-func makeDecision(idx int, rule string, scope int) {
+func makeDecision(idx int, rule string, scope int) error {
+	var dres bool
+	call := dbuso.Call("AddRuleAsync", 0, uint32(scope), rule, "*")
+
+	err := call.Store(&dres)
+	if err != nil {
+		log.Println("Error notifying SGFW of asynchronous rule addition:", err)
+		return err
+	}
+
+	fmt.Println("makeDecision remote result:", dres)
+
+	return nil
 	decisionWaiters[idx].Cond.L.Lock()
 	decisionWaiters[idx].Rule = rule
 	decisionWaiters[idx].Scope = scope
 	decisionWaiters[idx].Ready = true
 	decisionWaiters[idx].Cond.Signal()
 	decisionWaiters[idx].Cond.L.Unlock()
+	return nil
 }
 
+/* Do we need to hold the lock while this is called? Stay safe... */
 func toggleHover() {
-	mainWin.SetKeepAbove(len(decisionWaiters) > 0)
+	nitems := globalLS.IterNChildren(nil)
+
+	mainWin.SetKeepAbove(nitems > 0)
 }
 
 func toggleValidRuleState() {
 	ok := true
+
+	// XXX: Unfortunately, this can cause deadlock since it's a part of the item removal cascade
+	//	globalPromptLock.Lock()
+	//	defer globalPromptLock.Unlock()
 
 	if numSelections() <= 0 {
 		ok = false
@@ -536,7 +659,8 @@ func toggleValidRuleState() {
 
 	btnApprove.SetSensitive(ok)
 	btnDeny.SetSensitive(ok)
-	btnIgnore.SetSensitive(ok)
+	//	btnIgnore.SetSensitive(ok)
+	btnIgnore.SetSensitive(false)
 }
 
 func createCurrentRule() (ruleColumns, error) {
@@ -579,6 +703,9 @@ func createCurrentRule() (ruleColumns, error) {
 
 	rule.UID, rule.GID = 0, 0
 	rule.Uname, rule.Gname = "", ""
+
+	rule.ForceTLS = chkTLS.GetActive()
+
 	/*	Pid      int
 		Origin   string */
 
@@ -586,6 +713,7 @@ func createCurrentRule() (ruleColumns, error) {
 }
 
 func clearEditor() {
+	globalIcon.Clear()
 	editApp.SetText("")
 	editTarget.SetText("")
 	editPort.SetText("")
@@ -599,6 +727,7 @@ func clearEditor() {
 	radioPermanent.SetActive(false)
 	chkUser.SetActive(false)
 	chkGroup.SetActive(false)
+	chkTLS.SetActive(false)
 }
 
 func removeSelectedRule(idx int, rmdecision bool) error {
@@ -617,7 +746,7 @@ func removeSelectedRule(idx int, rmdecision bool) error {
 	globalLS.Remove(iter)
 
 	if rmdecision {
-		decisionWaiters = append(decisionWaiters[:idx], decisionWaiters[idx+1:]...)
+		//		decisionWaiters = append(decisionWaiters[:idx], decisionWaiters[idx+1:]...)
 	}
 
 	toggleHover()
@@ -634,6 +763,104 @@ func numSelections() int {
 	return int(rows.Length())
 }
 
+// Needs to be locked by the caller
+func getRuleByIdx(idx int) (ruleColumns, *gtk.TreeIter, error) {
+	rule := ruleColumns{}
+
+	path, err := gtk.TreePathNewFromString(fmt.Sprintf("%d", idx))
+	if err != nil {
+		return rule, nil, err
+	}
+
+	iter, err := globalLS.GetIter(path)
+	if err != nil {
+		return rule, nil, err
+	}
+
+	rule.nrefs, err = lsGetInt(globalLS, iter, 0)
+	if err != nil {
+		return rule, nil, err
+	}
+
+	rule.GUID, err = lsGetStr(globalLS, iter, 1)
+	if err != nil {
+		return rule, nil, err
+	}
+
+	rule.Path, err = lsGetStr(globalLS, iter, 2)
+	if err != nil {
+		return rule, nil, err
+	}
+
+	rule.Icon, err = lsGetStr(globalLS, iter, 3)
+	if err != nil {
+		return rule, nil, err
+	}
+
+	rule.Proto, err = lsGetStr(globalLS, iter, 4)
+	if err != nil {
+		return rule, nil, err
+	}
+
+	rule.Pid, err = lsGetInt(globalLS, iter, 5)
+	if err != nil {
+		return rule, nil, err
+	}
+
+	rule.Target, err = lsGetStr(globalLS, iter, 6)
+	if err != nil {
+		return rule, nil, err
+	}
+
+	rule.Hostname, err = lsGetStr(globalLS, iter, 7)
+	if err != nil {
+		return rule, nil, err
+	}
+
+	rule.Port, err = lsGetInt(globalLS, iter, 8)
+	if err != nil {
+		return rule, nil, err
+	}
+
+	rule.UID, err = lsGetInt(globalLS, iter, 9)
+	if err != nil {
+		return rule, nil, err
+	}
+
+	rule.GID, err = lsGetInt(globalLS, iter, 10)
+	if err != nil {
+		return rule, nil, err
+	}
+
+	rule.Origin, err = lsGetStr(globalLS, iter, 11)
+	if err != nil {
+		return rule, nil, err
+	}
+
+	rule.Timestamp, err = lsGetStr(globalLS, iter, 12)
+	if err != nil {
+		return rule, nil, err
+	}
+
+	rule.IsSocks = false
+	is_socks, err := lsGetInt(globalLS, iter, 13)
+	if err != nil {
+		return rule, nil, err
+	}
+
+	if is_socks != 0 {
+		rule.IsSocks = true
+	}
+
+	rule.Scope, err = lsGetInt(globalLS, iter, 15)
+	if err != nil {
+		return rule, nil, err
+	}
+
+	return rule, iter, nil
+}
+
+// Needs to be locked by the caller
 func getSelectedRule() (ruleColumns, int, error) {
 	rule := ruleColumns{}
 
@@ -655,62 +882,115 @@ func getSelectedRule() (ruleColumns, int, error) {
 	}
 
 	fmt.Println("lindex = ", lIndex)
-	path, err := gtk.TreePathNewFromString(fmt.Sprintf("%d", lIndex))
-	if err != nil {
-		return rule, -1, err
-	}
-
-	iter, err := globalLS.GetIter(path)
-	if err != nil {
-		return rule, -1, err
-	}
-
-	rule.Path, err = lsGetStr(globalLS, iter, 1)
-	if err != nil {
-		return rule, -1, err
-	}
-
-	rule.Proto, err = lsGetStr(globalLS, iter, 2)
-	if err != nil {
-		return rule, -1, err
-	}
-
-	rule.Pid, err = lsGetInt(globalLS, iter, 3)
-	if err != nil {
-		return rule, -1, err
-	}
-
-	rule.Target, err = lsGetStr(globalLS, iter, 4)
-	if err != nil {
-		return rule, -1, err
-	}
-
-	rule.Hostname, err = lsGetStr(globalLS, iter, 5)
-	if err != nil {
-		return rule, -1, err
-	}
-
-	rule.Port, err = lsGetInt(globalLS, iter, 6)
-	if err != nil {
-		return rule, -1, err
-	}
-
-	rule.UID, err = lsGetInt(globalLS, iter, 7)
-	if err != nil {
-		return rule, -1, err
-	}
-
-	rule.GID, err = lsGetInt(globalLS, iter, 8)
-	if err != nil {
-		return rule, -1, err
-	}
-
-	rule.Origin, err = lsGetStr(globalLS, iter, 9)
+	rule, _, err = getRuleByIdx(lIndex)
 	if err != nil {
 		return rule, -1, err
 	}
 
 	return rule, lIndex, nil
+}
+
+func addPendingPrompts(rules []string) {
+
+	for _, rule := range rules {
+		fields := strings.Split(rule, "|")
+
+		if len(fields) != 19 {
+			log.Printf("Got saved prompt message with strange data: \"%s\"", rule)
+			continue
+		}
+
+		guid := fields[0]
+		icon := fields[2]
+		path := fields[3]
+		address := fields[4]
+
+		port, err := strconv.Atoi(fields[5])
+		if err != nil {
+			log.Println("Error converting port in pending prompt message to integer:", err)
+			continue
+		}
+
+		ip := fields[6]
+		origin := fields[7]
+		proto := fields[8]
+
+		uid, err := strconv.Atoi(fields[9])
+		if err != nil {
+			log.Println("Error converting UID in pending prompt message to integer:", err)
+			continue
+		}
+
+		gid, err := strconv.Atoi(fields[10])
+		if err != nil {
+			log.Println("Error converting GID in pending prompt message to integer:", err)
+			continue
+		}
+
+		pid, err := strconv.Atoi(fields[13])
+		if err != nil {
+			log.Println("Error converting pid in pending prompt message to integer:", err)
+			continue
+		}
+
+		sandbox := fields[14]
+
+		is_socks, err := strconv.ParseBool(fields[15])
+		if err != nil {
+			log.Println("Error converting SOCKS flag in pending prompt message to boolean:", err)
+			continue
+		}
+
+		timestamp := fields[16]
+		optstring := fields[17]
+
+		action, err := strconv.Atoi(fields[18])
+		if err != nil {
+			log.Println("Error converting action in pending prompt message to integer:", err)
+			continue
+		}
+
+		addRequestAsync(nil, guid, path, icon, proto, int(pid), ip, address, int(port), int(uid), int(gid), origin, timestamp, is_socks, optstring, sandbox, action)
+	}
+
+}
+
+func buttonAction(action string) {
+	globalPromptLock.Lock()
+	rule, idx, err := getSelectedRule()
+	if err != nil {
+		globalPromptLock.Unlock()
+		promptError("Error occurred processing request: " + err.Error())
+		return
+	}
+
+	rule, err = createCurrentRule()
+	if err != nil {
+		globalPromptLock.Unlock()
+		promptError("Error occurred constructing new rule: " + err.Error())
+		return
+	}
+
+	fmt.Println("rule = ", rule)
+	rulestr := action
+
+	if action == "ALLOW" && rule.ForceTLS {
+		rulestr += "_TLSONLY"
+	}
+
+	rulestr += "|" + rule.Proto + ":" + rule.Target + ":" + strconv.Itoa(rule.Port)
+	rulestr += "|" + sgfw.RuleModeString[sgfw.RuleMode(rule.Scope)]
+	fmt.Println("RULESTR = ", rulestr)
+	makeDecision(idx, rulestr, int(rule.Scope))
+	fmt.Println("Decision made.")
+	err = removeSelectedRule(idx, true)
+	globalPromptLock.Unlock()
+	if err == nil {
+		clearEditor()
+	} else {
+		promptError("Error setting new rule: " + err.Error())
+	}
+
 }
 
 func main() {
@@ -719,6 +999,11 @@ func main() {
 	if err != nil {
 		log.Fatal("Error:", err)
 		return
+	}
+
+	dbuso, err = newDbusObjectAdd()
+	if err != nil {
+		log.Fatal("Failed to connect to dbus system bus: %v", err)
 	}
 
 	loadPreferences()
@@ -811,10 +1096,18 @@ func main() {
 	editbox := get_vbox()
 	hbox := get_hbox()
 	lbl := get_label("Application path:")
+
+	globalIcon, err = gtk.ImageNew()
+	if err != nil {
+		log.Fatal("Unable to create image:", err)
+	}
+
+	//	globalIcon.SetFromIconName("firefox", gtk.ICON_SIZE_DND)
 	editApp = get_entry("")
 	editApp.Connect("changed", toggleValidRuleState)
 	hbox.PackStart(lbl, false, false, 10)
-	hbox.PackStart(editApp, true, true, 50)
+	hbox.PackStart(editApp, true, true, 10)
+	hbox.PackStart(globalIcon, false, false, 10)
 	editbox.PackStart(hbox, false, false, 5)
 
 	hbox = get_hbox()
@@ -842,7 +1135,9 @@ func main() {
 	radioSession = get_radiobutton(radioOnce, "Session", false)
 	radioPermanent = get_radiobutton(radioOnce, "Permanent", false)
 	radioParent.SetSensitive(false)
-	hbox.PackStart(lbl, false, false, 10)
+	chkTLS = get_checkbox("Require TLS", false)
+	hbox.PackStart(chkTLS, false, false, 10)
+	hbox.PackStart(lbl, false, false, 20)
 	hbox.PackStart(radioOnce, false, false, 5)
 	hbox.PackStart(radioProcess, false, false, 5)
 	hbox.PackStart(radioParent, false, false, 5)
@@ -872,16 +1167,36 @@ func main() {
 	box.PackStart(scrollbox, false, true, 5)
 
 	tv.AppendColumn(createColumn("#", 0))
-	tv.AppendColumn(createColumn("Path", 1))
-	tv.AppendColumn(createColumn("Protocol", 2))
-	tv.AppendColumn(createColumn("PID", 3))
-	tv.AppendColumn(createColumn("IP Address", 4))
-	tv.AppendColumn(createColumn("Hostname", 5))
-	tv.AppendColumn(createColumn("Port", 6))
-	tv.AppendColumn(createColumn("UID", 7))
-	tv.AppendColumn(createColumn("GID", 8))
-	tv.AppendColumn(createColumn("Origin", 9))
-	tv.AppendColumn(createColumn("Details", 10))
+
+	guidcol := createColumn("GUID", 1)
+	guidcol.SetVisible(false)
+	tv.AppendColumn(guidcol)
+
+	tv.AppendColumn(createColumn("Path", 2))
+
+	icol := createColumn("Icon", 3)
+	icol.SetVisible(false)
+	tv.AppendColumn(icol)
+
+	tv.AppendColumn(createColumn("Protocol", 4))
+	tv.AppendColumn(createColumn("PID", 5))
+	tv.AppendColumn(createColumn("IP Address", 6))
+	tv.AppendColumn(createColumn("Hostname", 7))
+	tv.AppendColumn(createColumn("Port", 8))
+	tv.AppendColumn(createColumn("UID", 9))
+	tv.AppendColumn(createColumn("GID", 10))
+	tv.AppendColumn(createColumn("Origin", 11))
+	tv.AppendColumn(createColumn("Timestamp", 12))
+
+	scol := createColumn("Is SOCKS", 13)
+	scol.SetVisible(false)
+	tv.AppendColumn(scol)
+
+	tv.AppendColumn(createColumn("Details", 14))
+
+	acol := createColumn("Scope", 15)
+	acol.SetVisible(false)
+	tv.AppendColumn(acol)
 
 	listStore := createListStore(true)
 	globalLS = listStore
@@ -889,83 +1204,30 @@ func main() {
 	tv.SetModel(listStore)
 
 	btnApprove.Connect("clicked", func() {
-		rule, idx, err := getSelectedRule()
-		if err != nil {
-			promptError("Error occurred processing request: " + err.Error())
-			return
-		}
-
-		rule, err = createCurrentRule()
-		if err != nil {
-			promptError("Error occurred constructing new rule: " + err.Error())
-			return
-		}
-
-		fmt.Println("rule = ", rule)
-		rulestr := "ALLOW|" + rule.Proto + ":" + rule.Target + ":" + strconv.Itoa(rule.Port)
-		fmt.Println("RULESTR = ", rulestr)
-		makeDecision(idx, rulestr, int(rule.Scope))
-		fmt.Println("Decision made.")
-		err = removeSelectedRule(idx, true)
-		if err == nil {
-			clearEditor()
-		} else {
-			promptError("Error setting new rule: " + err.Error())
-		}
+		buttonAction("ALLOW")
 	})
-
 	btnDeny.Connect("clicked", func() {
-		rule, idx, err := getSelectedRule()
-		if err != nil {
-			promptError("Error occurred processing request: " + err.Error())
-			return
-		}
-
-		rule, err = createCurrentRule()
-		if err != nil {
-			promptError("Error occurred constructing new rule: " + err.Error())
-			return
-		}
-
-		fmt.Println("rule = ", rule)
-		rulestr := "DENY|" + rule.Proto + ":" + rule.Target + ":" + strconv.Itoa(rule.Port)
-		fmt.Println("RULESTR = ", rulestr)
-		makeDecision(idx, rulestr, int(rule.Scope))
-		fmt.Println("Decision made.")
-		err = removeSelectedRule(idx, true)
-		if err == nil {
-			clearEditor()
-		} else {
-			promptError("Error setting new rule: " + err.Error())
-		}
+		buttonAction("DENY")
 	})
-
-	btnIgnore.Connect("clicked", func() {
-		_, idx, err := getSelectedRule()
-		if err != nil {
-			promptError("Error occurred processing request: " + err.Error())
-			return
-		}
-
-		makeDecision(idx, "", 0)
-		fmt.Println("Decision made.")
-		err = removeSelectedRule(idx, true)
-		if err == nil {
-			clearEditor()
-		} else {
-			promptError("Error setting new rule: " + err.Error())
-		}
-	})
+	//	btnIgnore.Connect("clicked", buttonAction)
 
 	//	tv.SetActivateOnSingleClick(true)
 	tv.Connect("row-activated", func() {
+		globalPromptLock.Lock()
 		seldata, _, err := getSelectedRule()
+		globalPromptLock.Unlock()
 		if err != nil {
 			promptError("Unexpected error reading selected rule: " + err.Error())
 			return
 		}
 
 		editApp.SetText(seldata.Path)
+
+		if seldata.Icon != "" {
+			globalIcon.SetFromIconName(seldata.Icon, gtk.ICON_SIZE_DND)
+		} else {
+			globalIcon.Clear()
+		}
 
 		if seldata.Hostname != "" {
 			editTarget.SetText(seldata.Hostname)
@@ -974,13 +1236,14 @@ func main() {
 		}
 
 		editPort.SetText(strconv.Itoa(seldata.Port))
-		radioOnce.SetActive(true)
-		radioProcess.SetActive(false)
+		radioOnce.SetActive(seldata.Scope == int(sgfw.APPLY_ONCE))
 		radioProcess.SetSensitive(seldata.Pid > 0)
 		radioParent.SetActive(false)
-		radioSession.SetActive(false)
-		radioPermanent.SetActive(false)
+		radioSession.SetActive(seldata.Scope == int(sgfw.APPLY_SESSION))
+		radioPermanent.SetActive(seldata.Scope == int(sgfw.APPLY_FOREVER))
+
 		comboProto.SetActiveID(seldata.Proto)
+		chkTLS.SetActive(seldata.IsSocks)
 
 		if seldata.Uname != "" {
 			editUser.SetText(seldata.Uname)
@@ -1000,7 +1263,6 @@ func main() {
 
 		chkUser.SetActive(false)
 		chkGroup.SetActive(false)
-
 		return
 	})
 
@@ -1023,5 +1285,16 @@ func main() {
 
 	mainWin.ShowAll()
 	//	mainWin.SetKeepAbove(true)
+
+	var dres = []string{}
+	call := dbuso.Call("GetPendingRequests", 0, "*")
+	err = call.Store(&dres)
+	if err != nil {
+		errmsg := "Could not query running SGFW instance (maybe it's not running?): " + err.Error()
+		promptError(errmsg)
+	} else {
+		addPendingPrompts(dres)
+	}
+
 	gtk.Main()
 }

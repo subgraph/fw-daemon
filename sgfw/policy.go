@@ -6,8 +6,6 @@ import (
 	"strings"
 	"sync"
 
-	//	"encoding/binary"
-
 	//	nfnetlink "github.com/subgraph/go-nfnetlink"
 	"github.com/google/gopacket/layers"
 	nfqueue "github.com/subgraph/go-nfnetlink/nfqueue"
@@ -15,6 +13,7 @@ import (
 	"net"
 	"os"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -52,6 +51,10 @@ type pendingConnection interface {
 	drop()
 	setPrompting(bool)
 	getPrompting() bool
+	setPrompter(*prompter)
+	getPrompter() *prompter
+	getGUID() string
+	getTimestamp() string
 	print() string
 }
 
@@ -62,6 +65,24 @@ type pendingPkt struct {
 	pinfo     *procsnitch.Info
 	optstring string
 	prompting bool
+	prompter  *prompter
+	guid      string
+	timestamp time.Time
+}
+
+/* Not a *REAL* GUID */
+func genGUID() string {
+	frnd, err := os.Open("/dev/urandom")
+	if err != nil {
+		log.Fatal("Error reading random data source:", err)
+	}
+
+	rndb := make([]byte, 16)
+	frnd.Read(rndb)
+	frnd.Close()
+
+	guid := fmt.Sprintf("%x-%x-%x-%x", rndb[0:4], rndb[4:8], rndb[8:12], rndb[12:])
+	return guid
 }
 
 func getEmptyPInfo() *procsnitch.Info {
@@ -77,6 +98,10 @@ func getEmptyPInfo() *procsnitch.Info {
 
 func (pp *pendingPkt) sandbox() string {
 	return pp.pinfo.Sandbox
+}
+
+func (pc *pendingPkt) getTimestamp() string {
+	return pc.timestamp.Format("15:04:05.00")
 }
 
 func (pp *pendingPkt) socks() bool {
@@ -165,6 +190,22 @@ func (pp *pendingPkt) drop() {
 	pp.pkt.Accept()
 }
 
+func (pp *pendingPkt) setPrompter(val *prompter) {
+	pp.prompter = val
+}
+
+func (pp *pendingPkt) getPrompter() *prompter {
+	return pp.prompter
+}
+
+func (pp *pendingPkt) getGUID() string {
+	if pp.guid == "" {
+		pp.guid = genGUID()
+	}
+
+	return pp.guid
+}
+
 func (pp *pendingPkt) getPrompting() bool {
 	return pp.prompting
 }
@@ -177,6 +218,12 @@ func (pp *pendingPkt) print() string {
 	return printPacket(pp.pkt, pp.name, pp.pinfo)
 }
 
+type PendingRule struct {
+	rule   string
+	scope  int
+	policy string
+}
+
 type Policy struct {
 	fw               *Firewall
 	path             string
@@ -187,6 +234,7 @@ type Policy struct {
 	pendingQueue     []pendingConnection
 	promptInProgress bool
 	lock             sync.Mutex
+	rulesPending     []PendingRule
 }
 
 func (fw *Firewall) PolicyForPath(path string) *Policy {
@@ -240,17 +288,25 @@ func (fw *Firewall) policyForPath(path string) *Policy {
 	return fw.policyMap[path]
 }
 
-func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info, optstr string) {
+func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, timestamp time.Time, pinfo *procsnitch.Info, optstr string) {
+	fmt.Println("policy processPacket()")
 
-	/*	hbytes, err := pkt.GetHWAddr()
-		if err != nil {
-			log.Notice("Failed to get HW address underlying packet: ", err)
-		} else { log.Notice("got hwaddr: ", hbytes) } */
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	dstb := pkt.Packet.NetworkLayer().NetworkFlow().Dst().Raw()
 	dstip := net.IP(dstb)
 	srcip := net.IP(pkt.Packet.NetworkLayer().NetworkFlow().Src().Raw())
+
+	/* Can we pass this through quickly? */
+	/* this probably isn't a performance enhancement. */
+	/*_, dstp := getPacketPorts(pkt)
+	fres := p.rules.filter(pkt, srcip, dstip, dstp, dstip.String(), pinfo, optstr)
+	if fres == FILTER_ALLOW {
+		fmt.Printf("Packet passed wildcard rules without requiring DNS lookup; accepting: %s:%d\n", dstip, dstp)
+		pkt.Accept()
+		return
+	}*/
+
 	name := p.fw.dns.Lookup(dstip, pinfo.Pid)
 	log.Infof("Lookup(%s): %s", dstip.String(), name)
 
@@ -267,7 +323,7 @@ func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info, o
 	case FILTER_ALLOW:
 		pkt.Accept()
 	case FILTER_PROMPT:
-		p.processPromptResult(&pendingPkt{pol: p, name: name, pkt: pkt, pinfo: pinfo, optstring: optstr, prompting: false})
+		p.processPromptResult(&pendingPkt{pol: p, name: name, pkt: pkt, pinfo: pinfo, optstring: optstr, prompter: nil, timestamp: timestamp, prompting: false})
 	default:
 		log.Warningf("Unexpected filter result: %d", result)
 	}
@@ -276,33 +332,27 @@ func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info, o
 func (p *Policy) processPromptResult(pc pendingConnection) {
 	p.pendingQueue = append(p.pendingQueue, pc)
 	//fmt.Println("processPromptResult(): p.promptInProgress = ", p.promptInProgress)
-	if DoMultiPrompt || (!DoMultiPrompt && !p.promptInProgress) {
-		p.promptInProgress = true
-		go p.fw.dbus.prompt(p)
-	}
+	//if DoMultiPrompt || (!DoMultiPrompt && !p.promptInProgress) {
+	//	if !p.promptInProgress {
+	p.promptInProgress = true
+	go p.fw.dbus.prompter.prompt(p)
+	//	}
 }
 
 func (p *Policy) nextPending() (pendingConnection, bool) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	if !DoMultiPrompt {
-		if len(p.pendingQueue) == 0 {
-			return nil, true
-		}
-		return p.pendingQueue[0], false
-	}
 
 	if len(p.pendingQueue) == 0 {
 		return nil, true
 	}
 
-	//	for len(p.pendingQueue) != 0 {
 	for i := 0; i < len(p.pendingQueue); i++ {
+		//		fmt.Printf("XXX: pendingQueue %v of %v: %v\n", i, len(p.pendingQueue), p.pendingQueue[i])
 		if !p.pendingQueue[i].getPrompting() {
 			return p.pendingQueue[i], false
 		}
 	}
-	//	}
 
 	return nil, false
 }
@@ -329,6 +379,7 @@ func (p *Policy) processNewRule(r *Rule, scope FilterScope) bool {
 	if scope != APPLY_ONCE {
 		p.rules = append(p.rules, r)
 	}
+	fmt.Println("----------------------- processNewRule()")
 	p.filterPending(r)
 	if len(p.pendingQueue) == 0 {
 		p.promptInProgress = false
@@ -372,6 +423,15 @@ func (p *Policy) filterPending(rule *Rule) {
 	remaining := []pendingConnection{}
 	for _, pc := range p.pendingQueue {
 		if rule.match(pc.src(), pc.dst(), pc.dstPort(), pc.hostname(), pc.proto(), pc.procInfo().UID, pc.procInfo().GID, uidToUser(pc.procInfo().UID), gidToGroup(pc.procInfo().GID), pc.procInfo().Sandbox) {
+			prompter := pc.getPrompter()
+
+			if prompter == nil {
+				fmt.Println("-------- prompter = NULL")
+			} else {
+				call := prompter.dbusObj.Call("com.subgraph.FirewallPrompt.RemovePrompt", 0, pc.getGUID())
+				fmt.Println("CAAAAAAAAAAAAAAALL = ", call)
+			}
+
 			log.Infof("Adding rule for: %s", rule.getString(FirewallConfig.LogRedact))
 			// log.Noticef("%s > %s", rule.getString(FirewallConfig.LogRedact), pc.print())
 			if rule.rtype == RULE_ACTION_ALLOW {
@@ -442,7 +502,8 @@ func printPacket(pkt *nfqueue.NFQPacket, hostname string, pinfo *procsnitch.Info
 	return fmt.Sprintf("%s %s %s:%d -> %s:%d", pinfo.ExePath, proto, SrcIp, SrcPort, name, DstPort)
 }
 
-func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
+func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket, timestamp time.Time) {
+	fmt.Println("firewall: filterPacket()")
 	isudp := pkt.Packet.Layer(layers.LayerTypeUDP) != nil
 
 	if basicAllowPacket(pkt) {
@@ -520,7 +581,7 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 	*/
 	policy := fw.PolicyForPathAndSandbox(ppath, pinfo.Sandbox)
 	//log.Notice("XXX: flunked basicallowpacket; policy = ", policy)
-	policy.processPacket(pkt, pinfo, optstring)
+	policy.processPacket(pkt, timestamp, pinfo, optstring)
 }
 
 func readFileDirect(filename string) ([]byte, error) {

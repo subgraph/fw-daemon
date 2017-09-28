@@ -111,60 +111,65 @@ func findUDPSocketAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort ui
 	if custdata == nil {
 		if strictness == MATCH_STRICT {
 			return findSocket(proto, func(ss socketStatus) bool {
-				fmt.Println("Match strict")
+				//				fmt.Println("Match strict")
 				return ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
 				//return ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
 			})
 		} else if strictness == MATCH_LOOSE {
 			return findSocket(proto, func(ss socketStatus) bool {
-				/* 
-				fmt.Println("Match loose")
-				fmt.Printf("sock dst = %v pkt dst = %v\n", ss.remote.ip, dstAddr)
-				fmt.Printf("sock port = %d pkt port = %d\n", ss.local.port, srcPort)
-				fmt.Printf("local ip: %v\n source ip: %v\n", ss.local.ip, srcAddr)
+				/*
+					fmt.Println("Match loose")
+					fmt.Printf("sock dst = %v pkt dst = %v\n", ss.remote.ip, dstAddr)
+					fmt.Printf("sock port = %d pkt port = %d\n", ss.local.port, srcPort)
+					fmt.Printf("local ip: %v\n source ip: %v\n", ss.local.ip, srcAddr)
 				*/
 
-				if (ss.local.port == srcPort && (ss.local.ip.Equal(net.IPv4(0,0,0,0)) && ss.remote.ip.Equal(net.IPv4(0,0,0,0)))) {
-					fmt.Printf("Matching for UDP socket bound to *:%d\n",ss.local.port)
+				if (ss.local.port == srcPort) && addrMatchesAny(ss.local.ip) && addrMatchesAny(ss.remote.ip) {
+					fmt.Printf("Loose match for UDP socket bound to *:%d\n", ss.local.port)
 					return true
-				} else if (ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)) {
+				} else if ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr) {
 					return true
 				}
 
-				// Finally, loop through all interfaces if src port matches 
-
+				// Finally, loop through all interfaces if src port matches
 				if ss.local.port == srcPort {
 					ifs, err := net.Interfaces()
 					if err != nil {
-						log.Warningf("Error on net.Interfaces(): %v", err)
+						log.Warning("Error retrieving list of network interfaces for UDP socket lookup:", err)
 						return false
 					}
+
 					for _, i := range ifs {
+
 						addrs, err := i.Addrs()
 						if err != nil {
-							log.Warningf("Error on Interface.Addrs(): %v", err)
+							log.Warning("Error retrieving network interface for UDP socket lookup:", err)
 							return false
 						}
+
 						for _, addr := range addrs {
 							var ifip net.IP
 							switch x := addr.(type) {
-								case *net.IPNet:
-									ifip = x.IP
-								case *net.IPAddr:
-									ifip = x.IP
+							case *net.IPNet:
+								ifip = x.IP
+							case *net.IPAddr:
+								ifip = x.IP
 							}
+
 							if ss.local.ip.Equal(ifip) {
-								fmt.Printf("Matched on UDP socket bound to %v:%d\n",ifip,srcPort)
+								fmt.Printf("Matched on UDP socket bound to %v:%d\n", ifip, srcPort)
 								return true
 							}
+
 						}
 					}
 				}
+
 				return false
 				//return (ss.remote.ip.Equal(dstAddr) || ss.remote.ip.Equal(net.IPv4(0,0,0,0))) && ss.local.port == srcPort && (ss.local.ip.Equal(srcAddr) || ss.local.ip.Equal(net.IPv4(0,0,0,0)))
 				/*
-				return (ss.remote.ip.Equal(dstAddr) || addrMatchesAny(ss.remote.ip)) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr) ||
-					(ss.local.ip.Equal(dstAddr) || addrMatchesAny(ss.local.ip)) && ss.remote.port == srcPort && ss.remote.ip.Equal(srcAddr) */
+					return (ss.remote.ip.Equal(dstAddr) || addrMatchesAny(ss.remote.ip)) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr) ||
+						(ss.local.ip.Equal(dstAddr) || addrMatchesAny(ss.local.ip)) && ss.remote.port == srcPort && ss.remote.ip.Equal(srcAddr) */
 			})
 		}
 		return findSocket(proto, func(ss socketStatus) bool {
@@ -367,11 +372,11 @@ func getSocketLines(proto string) []string {
 }
 
 func addrMatchesAny(addr net.IP) bool {
-	wildcard := net.IP{0,0,0,0}
+	wildcard := net.IP{0, 0, 0, 0}
 
 	if addr.To4() == nil {
-		wildcard = net.IP{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
+		wildcard = net.IP{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 	}
 
-        return wildcard.Equal(addr)
+	return wildcard.Equal(addr)
 }

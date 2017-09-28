@@ -1,16 +1,16 @@
 package sgfw
 
 import (
-	"os"
-	"os/signal"
-	"regexp"
-	"sync"
-	"syscall"
-	//	"time"
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/signal"
+	"regexp"
 	"strings"
+	"sync"
+	"syscall"
+	"time"
 
 	"github.com/op/go-logging"
 	nfqueue "github.com/subgraph/go-nfnetlink/nfqueue"
@@ -110,6 +110,8 @@ func (fw *Firewall) runFilter() {
 
 	go func() {
 		for p := range ps {
+			timestamp := time.Now()
+
 			if fw.isEnabled() {
 				ipLayer := p.Packet.Layer(layers.LayerTypeIPv4)
 				if ipLayer == nil {
@@ -127,7 +129,7 @@ func (fw *Firewall) runFilter() {
 
 				}
 
-				fw.filterPacket(p)
+				fw.filterPacket(p, timestamp)
 			} else {
 				p.Accept()
 			}

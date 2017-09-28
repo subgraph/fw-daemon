@@ -23,7 +23,9 @@ type Info struct {
 	FirstArg      string
 	ParentCmdLine string
 	ParentExePath string
-	Sandbox	      string
+	Sandbox       string
+	Inode         uint64
+	FD            int
 }
 
 type pidCache struct {
@@ -51,10 +53,12 @@ func loadCache() map[uint64]*Info {
 	for _, n := range readdir("/proc") {
 		pid := toPid(n)
 		if pid != 0 {
-			pinfo := &Info{Pid: pid}
-			for _, inode := range inodesFromPid(pid) {
+			inodes, fds := inodesFromPid(pid)
+			for iind, inode := range inodes {
+				pinfo := &Info{Inode: inode, Pid: pid, FD: fds[iind]}
 				cmap[inode] = pinfo
 			}
+
 		}
 	}
 	return cmap
@@ -76,8 +80,9 @@ func toPid(name string) int {
 	return (int)(pid)
 }
 
-func inodesFromPid(pid int) []uint64 {
+func inodesFromPid(pid int) ([]uint64, []int) {
 	var inodes []uint64
+	var fds []int
 	fdpath := fmt.Sprintf("/proc/%d/fd", pid)
 	for _, n := range readdir(fdpath) {
 		if link, err := os.Readlink(path.Join(fdpath, n)); err != nil {
@@ -85,12 +90,19 @@ func inodesFromPid(pid int) []uint64 {
 				log.Warningf("Error reading link %s: %v", n, err)
 			}
 		} else {
+			fd, err := strconv.Atoi(n)
+			if err != nil {
+				log.Warningf("Error retrieving fd associated with pid %v: %v", pid, err)
+				fd = -1
+			}
+
 			if inode := extractSocket(link); inode > 0 {
 				inodes = append(inodes, inode)
+				fds = append(fds, fd)
 			}
 		}
 	}
-	return inodes
+	return inodes, fds
 }
 
 func extractSocket(name string) uint64 {

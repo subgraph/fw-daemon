@@ -199,6 +199,74 @@ func (ds *dbusServer) DeleteRule(id uint32) *dbus.Error {
 	return nil
 }
 
+func (ds *dbusServer) GetPendingRequests(policy string) ([]string, *dbus.Error) {
+	log.Debug("+++ GetPendingRequests()")
+	ds.fw.lock.Lock()
+	defer ds.fw.lock.Unlock()
+
+	pending_data := make([]string, 0)
+
+	for pname := range ds.fw.policyMap {
+		policy := ds.fw.policyMap[pname]
+		pqueue := policy.pendingQueue
+
+		for _, pc := range pqueue {
+			addr := pc.hostname()
+			if addr == "" {
+				addr = pc.dst().String()
+			}
+
+			dststr := ""
+
+			if pc.dst() != nil {
+				dststr = pc.dst().String()
+			} else {
+				dststr = addr + " (via proxy resolver)"
+			}
+
+			pstr := ""
+			pstr += pc.getGUID() + "|"
+			pstr += policy.application + "|"
+			pstr += policy.icon + "|"
+			pstr += policy.path + "|"
+			pstr += addr + "|"
+			pstr += strconv.FormatUint(uint64(pc.dstPort()), 10) + "|"
+			pstr += dststr + "|"
+			pstr += pc.src().String() + "|"
+			pstr += pc.proto() + "|"
+			pstr += strconv.FormatInt(int64(pc.procInfo().UID), 10) + "|"
+			pstr += strconv.FormatInt(int64(pc.procInfo().GID), 10) + "|"
+			pstr += uidToUser(pc.procInfo().UID) + "|"
+			pstr += gidToGroup(pc.procInfo().GID) + "|"
+			pstr += strconv.FormatInt(int64(pc.procInfo().Pid), 10) + "|"
+			pstr += pc.sandbox() + "|"
+			pstr += strconv.FormatBool(pc.socks()) + "|"
+			pstr += pc.getTimestamp() + "|"
+			pstr += pc.getOptString() + "|"
+			pstr += strconv.FormatUint(uint64(FirewallConfig.DefaultActionID), 10)
+			pending_data = append(pending_data, pstr)
+		}
+
+	}
+
+	return pending_data, nil
+}
+
+func (ds *dbusServer) AddRuleAsync(scope uint32, rule string, policy string) (bool, *dbus.Error) {
+	log.Warningf("AddRuleAsync %v, %v / %v\n", scope, rule, policy)
+	ds.fw.lock.Lock()
+	defer ds.fw.lock.Unlock()
+
+	prule := PendingRule{rule: rule, scope: int(scope), policy: policy}
+
+	for pname := range ds.fw.policyMap {
+		log.Debug("+++ Adding prule to policy")
+		ds.fw.policyMap[pname].rulesPending = append(ds.fw.policyMap[pname].rulesPending, prule)
+	}
+
+	return true, nil
+}
+
 func (ds *dbusServer) UpdateRule(rule DbusRule) *dbus.Error {
 	log.Debugf("UpdateRule %v", rule)
 	ds.fw.lock.Lock()
@@ -266,11 +334,6 @@ func (ds *dbusServer) SetConfig(key string, val dbus.Variant) *dbus.Error {
 	}
 	writeConfig()
 	return nil
-}
-
-func (ds *dbusServer) prompt(p *Policy) {
-	log.Info("prompting...")
-	ds.prompter.prompt(p)
 }
 
 func (ob *dbusObjectP) alertRule(data string) {
