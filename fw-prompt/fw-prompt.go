@@ -614,7 +614,7 @@ func toggleHover() {
 func toggleValidRuleState() {
 	ok := true
 
-	// Unfortunately, this can cause deadlock since it's a part of the item removal cascade
+	// XXX: Unfortunately, this can cause deadlock since it's a part of the item removal cascade
 	//	globalPromptLock.Lock()
 	//	defer globalPromptLock.Unlock()
 
