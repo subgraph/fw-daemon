@@ -18,10 +18,42 @@ const SSL3_RT_ALERT = 21
 const SSL3_RT_HANDSHAKE = 22
 const SSL3_RT_APPLICATION_DATA = 23
 
+const SSL3_MT_HELLO_REQUEST = 0
+const SSL3_MT_CLIENT_HELLO = 1
 const SSL3_MT_SERVER_HELLO = 2
 const SSL3_MT_CERTIFICATE = 11
 const SSL3_MT_CERTIFICATE_REQUEST = 13
 const SSL3_MT_SERVER_DONE = 14
+const SSL3_MT_CERTIFICATE_STATUS = 22
+
+const SSL3_AL_WARNING = 1
+const SSL3_AL_FATAL = 2
+const SSL3_AD_CLOSE_NOTIFY = 0
+const SSL3_AD_UNEXPECTED_MESSAGE = 10
+const SSL3_AD_BAD_RECORD_MAC = 20
+const TLS1_AD_DECRYPTION_FAILED = 21
+const TLS1_AD_RECORD_OVERFLOW = 22
+const SSL3_AD_DECOMPRESSION_FAILURE = 30
+const SSL3_AD_HANDSHAKE_FAILURE = 40
+const SSL3_AD_NO_CERTIFICATE = 41
+const SSL3_AD_BAD_CERTIFICATE = 42
+const SSL3_AD_UNSUPPORTED_CERTIFICATE = 43
+const SSL3_AD_CERTIFICATE_REVOKED = 44
+const SSL3_AD_CERTIFICATE_EXPIRED = 45
+const SSL3_AD_CERTIFICATE_UNKNOWN = 46
+const SSL3_AD_ILLEGAL_PARAMETER = 47
+const TLS1_AD_UNKNOWN_CA = 48
+const TLS1_AD_ACCESS_DENIED = 49
+const TLS1_AD_DECODE_ERROR = 50
+const TLS1_AD_DECRYPT_ERROR = 51
+const TLS1_AD_EXPORT_RESTRICTION = 60
+const TLS1_AD_PROTOCOL_VERSION = 70
+const TLS1_AD_INSUFFICIENT_SECURITY = 71
+const TLS1_AD_INTERNAL_ERROR = 80
+const TLS1_AD_INAPPROPRIATE_FALLBACK = 86
+const TLS1_AD_USER_CANCELLED = 90
+const TLS1_AD_NO_RENEGOTIATION = 100
+const TLS1_AD_UNSUPPORTED_EXTENSION = 110
 
 type connReader struct {
 	client bool
@@ -76,8 +108,15 @@ func connectionReader(conn net.Conn, is_client bool, c chan connReader, done cha
 				rtype = int(header[0])
 				mlen = int(int(header[3])<<8 | int(header[4]))
 				fmt.Printf("TLS data chunk header read: type = %#x, maj = %v, min = %v, len = %v\n", rtype, header[1], header[2], mlen)
-				buffered = header
 
+				/*  16384+1024 if compression is not null */
+				/*  or 16384+2048 if ciphertext */
+				if mlen > 16384 {
+					ret_error = errors.New(fmt.Sprintf("TLSGuard read TLS plaintext record of excessively large length; dropping (%v bytes)", mlen))
+					continue
+				}
+
+				buffered = header
 				stage++
 			} else if stage == 2 {
 				remainder := make([]byte, mlen)
@@ -121,6 +160,9 @@ func TLSGuard(conn, conn2 net.Conn, fqdn string) error {
 	go connectionReader(conn, true, crChan, dChan)
 	go connectionReader(conn2, false, crChan, dChan)
 
+	client_expected := SSL3_MT_CLIENT_HELLO
+	server_expected := SSL3_MT_SERVER_HELLO
+
 select_loop:
 	for {
 		if ndone == 2 {
@@ -148,6 +190,35 @@ select_loop:
 			if cr.err == nil {
 				if cr.rtype == SSL3_RT_CHANGE_CIPHER_SPEC || cr.rtype == SSL3_RT_APPLICATION_DATA ||
 					cr.rtype == SSL3_RT_ALERT {
+
+					/* We expect only a single byte of data */
+					if cr.rtype == SSL3_RT_CHANGE_CIPHER_SPEC {
+						if len(cr.data) != 6 {
+							return errors.New(fmt.Sprintf("TLSGuard dropped connection with strange change cipher spec data length (%v bytes)", len(cr.data)))
+						}
+						if cr.data[5] != 1 {
+							return errors.New(fmt.Sprintf("TLSGuard dropped connection with strange change cipher spec data (%#x bytes)", cr.data[5]))
+						}
+					} else if cr.rtype == SSL3_RT_ALERT {
+						if cr.data[5] == SSL3_AL_WARNING {
+							fmt.Println("SSL ALERT TYPE: warning")
+						} else if cr.data[5] == SSL3_AL_FATAL {
+							fmt.Println("SSL ALERT TYPE: fatal")
+						} else {
+							fmt.Println("SSL ALERT TYPE UNKNOWN")
+						}
+
+						alert_desc := int(int(cr.data[6])<<8 | int(cr.data[7]))
+						fmt.Println("ALERT DESCRIPTION: ", alert_desc)
+
+						if cr.data[5] == SSL3_AL_FATAL {
+							return errors.New(fmt.Sprintf("TLSGuard dropped connection after fatal error alert detected"))
+						} else if alert_desc == SSL3_AD_CLOSE_NOTIFY {
+							return errors.New(fmt.Sprintf("TLSGuard dropped connection after close_notify alert detected"))
+						}
+
+					}
+
 					// fmt.Println("OTHER DATA; PASSING THRU")
 					if cr.rtype == SSL3_RT_ALERT {
 						fmt.Println("ALERT = ", cr.data)
@@ -161,19 +232,35 @@ select_loop:
 					return errors.New(fmt.Sprintf("Expected TLS server handshake byte was not received [%#x vs 0x16]", cr.rtype))
 				}
 
+				if cr.rtype < SSL3_RT_CHANGE_CIPHER_SPEC || cr.rtype > SSL3_RT_APPLICATION_DATA {
+					return errors.New(fmt.Sprintf("TLSGuard dropping connection with unknown content type: %#x", cr.rtype))
+				}
+
 				serverMsg := cr.data[5:]
-				s := serverMsg[0]
+				s := uint(serverMsg[0])
 				fmt.Printf("s = %#x\n", s)
 
-				if s > 0x22 {
+				if cr.client && s != uint(client_expected) {
+					return errors.New(fmt.Sprintf("Client sent handshake type %#x but expected %#x", s, client_expected))
+				} else if !cr.client && s != uint(server_expected) {
+					return errors.New(fmt.Sprintf("Server sent handshake type %#x but expected %#x", s, server_expected))
+				}
+
+				if !cr.client && s == SSL3_MT_HELLO_REQUEST {
+					fmt.Println("Server sent hello request")
+					continue
+				}
+
+				if s > SSL3_MT_CERTIFICATE_STATUS {
 					fmt.Println("WTF: ", cr.data)
 				}
 
+				// Message len, 3 bytes
+				serverMessageLen := serverMsg[1:4]
+				serverMessageLenInt := int(int(serverMessageLen[0])<<16 | int(serverMessageLen[1])<<8 | int(serverMessageLen[2]))
+
 				if s == SSL3_MT_CERTIFICATE {
 					fmt.Println("HMM")
-					// Message len, 3 bytes
-					serverMessageLen := serverMsg[1:4]
-					serverMessageLenInt := int(int(serverMessageLen[0])<<16 | int(serverMessageLen[1])<<8 | int(serverMessageLen[2]))
 					// fmt.Printf("chunk len = %v, serverMsgLen = %v, slint = %v\n", len(chunk), len(serverMsg), serverMessageLenInt)
 					if len(serverMsg) < serverMessageLenInt {
 						return errors.New(fmt.Sprintf("len(serverMsg) %v < serverMessageLenInt %v!\n", len(serverMsg), serverMessageLenInt))

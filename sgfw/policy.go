@@ -283,6 +283,7 @@ func (fw *Firewall) policyForPath(path string) *Policy {
 
 func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info, optstr string) {
 
+	fmt.Println("policy processPacket()")
 	/*	hbytes, err := pkt.GetHWAddr()
 		if err != nil {
 			log.Notice("Failed to get HW address underlying packet: ", err)
@@ -292,6 +293,17 @@ func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info, o
 	dstb := pkt.Packet.NetworkLayer().NetworkFlow().Dst().Raw()
 	dstip := net.IP(dstb)
 	srcip := net.IP(pkt.Packet.NetworkLayer().NetworkFlow().Src().Raw())
+
+	/* Can we pass this through quickly? */
+	/* this probably isn't a performance enhancement. */
+	/*_, dstp := getPacketPorts(pkt)
+	fres := p.rules.filter(pkt, srcip, dstip, dstp, dstip.String(), pinfo, optstr)
+	if fres == FILTER_ALLOW {
+		fmt.Printf("Packet passed wildcard rules without requiring DNS lookup; accepting: %s:%d\n", dstip, dstp)
+		pkt.Accept()
+		return
+	}*/
+
 	name := p.fw.dns.Lookup(dstip, pinfo.Pid)
 	log.Infof("Lookup(%s): %s", dstip.String(), name)
 
@@ -333,7 +345,7 @@ func (p *Policy) nextPending() (pendingConnection, bool) {
 	}
 
 	for i := 0; i < len(p.pendingQueue); i++ {
-		fmt.Printf("pendingQueue %v of %v: %v\n", i, len(p.pendingQueue), p.pendingQueue[i])
+		//		fmt.Printf("XXX: pendingQueue %v of %v: %v\n", i, len(p.pendingQueue), p.pendingQueue[i])
 		if !p.pendingQueue[i].getPrompting() {
 			return p.pendingQueue[i], false
 		}
@@ -488,6 +500,7 @@ func printPacket(pkt *nfqueue.NFQPacket, hostname string, pinfo *procsnitch.Info
 }
 
 func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
+	fmt.Println("firewall: filterPacket()")
 	isudp := pkt.Packet.Layer(layers.LayerTypeUDP) != nil
 
 	if basicAllowPacket(pkt) {

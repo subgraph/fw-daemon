@@ -47,13 +47,11 @@ func (r *Rule) String() string {
 
 func (r *Rule) getString(redact bool) string {
 	rtype := RuleActionString[RULE_ACTION_DENY]
-	if r.rtype == RULE_ACTION_ALLOW {
-		rtype = RuleActionString[RULE_ACTION_ALLOW]
-	} else if r.rtype == RULE_ACTION_ALLOW_TLSONLY {
-		rtype = RuleActionString[RULE_ACTION_ALLOW_TLSONLY]
+	if r.rtype == RULE_ACTION_ALLOW || r.rtype == RULE_ACTION_ALLOW_TLSONLY {
+		rtype = RuleActionString[r.rtype]
 	}
-	rmode := "|" + RuleModeString[r.mode]
 
+	rmode := "|" + RuleModeString[r.mode]
 	protostr := ""
 
 	if r.proto != "tcp" {
@@ -258,17 +256,17 @@ func (r *Rule) parse(s string) bool {
 	} else if parts[2] == "PERMANENT" {
 		r.mode = RULE_MODE_PERMANENT
 	} else if parts[2] != "" {
-		log.Notice("invalid rule mode ", parts[2], " in line ", s)
+		log.Warning("Error: invalid rule mode ", parts[2], " in line ", s)
 		return false
 	}
 
 	if !r.parsePrivs(parts[3]) {
-		log.Notice("invalid privs ", parts[3], " in line ", s)
+		log.Warning("Error: invalid privs ", parts[3], " in line ", s)
 		return false
 	}
 
 	if !r.parseSandbox(parts[4]) {
-		log.Notice("invalid sandbox ", parts[4], "in line ", s)
+		log.Warning("invalid sandbox ", parts[4], "in line ", s)
 		return false
 	}
 

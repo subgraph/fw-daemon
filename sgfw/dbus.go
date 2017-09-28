@@ -252,7 +252,7 @@ func (ds *dbusServer) GetPendingRequests(policy string) ([]string, *dbus.Error) 
 }
 
 func (ds *dbusServer) AddRuleAsync(scope uint32, rule string, policy string) (bool, *dbus.Error) {
-	log.Debugf("AddRuleAsync %v, %v / %v\n", scope, rule, policy)
+	log.Warningf("AddRuleAsync %v, %v / %v\n", scope, rule, policy)
 	ds.fw.lock.Lock()
 	defer ds.fw.lock.Unlock()
 
@@ -334,11 +334,6 @@ func (ds *dbusServer) SetConfig(key string, val dbus.Variant) *dbus.Error {
 	writeConfig()
 	return nil
 }
-
-/*func (ds *dbusServer) prompt(p *Policy) {
-	log.Info("prompting...")
-	ds.prompter.prompt(p)
-} */
 
 func (ob *dbusObjectP) alertRule(data string) {
 	ob.Call("com.subgraph.fwprompt.EventNotifier.Alert", 0, data)

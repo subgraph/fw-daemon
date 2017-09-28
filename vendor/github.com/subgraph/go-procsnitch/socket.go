@@ -111,7 +111,7 @@ func findUDPSocketAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort ui
 	if custdata == nil {
 		if strictness == MATCH_STRICT {
 			return findSocket(proto, func(ss socketStatus) bool {
-				fmt.Println("Match strict")
+				//				fmt.Println("Match strict")
 				return ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
 				//return ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
 			})
@@ -124,27 +124,29 @@ func findUDPSocketAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort ui
 					fmt.Printf("local ip: %v\n source ip: %v\n", ss.local.ip, srcAddr)
 				*/
 
-				if ss.local.port == srcPort && (ss.local.ip.Equal(net.IPv4(0, 0, 0, 0)) && ss.remote.ip.Equal(net.IPv4(0, 0, 0, 0))) {
-					fmt.Printf("Matching for UDP socket bound to *:%d\n", ss.local.port)
+				if (ss.local.port == srcPort) && addrMatchesAny(ss.local.ip) && addrMatchesAny(ss.remote.ip) {
+					fmt.Printf("Loose match for UDP socket bound to *:%d\n", ss.local.port)
 					return true
 				} else if ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr) {
 					return true
 				}
 
 				// Finally, loop through all interfaces if src port matches
-
 				if ss.local.port == srcPort {
 					ifs, err := net.Interfaces()
 					if err != nil {
-						log.Warningf("Error on net.Interfaces(): %v", err)
+						log.Warning("Error retrieving list of network interfaces for UDP socket lookup:", err)
 						return false
 					}
+
 					for _, i := range ifs {
+
 						addrs, err := i.Addrs()
 						if err != nil {
-							log.Warningf("Error on Interface.Addrs(): %v", err)
+							log.Warning("Error retrieving network interface for UDP socket lookup:", err)
 							return false
 						}
+
 						for _, addr := range addrs {
 							var ifip net.IP
 							switch x := addr.(type) {
@@ -153,13 +155,16 @@ func findUDPSocketAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort ui
 							case *net.IPAddr:
 								ifip = x.IP
 							}
+
 							if ss.local.ip.Equal(ifip) {
 								fmt.Printf("Matched on UDP socket bound to %v:%d\n", ifip, srcPort)
 								return true
 							}
+
 						}
 					}
 				}
+
 				return false
 				//return (ss.remote.ip.Equal(dstAddr) || ss.remote.ip.Equal(net.IPv4(0,0,0,0))) && ss.local.port == srcPort && (ss.local.ip.Equal(srcAddr) || ss.local.ip.Equal(net.IPv4(0,0,0,0)))
 				/*

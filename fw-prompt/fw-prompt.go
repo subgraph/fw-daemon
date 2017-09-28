@@ -734,7 +734,8 @@ func toggleValidRuleState() {
 
 	btnApprove.SetSensitive(ok)
 	btnDeny.SetSensitive(ok)
-	btnIgnore.SetSensitive(ok)
+	//	btnIgnore.SetSensitive(ok)
+	btnIgnore.SetSensitive(false)
 }
 
 func createCurrentRule() (ruleColumns, error) {
@@ -1023,6 +1024,44 @@ func addPendingPrompts(rules []string) {
 
 }
 
+func buttonAction(action string) {
+	globalPromptLock.Lock()
+	rule, idx, err := getSelectedRule()
+	if err != nil {
+		globalPromptLock.Unlock()
+		promptError("Error occurred processing request: " + err.Error())
+		return
+	}
+
+	rule, err = createCurrentRule()
+	if err != nil {
+		globalPromptLock.Unlock()
+		promptError("Error occurred constructing new rule: " + err.Error())
+		return
+	}
+
+	fmt.Println("rule = ", rule)
+	rulestr := action
+
+	if action == "ALLOW" && rule.ForceTLS {
+		rulestr += "_TLSONLY"
+	}
+
+	rulestr += "|" + rule.Proto + ":" + rule.Target + ":" + strconv.Itoa(rule.Port)
+	rulestr += "|" + sgfw.RuleModeString[sgfw.RuleMode(rule.Scope)]
+	fmt.Println("RULESTR = ", rulestr)
+	makeDecision(idx, rulestr, int(rule.Scope))
+	fmt.Println("Decision made.")
+	err = removeSelectedRule(idx, true)
+	globalPromptLock.Unlock()
+	if err == nil {
+		clearEditor()
+	} else {
+		promptError("Error setting new rule: " + err.Error())
+	}
+
+}
+
 func main() {
 	decisionWaiters = make([]*decisionWaiter, 0)
 	_, err := newDbusServer()
@@ -1233,90 +1272,12 @@ func main() {
 	tv.SetModel(listStore)
 
 	btnApprove.Connect("clicked", func() {
-		globalPromptLock.Lock()
-		rule, idx, err := getSelectedRule()
-		if err != nil {
-			globalPromptLock.Unlock()
-			promptError("Error occurred processing request: " + err.Error())
-			return
-		}
-
-		rule, err = createCurrentRule()
-		if err != nil {
-			globalPromptLock.Unlock()
-			promptError("Error occurred constructing new rule: " + err.Error())
-			return
-		}
-
-		fmt.Println("rule = ", rule)
-		rulestr := "ALLOW"
-
-		if rule.ForceTLS {
-			rulestr += "_TLSONLY"
-		}
-
-		rulestr += "|" + rule.Proto + ":" + rule.Target + ":" + strconv.Itoa(rule.Port)
-		fmt.Println("RULESTR = ", rulestr)
-		makeDecision(idx, rulestr, int(rule.Scope))
-		fmt.Println("Decision made.")
-		globalPromptLock.Unlock()
-		err = removeSelectedRule(idx, true)
-		if err == nil {
-			clearEditor()
-		} else {
-			promptError("Error setting new rule: " + err.Error())
-		}
+		buttonAction("ALLOW")
 	})
-
 	btnDeny.Connect("clicked", func() {
-		globalPromptLock.Lock()
-		rule, idx, err := getSelectedRule()
-		if err != nil {
-			globalPromptLock.Unlock()
-			promptError("Error occurred processing request: " + err.Error())
-			return
-		}
-
-		rule, err = createCurrentRule()
-		if err != nil {
-			globalPromptLock.Unlock()
-			promptError("Error occurred constructing new rule: " + err.Error())
-			return
-		}
-
-		fmt.Println("rule = ", rule)
-		rulestr := "DENY|" + rule.Proto + ":" + rule.Target + ":" + strconv.Itoa(rule.Port)
-		fmt.Println("RULESTR = ", rulestr)
-		makeDecision(idx, rulestr, int(rule.Scope))
-		fmt.Println("Decision made.")
-		globalPromptLock.Unlock()
-		err = removeSelectedRule(idx, true)
-		if err == nil {
-			clearEditor()
-		} else {
-			promptError("Error setting new rule: " + err.Error())
-		}
+		buttonAction("DENY")
 	})
-
-	btnIgnore.Connect("clicked", func() {
-		globalPromptLock.Lock()
-		_, idx, err := getSelectedRule()
-		if err != nil {
-			globalPromptLock.Unlock()
-			promptError("Error occurred processing request: " + err.Error())
-			return
-		}
-
-		makeDecision(idx, "", 0)
-		fmt.Println("Decision made.")
-		globalPromptLock.Unlock()
-		err = removeSelectedRule(idx, true)
-		if err == nil {
-			clearEditor()
-		} else {
-			promptError("Error setting new rule: " + err.Error())
-		}
-	})
+	//	btnIgnore.Connect("clicked", buttonAction)
 
 	//	tv.SetActivateOnSingleClick(true)
 	tv.Connect("row-activated", func() {

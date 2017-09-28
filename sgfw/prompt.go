@@ -2,7 +2,6 @@ package sgfw
 
 import (
 	"fmt"
-	"net"
 	"os"
 	"os/user"
 	"strconv"
@@ -49,36 +48,20 @@ func (p *prompter) prompt(policy *Policy) {
 func (p *prompter) promptLoop() {
 	//	p.lock.Lock()
 	for {
-		// fmt.Println("XXX: promptLoop() outer")
-		p.lock.Lock()
-		for p.processNextPacket() {
-			// fmt.Println("XXX: promptLoop() inner")
-		}
-		p.lock.Unlock()
-		// fmt.Println("promptLoop() wait")
-		//		p.cond.Wait()
+		p.processNextPacket()
 	}
 }
 
 func (p *prompter) processNextPacket() bool {
+	//fmt.Println("processNextPacket()")
 	var pc pendingConnection = nil
-
-	/*	if 1 == 2 {
-		//	if !DoMultiPrompt {
-		pc, _ = p.nextConnection()
-		if pc == nil {
-			return false
-		}
-		p.lock.Unlock()
-		defer p.lock.Lock()
-		p.processConnection(pc)
-		return true
-	} */
-
 	empty := true
+
 	for {
+		p.lock.Lock()
 		pc, empty = p.nextConnection()
-		fmt.Println("XXX: processNextPacket() loop; empty = ", empty, " / pc = ", pc)
+		p.lock.Unlock()
+		//fmt.Println("XXX: processNextPacket() loop; empty = ", empty, " / pc = ", pc)
 		if pc == nil && empty {
 			return false
 		} else if pc == nil {
@@ -87,14 +70,14 @@ func (p *prompter) processNextPacket() bool {
 			break
 		}
 	}
-	p.lock.Unlock()
-	defer p.lock.Lock()
-	// fmt.Println("XXX: Waiting for prompt lock go...")
+
 	if pc.getPrompting() {
 		log.Debugf("Skipping over already prompted connection")
+		return false
 	}
 
 	pc.setPrompting(true)
+	fmt.Println("processConnection")
 	go p.processConnection(pc)
 	return true
 }
@@ -223,6 +206,8 @@ func (p *prompter) processConnection(pc pendingConnection) {
 			PC2FDMapRunning = true
 			PC2FDMapLock.Unlock()
 			go monitorPromptFDLoop()
+		} else {
+			PC2FDMapLock.Unlock()
 		}
 
 	}
@@ -245,11 +230,6 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		dststr = addr + " (via proxy resolver)"
 	}
 
-	//	callChan := make(chan *dbus.Call, 10)
-	//	saveChannel(callChan, true, false)
-	//	fmt.Println("# outstanding prompt chans = ", len(outstandingPromptChans))
-
-	//	fmt.Println("ABOUT TO CALL ASYNC PROMPT")
 	monitorPromptFDs(pc)
 	call := p.dbusObj.Call("com.subgraph.FirewallPrompt.RequestPromptAsync", 0,
 		pc.getGUID(),
@@ -288,81 +268,36 @@ func (p *prompter) processConnection(pc pendingConnection) {
 	return
 
 	/*	p.dbusObj.Go("com.subgraph.FirewallPrompt.RequestPrompt", 0, callChan,
-			pc.getGUID(),
-			policy.application,
-			policy.icon,
-			policy.path,
-			addr,
-			int32(pc.dstPort()),
-			dststr,
-			pc.src().String(),
-			pc.proto(),
-			int32(pc.procInfo().UID),
-			int32(pc.procInfo().GID),
-			uidToUser(pc.procInfo().UID),
-			gidToGroup(pc.procInfo().GID),
-			int32(pc.procInfo().Pid),
-			pc.sandbox(),
-			pc.socks(),
-			pc.getOptString(),
-			FirewallConfig.PromptExpanded,
-			FirewallConfig.PromptExpert,
-			int32(FirewallConfig.DefaultActionID))
+				pc.getGUID(),
+				policy.application,
+				policy.icon,
+				policy.path,
+				addr,
+				int32(pc.dstPort()),
+				dststr,
+				pc.src().String(),
+				pc.proto(),
+				int32(pc.procInfo().UID),
+				int32(pc.procInfo().GID),
+				uidToUser(pc.procInfo().UID),
+				gidToGroup(pc.procInfo().GID),
+				int32(pc.procInfo().Pid),
+				pc.sandbox(),
+				pc.socks(),
+				pc.getOptString(),
+				FirewallConfig.PromptExpanded,
+				FirewallConfig.PromptExpert,
+				int32(FirewallConfig.DefaultActionID))
 
-		select {
-		case call := <-callChan:
+			saveChannel(callChan, false, true)
 
-			if call.Err != nil {
-				fmt.Println("Error reading DBus channel (accepting packet): ", call.Err)
+		/*	err := call.Store(&scope, &rule)
+			if err != nil {
+				log.Warningf("Error sending dbus RequestPrompt message: %v", err)
 				policy.removePending(pc)
-				pc.accept()
-				saveChannel(callChan, false, true)
-				time.Sleep(1 * time.Second)
+				pc.drop()
 				return
-			}
-
-			if len(call.Body) != 2 {
-				log.Warning("SGFW got back response in unrecognized format, len = ", len(call.Body))
-				saveChannel(callChan, false, true)
-
-				if (len(call.Body) == 3) && (call.Body[2] == 666) {
-					fmt.Printf("+++++++++ AWESOME: %v | %v | %v\n", call.Body[0], call.Body[1], call.Body[2])
-					scope = call.Body[0].(int32)
-					rule = call.Body[1].(string)
-				}
-
-				return
-			}
-
-			fmt.Printf("DBUS GOT BACK: %v, %v\n", call.Body[0], call.Body[1])
-			scope = call.Body[0].(int32)
-			rule = call.Body[1].(string)
-		}
-
-		saveChannel(callChan, false, true)
-
-		// Try alerting every other channel
-		promptData := make([]interface{}, 3)
-		promptData[0] = scope
-		promptData[1] = rule
-		promptData[2] = 666
-		promptChanLock.Lock()
-		fmt.Println("# channels to alert: ", len(outstandingPromptChans))
-
-		for chidx, _ := range outstandingPromptChans {
-			alertChannel(chidx, scope, rule)
-			//		ch <- &dbus.Call{Body: promptData}
-		}
-
-		promptChanLock.Unlock() */
-
-	/*	err := call.Store(&scope, &rule)
-		if err != nil {
-			log.Warningf("Error sending dbus RequestPrompt message: %v", err)
-			policy.removePending(pc)
-			pc.drop()
-			return
-		} */
+			} */
 
 	// the prompt sends:
 	// ALLOW|dest or DENY|dest
@@ -383,17 +318,19 @@ func (p *prompter) processConnection(pc pendingConnection) {
 	}
 
 	tempRule := fmt.Sprintf("%s|%s", toks[0], toks[1])
+	tempRule += "||-1:-1|" + sandbox + "|"
 
-	if pc.src() != nil && !pc.src().Equal(net.ParseIP("127.0.0.1")) && sandbox != "" {
+	if pc.src() != nil && !pc.src().IsLoopback() && sandbox != "" {
 
 		//if !strings.HasSuffix(rule, "SYSTEM") && !strings.HasSuffix(rule, "||") {
 		//rule += "||"
 		//}
 		//ule += "|||" + pc.src().String()
 
-		tempRule += "||-1:-1|" + sandbox + "|" + pc.src().String()
+		//		tempRule += "||-1:-1|" + sandbox + "|" + pc.src().String()
+		tempRule += pc.src().String()
 	} else {
-		tempRule += "||-1:-1|" + sandbox + "|"
+		//		tempRule += "||-1:-1|" + sandbox + "|"
 	}
 	r, err := policy.parseRule(tempRule, false)
 	if err != nil {
@@ -432,7 +369,7 @@ func (p *prompter) nextConnection() (pendingConnection, bool) {
 	fmt.Println("policy queue len = ", len(p.policyQueue))
 
 	for pind < len(p.policyQueue) {
-		fmt.Printf("pind = %v of %v\n", pind, len(p.policyQueue))
+		//fmt.Printf("XXX: pind = %v of %v\n", pind, len(p.policyQueue))
 		policy := p.policyQueue[pind]
 		pc, qempty := policy.nextPending()
 
@@ -455,18 +392,21 @@ func (p *prompter) nextConnection() (pendingConnection, bool) {
 				if len(toks) > 2 {
 					sandbox = toks[2]
 				}
+				sandbox += ""
 
 				tempRule := fmt.Sprintf("%s|%s", toks[0], toks[1])
-
-				/*					if pc.src() != nil && !pc.src().Equal(net.ParseIP("127.0.0.1")) && sandbox != "" {
-									tempRule += "||-1:-1|" + sandbox + "|" + pc.src().String()
-								} else {*/
 				tempRule += "||-1:-1|" + sandbox + "|"
-				//					}
+
+				/*if pc.src() != nil && !pc.src().IsLoopback() && sandbox != "" {
+					tempRule += "||-1:-1|" + sandbox + "|" + pc.src().String()
+				} else {
+					tempRule += "||-1:-1|" + sandbox + "|"
+				}*/
 
 				r, err := policy.parseRule(tempRule, false)
 				if err != nil {
 					log.Warningf("Error parsing rule string returned from dbus RequestPrompt: %v", err)
+					continue
 					//						policy.removePending(pc)
 					//						pc.drop()
 					//						return
@@ -476,8 +416,8 @@ func (p *prompter) nextConnection() (pendingConnection, bool) {
 						r.mode = RULE_MODE_SESSION
 					} else if fscope == APPLY_PROCESS {
 						r.mode = RULE_MODE_PROCESS
-						//							r.pid = pc.procInfo().Pid
-						//							pcoroner.MonitorProcess(r.pid)
+						/*r.pid = pc.procInfo().Pid
+						pcoroner.MonitorProcess(r.pid)*/
 					}
 					if !policy.processNewRule(r, fscope) {
 						//							p.lock.Lock()
