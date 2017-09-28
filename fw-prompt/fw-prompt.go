@@ -34,23 +34,24 @@ type decisionWaiter struct {
 }
 
 type ruleColumns struct {
-	nrefs    int
-	Path     string
-	GUID     string
-	Icon     string
-	Proto    string
-	Pid      int
-	Target   string
-	Hostname string
-	Port     int
-	UID      int
-	GID      int
-	Uname    string
-	Gname    string
-	Origin   string
-	IsSocks  bool
-	ForceTLS bool
-	Scope    int
+	nrefs     int
+	Path      string
+	GUID      string
+	Icon      string
+	Proto     string
+	Pid       int
+	Target    string
+	Hostname  string
+	Port      int
+	UID       int
+	GID       int
+	Uname     string
+	Gname     string
+	Origin    string
+	Timestamp string
+	IsSocks   bool
+	ForceTLS  bool
+	Scope     int
 }
 
 var dbuso *dbusObject
@@ -70,6 +71,7 @@ var btnApprove, btnDeny, btnIgnore *gtk.Button
 var chkTLS, chkUser, chkGroup *gtk.CheckButton
 
 func dumpDecisions() {
+	return
 	fmt.Println("XXX Total of decisions pending: ", len(decisionWaiters))
 	for i := 0; i < len(decisionWaiters); i++ {
 		fmt.Printf("XXX %d ready = %v, rule = %v\n", i+1, decisionWaiters[i].Ready, decisionWaiters[i].Rule)
@@ -77,6 +79,7 @@ func dumpDecisions() {
 }
 
 func addDecision() *decisionWaiter {
+	return nil
 	decision := decisionWaiter{Lock: &sync.Mutex{}, Ready: false, Scope: int(sgfw.APPLY_ONCE), Rule: ""}
 	decision.Cond = sync.NewCond(decision.Lock)
 	decisionWaiters = append(decisionWaiters, &decision)
@@ -315,7 +318,7 @@ func createColumn(title string, id int) *gtk.TreeViewColumn {
 
 func createListStore(general bool) *gtk.ListStore {
 	colData := []glib.Type{glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_STRING,
-		glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_INT, glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_INT}
+		glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_INT, glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_INT}
 	listStore, err := gtk.ListStoreNew(colData...)
 
 	if err != nil {
@@ -331,7 +334,7 @@ func removeRequest(listStore *gtk.ListStore, guid string) {
 	defer globalPromptLock.Unlock()
 
 	/* XXX: This is horrible. Figure out how to do this properly. */
-	for ridx := 0; ridx < 2000; ridx++ {
+	for ridx := 0; ridx < globalLS.IterNChildren(nil); ridx++ {
 
 		rule, _, err := getRuleByIdx(ridx)
 		if err != nil {
@@ -357,7 +360,7 @@ func addRequestInc(listStore *gtk.ListStore, guid, path, icon, proto string, pid
 	globalPromptLock.Lock()
 	defer globalPromptLock.Unlock()
 
-	for ridx := 0; ridx < 2000; ridx++ {
+	for ridx := 0; ridx < globalLS.IterNChildren(nil); ridx++ {
 
 		/* XXX: This is horrible. Figure out how to do this properly. */
 		rule, iter, err := getRuleByIdx(ridx)
@@ -385,98 +388,14 @@ func addRequestInc(listStore *gtk.ListStore, guid, path, icon, proto string, pid
 }
 
 func addRequestAsync(listStore *gtk.ListStore, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int,
-	origin string, is_socks bool, optstring string, sandbox string, action int) bool {
-	if listStore == nil {
-		listStore = globalLS
-		waitTimes := []int{1, 2, 5, 10}
-
-		if listStore == nil {
-			log.Println("SGFW prompter was not ready to receive firewall request... waiting")
-
-			for _, wtime := range waitTimes {
-				time.Sleep(time.Duration(wtime) * time.Second)
-				listStore = globalLS
-
-				if listStore != nil {
-					break
-				}
-
-				log.Println("SGFW prompter is still waiting...")
-			}
-
-		}
-
-	}
-
-	if listStore == nil {
-		log.Fatal("SGFW prompter GUI failed to load for unknown reasons")
-	}
-
-	if addRequestInc(listStore, guid, path, icon, proto, pid, ipaddr, hostname, port, uid, gid, origin, is_socks, optstring, sandbox, action) {
-		fmt.Println("REQUEST WAS DUPLICATE")
-		return false
-	} else {
-		fmt.Println("NOT DUPLICATE")
-	}
-
-	globalPromptLock.Lock()
-	iter := listStore.Append()
-
-	if is_socks {
-		if (optstring != "") && (strings.Index(optstring, "SOCKS") == -1) {
-			optstring = "SOCKS5 / " + optstring
-		} else if optstring == "" {
-			optstring = "SOCKS5"
-		}
-	}
-
-	colVals := make([]interface{}, 15)
-	colVals[0] = 1
-	colVals[1] = guid
-	colVals[2] = path
-	colVals[3] = icon
-	colVals[4] = proto
-	colVals[5] = pid
-
-	if ipaddr == "" {
-		colVals[6] = "---"
-	} else {
-		colVals[6] = ipaddr
-	}
-
-	colVals[7] = hostname
-	colVals[8] = port
-	colVals[9] = uid
-	colVals[10] = gid
-	colVals[11] = origin
-	colVals[12] = 0
-
-	if is_socks {
-		colVals[12] = 1
-	}
-
-	colVals[13] = optstring
-	colVals[14] = action
-
-	colNums := make([]int, len(colVals))
-
-	for n := 0; n < len(colVals); n++ {
-		colNums[n] = n
-	}
-
-	err := listStore.Set(iter, colNums, colVals)
-	globalPromptLock.Unlock()
-
-	if err != nil {
-		log.Fatal("Unable to add row:", err)
-	}
-
-	toggleHover()
+	origin, timestamp string, is_socks bool, optstring string, sandbox string, action int) bool {
+	addRequest(listStore, guid, path, icon, proto, pid, ipaddr, hostname, port, uid, gid, origin, timestamp, is_socks,
+		optstring, sandbox, action)
 	return true
 }
 
 func addRequest(listStore *gtk.ListStore, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int,
-	origin string, is_socks bool, optstring string, sandbox string, action int) *decisionWaiter {
+	origin, timestamp string, is_socks bool, optstring string, sandbox string, action int) *decisionWaiter {
 	if listStore == nil {
 		listStore = globalLS
 		waitTimes := []int{1, 2, 5, 10}
@@ -506,7 +425,9 @@ func addRequest(listStore *gtk.ListStore, guid, path, icon, proto string, pid in
 	if addRequestInc(listStore, guid, path, icon, proto, pid, ipaddr, hostname, port, uid, gid, origin, is_socks, optstring, sandbox, action) {
 		fmt.Println("REQUEST WAS DUPLICATE")
 		decision := addDecision()
+		globalPromptLock.Lock()
 		toggleHover()
+		globalPromptLock.Unlock()
 		return decision
 	} else {
 		fmt.Println("NOT DUPLICATE")
@@ -523,7 +444,7 @@ func addRequest(listStore *gtk.ListStore, guid, path, icon, proto string, pid in
 		}
 	}
 
-	colVals := make([]interface{}, 15)
+	colVals := make([]interface{}, 16)
 	colVals[0] = 1
 	colVals[1] = guid
 	colVals[2] = path
@@ -542,14 +463,15 @@ func addRequest(listStore *gtk.ListStore, guid, path, icon, proto string, pid in
 	colVals[9] = uid
 	colVals[10] = gid
 	colVals[11] = origin
-	colVals[12] = 0
+	colVals[12] = timestamp
+	colVals[13] = 0
 
 	if is_socks {
-		colVals[12] = 1
+		colVals[13] = 1
 	}
 
-	colVals[13] = optstring
-	colVals[14] = action
+	colVals[14] = optstring
+	colVals[15] = action
 
 	colNums := make([]int, len(colVals))
 
@@ -558,7 +480,6 @@ func addRequest(listStore *gtk.ListStore, guid, path, icon, proto string, pid in
 	}
 
 	err := listStore.Set(iter, colNums, colVals)
-	globalPromptLock.Unlock()
 
 	if err != nil {
 		log.Fatal("Unable to add row:", err)
@@ -567,6 +488,7 @@ func addRequest(listStore *gtk.ListStore, guid, path, icon, proto string, pid in
 	decision := addDecision()
 	dumpDecisions()
 	toggleHover()
+	globalPromptLock.Unlock()
 	return decision
 }
 
@@ -682,14 +604,17 @@ func makeDecision(idx int, rule string, scope int) error {
 	return nil
 }
 
+/* Do we need to hold the lock while this is called? Stay safe... */
 func toggleHover() {
-	mainWin.SetKeepAbove(len(decisionWaiters) > 0)
+	nitems := globalLS.IterNChildren(nil)
+
+	mainWin.SetKeepAbove(nitems > 0)
 }
 
 func toggleValidRuleState() {
 	ok := true
 
-	// Unfortunately, this can cause deadlock since it's a part ofi the item removal cascade
+	// Unfortunately, this can cause deadlock since it's a part of the item removal cascade
 	//	globalPromptLock.Lock()
 	//	defer globalPromptLock.Unlock()
 
@@ -912,8 +837,13 @@ func getRuleByIdx(idx int) (ruleColumns, *gtk.TreeIter, error) {
 		return rule, nil, err
 	}
 
+	rule.Timestamp, err = lsGetStr(globalLS, iter, 12)
+	if err != nil {
+		return rule, nil, err
+	}
+
 	rule.IsSocks = false
-	is_socks, err := lsGetInt(globalLS, iter, 12)
+	is_socks, err := lsGetInt(globalLS, iter, 13)
 	if err != nil {
 		return rule, nil, err
 	}
@@ -922,7 +852,7 @@ func getRuleByIdx(idx int) (ruleColumns, *gtk.TreeIter, error) {
 		rule.IsSocks = true
 	}
 
-	rule.Scope, err = lsGetInt(globalLS, iter, 14)
+	rule.Scope, err = lsGetInt(globalLS, iter, 15)
 	if err != nil {
 		return rule, nil, err
 	}
@@ -965,7 +895,7 @@ func addPendingPrompts(rules []string) {
 	for _, rule := range rules {
 		fields := strings.Split(rule, "|")
 
-		if len(fields) != 18 {
+		if len(fields) != 19 {
 			log.Printf("Got saved prompt message with strange data: \"%s\"", rule)
 			continue
 		}
@@ -1011,15 +941,16 @@ func addPendingPrompts(rules []string) {
 			continue
 		}
 
-		optstring := fields[16]
+		timestamp := fields[16]
+		optstring := fields[17]
 
-		action, err := strconv.Atoi(fields[17])
+		action, err := strconv.Atoi(fields[18])
 		if err != nil {
 			log.Println("Error converting action in pending prompt message to integer:", err)
 			continue
 		}
 
-		addRequestAsync(nil, guid, path, icon, proto, int(pid), ip, address, int(port), int(uid), int(gid), origin, is_socks, optstring, sandbox, action)
+		addRequestAsync(nil, guid, path, icon, proto, int(pid), ip, address, int(port), int(uid), int(gid), origin, timestamp, is_socks, optstring, sandbox, action)
 	}
 
 }
@@ -1255,14 +1186,15 @@ func main() {
 	tv.AppendColumn(createColumn("UID", 9))
 	tv.AppendColumn(createColumn("GID", 10))
 	tv.AppendColumn(createColumn("Origin", 11))
+	tv.AppendColumn(createColumn("Timestamp", 12))
 
-	scol := createColumn("Is SOCKS", 12)
+	scol := createColumn("Is SOCKS", 13)
 	scol.SetVisible(false)
 	tv.AppendColumn(scol)
 
-	tv.AppendColumn(createColumn("Details", 13))
+	tv.AppendColumn(createColumn("Details", 14))
 
-	acol := createColumn("Scope", 14)
+	acol := createColumn("Scope", 15)
 	acol.SetVisible(false)
 	tv.AppendColumn(acol)
 

@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -53,6 +54,7 @@ type pendingConnection interface {
 	setPrompter(*prompter)
 	getPrompter() *prompter
 	getGUID() string
+	getTimestamp() string
 	print() string
 }
 
@@ -65,6 +67,7 @@ type pendingPkt struct {
 	prompting bool
 	prompter  *prompter
 	guid      string
+	timestamp time.Time
 }
 
 /* Not a *REAL* GUID */
@@ -95,6 +98,10 @@ func getEmptyPInfo() *procsnitch.Info {
 
 func (pp *pendingPkt) sandbox() string {
 	return pp.pinfo.Sandbox
+}
+
+func (pc *pendingPkt) getTimestamp() string {
+	return pc.timestamp.Format("15:04:05.00")
 }
 
 func (pp *pendingPkt) socks() bool {
@@ -281,13 +288,9 @@ func (fw *Firewall) policyForPath(path string) *Policy {
 	return fw.policyMap[path]
 }
 
-func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info, optstr string) {
-
+func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, timestamp time.Time, pinfo *procsnitch.Info, optstr string) {
 	fmt.Println("policy processPacket()")
-	/*	hbytes, err := pkt.GetHWAddr()
-		if err != nil {
-			log.Notice("Failed to get HW address underlying packet: ", err)
-		} else { log.Notice("got hwaddr: ", hbytes) } */
+
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	dstb := pkt.Packet.NetworkLayer().NetworkFlow().Dst().Raw()
@@ -320,7 +323,7 @@ func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info, o
 	case FILTER_ALLOW:
 		pkt.Accept()
 	case FILTER_PROMPT:
-		p.processPromptResult(&pendingPkt{pol: p, name: name, pkt: pkt, pinfo: pinfo, optstring: optstr, prompter: nil, prompting: false})
+		p.processPromptResult(&pendingPkt{pol: p, name: name, pkt: pkt, pinfo: pinfo, optstring: optstr, prompter: nil, timestamp: timestamp, prompting: false})
 	default:
 		log.Warningf("Unexpected filter result: %d", result)
 	}
@@ -499,7 +502,7 @@ func printPacket(pkt *nfqueue.NFQPacket, hostname string, pinfo *procsnitch.Info
 	return fmt.Sprintf("%s %s %s:%d -> %s:%d", pinfo.ExePath, proto, SrcIp, SrcPort, name, DstPort)
 }
 
-func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
+func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket, timestamp time.Time) {
 	fmt.Println("firewall: filterPacket()")
 	isudp := pkt.Packet.Layer(layers.LayerTypeUDP) != nil
 
@@ -578,7 +581,7 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket) {
 	*/
 	policy := fw.PolicyForPathAndSandbox(ppath, pinfo.Sandbox)
 	//log.Notice("XXX: flunked basicallowpacket; policy = ", policy)
-	policy.processPacket(pkt, pinfo, optstring)
+	policy.processPacket(pkt, timestamp, pinfo, optstring)
 }
 
 func readFileDirect(filename string) ([]byte, error) {

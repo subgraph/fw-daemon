@@ -241,6 +241,7 @@ func (ds *dbusServer) GetPendingRequests(policy string) ([]string, *dbus.Error) 
 			pstr += strconv.FormatInt(int64(pc.procInfo().Pid), 10) + "|"
 			pstr += pc.sandbox() + "|"
 			pstr += strconv.FormatBool(pc.socks()) + "|"
+			pstr += pc.getTimestamp() + "|"
 			pstr += pc.getOptString() + "|"
 			pstr += strconv.FormatUint(uint64(FirewallConfig.DefaultActionID), 10)
 			pending_data = append(pending_data, pstr)

@@ -1,18 +1,11 @@
 fw-daemon:
-	pc.socks() an getOptString() return overlapping information
+	pc.socks() and getOptString() return overlapping information
 
 	remove all stale references to SANDBOX: rules/policyForPathAndSandbox()
 
 
 fw-prompt:
 	scope returned by new rules is bad (always set to process)
-
-	prompter should have a timestamp field
-
-	Iteration through fw-prompt choices can't brute force by index #
-
-	This function needs to be updated because it no longer works:
-		func toggleHover() { mainWin.SetKeepAbove(len(decisionWaiters) > 0) }
 
 	Each duplicate prompt needs to be expandable into individual items
 

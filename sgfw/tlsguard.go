@@ -2,6 +2,7 @@ package sgfw
 
 import (
 	"crypto/x509"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -60,6 +61,20 @@ type connReader struct {
 	data   []byte
 	rtype  int
 	err    error
+}
+
+var cipherSuiteMap map[uint16]string = map[uint16]string{
+	0x0000: "TLS_NULL_WITH_NULL_NULL",
+	0x0030: "TLS_DH_DSS_WITH_AES_128_CBC_SHA",
+}
+
+func getCipherSuiteName(value uint) string {
+	val, ok := cipherSuiteMap[uint16(value)]
+	if !ok {
+		return "UNKNOWN"
+	}
+
+	return val
 }
 
 func connectionReader(conn net.Conn, is_client bool, c chan connReader, done chan bool) {
@@ -226,8 +241,8 @@ select_loop:
 					other.Write(cr.data)
 					continue
 				} else if cr.client {
-					other.Write(cr.data)
-					continue
+					//					other.Write(cr.data)
+					//					continue
 				} else if cr.rtype != SSL3_RT_HANDSHAKE {
 					return errors.New(fmt.Sprintf("Expected TLS server handshake byte was not received [%#x vs 0x16]", cr.rtype))
 				}
@@ -236,14 +251,39 @@ select_loop:
 					return errors.New(fmt.Sprintf("TLSGuard dropping connection with unknown content type: %#x", cr.rtype))
 				}
 
-				serverMsg := cr.data[5:]
-				s := uint(serverMsg[0])
+				handshakeMsg := cr.data[5:]
+				s := uint(handshakeMsg[0])
 				fmt.Printf("s = %#x\n", s)
 
 				if cr.client && s != uint(client_expected) {
 					return errors.New(fmt.Sprintf("Client sent handshake type %#x but expected %#x", s, client_expected))
 				} else if !cr.client && s != uint(server_expected) {
 					return errors.New(fmt.Sprintf("Server sent handshake type %#x but expected %#x", s, server_expected))
+				}
+
+				if cr.client {
+					if s == SSL3_MT_CLIENT_HELLO {
+						fmt.Println("CLIENT HELLO")
+						hello_offset := 4
+						// 2 byte protocol version
+						fmt.Println("CLIENT HELLO VERSION = ", handshakeMsg[hello_offset:hello_offset+2])
+						hello_offset += 2
+						// 4 byte Random/GMT time
+						fmt.Println("CLIENT HELLO GMT = ", handshakeMsg[hello_offset:hello_offset+4])
+						hello_offset += 4
+						// 28 bytes Random/random_bytes
+						hello_offset += 28
+						// 1 byte (32-bit session ID)
+						fmt.Println("CLIENT HELLO SESSION ID = ", handshakeMsg[hello_offset:hello_offset+1])
+						hello_offset++
+						// 2 byte cipher suite array
+						cs := binary.BigEndian.Uint16(handshakeMsg[hello_offset : hello_offset+2])
+						fmt.Printf("cs = %v / %#v\n", cs, cs)
+						fmt.Printf("CLIENT HELLO CIPHERSUITE: %v (%s)\n", handshakeMsg[hello_offset:hello_offset+2], getCipherSuiteName(uint(cs)))
+					}
+
+					other.Write(cr.data)
+					continue
 				}
 
 				if !cr.client && s == SSL3_MT_HELLO_REQUEST {
@@ -256,16 +296,16 @@ select_loop:
 				}
 
 				// Message len, 3 bytes
-				serverMessageLen := serverMsg[1:4]
-				serverMessageLenInt := int(int(serverMessageLen[0])<<16 | int(serverMessageLen[1])<<8 | int(serverMessageLen[2]))
+				handshakeMessageLen := handshakeMsg[1:4]
+				handshakeMessageLenInt := int(int(handshakeMessageLen[0])<<16 | int(handshakeMessageLen[1])<<8 | int(handshakeMessageLen[2]))
 
 				if s == SSL3_MT_CERTIFICATE {
 					fmt.Println("HMM")
-					// fmt.Printf("chunk len = %v, serverMsgLen = %v, slint = %v\n", len(chunk), len(serverMsg), serverMessageLenInt)
-					if len(serverMsg) < serverMessageLenInt {
-						return errors.New(fmt.Sprintf("len(serverMsg) %v < serverMessageLenInt %v!\n", len(serverMsg), serverMessageLenInt))
+					// fmt.Printf("chunk len = %v, handshakeMsgLen = %v, slint = %v\n", len(chunk), len(handshakeMsg), handshakeMessageLenInt)
+					if len(handshakeMsg) < handshakeMessageLenInt {
+						return errors.New(fmt.Sprintf("len(handshakeMsg) %v < handshakeMessageLenInt %v!\n", len(handshakeMsg), handshakeMessageLenInt))
 					}
-					serverHelloBody := serverMsg[4 : 4+serverMessageLenInt]
+					serverHelloBody := handshakeMsg[4 : 4+handshakeMessageLenInt]
 					certChainLen := int(int(serverHelloBody[0])<<16 | int(serverHelloBody[1])<<8 | int(serverHelloBody[2]))
 					remaining := certChainLen
 					pos := serverHelloBody[3:certChainLen]

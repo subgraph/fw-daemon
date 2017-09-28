@@ -59,6 +59,7 @@ type pendingSocksConnection struct {
 	prompter   *prompter
 	guid       string
 	optstr     string
+	timestamp  time.Time
 }
 
 func (sc *pendingSocksConnection) sandbox() string {
@@ -116,17 +117,31 @@ func (sc *pendingSocksConnection) deliverVerdict(v int) {
 	}
 }
 
-func (sc *pendingSocksConnection) accept() { sc.deliverVerdict(socksVerdictAccept) }
+func (sc *pendingSocksConnection) accept() {
+	sc.deliverVerdict(socksVerdictAccept)
+}
 
 // need to generalize special accept
 
-func (sc *pendingSocksConnection) acceptTLSOnly() { sc.deliverVerdict(socksVerdictAcceptTLSOnly) }
+func (sc *pendingSocksConnection) acceptTLSOnly() {
+	sc.deliverVerdict(socksVerdictAcceptTLSOnly)
+}
 
-func (sc *pendingSocksConnection) drop() { sc.deliverVerdict(socksVerdictDrop) }
+func (sc *pendingSocksConnection) drop() {
+	sc.deliverVerdict(socksVerdictDrop)
+}
 
-func (sc *pendingSocksConnection) setPrompter(val *prompter) { sc.prompter = val }
+func (sc *pendingSocksConnection) setPrompter(val *prompter) {
+	sc.prompter = val
+}
 
-func (sc *pendingSocksConnection) getPrompter() *prompter { return sc.prompter }
+func (sc *pendingSocksConnection) getPrompter() *prompter {
+	return sc.prompter
+}
+
+func (sc *pendingSocksConnection) getTimestamp() string {
+	return sc.timestamp.Format("15:04:05.00")
+}
 
 func (sc *pendingSocksConnection) getGUID() string {
 	if sc.guid == "" {
@@ -136,11 +151,17 @@ func (sc *pendingSocksConnection) getGUID() string {
 	return sc.guid
 }
 
-func (sc *pendingSocksConnection) getPrompting() bool { return sc.prompting }
+func (sc *pendingSocksConnection) getPrompting() bool {
+	return sc.prompting
+}
 
-func (sc *pendingSocksConnection) setPrompting(val bool) { sc.prompting = val }
+func (sc *pendingSocksConnection) setPrompting(val bool) {
+	sc.prompting = val
+}
 
-func (sc *pendingSocksConnection) print() string { return "socks connection" }
+func (sc *pendingSocksConnection) print() string {
+	return "socks connection"
+}
 
 func NewSocksChain(cfg *socksChainConfig, wg *sync.WaitGroup, fw *Firewall) *socksChain {
 	chain := socksChain{
@@ -163,10 +184,11 @@ func (s *socksChain) start() {
 	}
 
 	s.wg.Add(1)
-	go s.socksAcceptLoop()
+	ts := time.Now()
+	go s.socksAcceptLoop(ts)
 }
 
-func (s *socksChain) socksAcceptLoop() error {
+func (s *socksChain) socksAcceptLoop(timestamp time.Time) error {
 	defer s.wg.Done()
 	defer s.listener.Close()
 
@@ -180,11 +202,11 @@ func (s *socksChain) socksAcceptLoop() error {
 			continue
 		}
 		session := &socksChainSession{cfg: s.cfg, clientConn: conn, procInfo: s.procInfo, server: s}
-		go session.sessionWorker()
+		go session.sessionWorker(timestamp)
 	}
 }
 
-func (c *socksChainSession) sessionWorker() {
+func (c *socksChainSession) sessionWorker(timestamp time.Time) {
 	defer c.clientConn.Close()
 
 	clientAddr := c.clientConn.RemoteAddr()
@@ -214,7 +236,7 @@ func (c *socksChainSession) sessionWorker() {
 			c.req.ReplyAddr(ReplySucceeded, c.bndAddr)
 		}
 	case CommandConnect:
-		verdict, tls := c.filterConnect()
+		verdict, tls := c.filterConnect(timestamp)
 
 		if !verdict {
 			c.req.Reply(ReplyConnectionRefused)
@@ -295,7 +317,7 @@ func findProxyEndpoint(pdata []string, conn net.Conn) (*procsnitch.Info, string)
 	return nil, ""
 }
 
-func (c *socksChainSession) filterConnect() (bool, bool) {
+func (c *socksChainSession) filterConnect(timestamp time.Time) (bool, bool) {
 	// return filter verdict, tlsguard
 
 	allProxies, err := ListProxies()
@@ -383,6 +405,7 @@ func (c *socksChainSession) filterConnect() (bool, bool) {
 			prompting:  false,
 			prompter:   nil,
 			optstr:     optstr,
+			timestamp:  timestamp,
 		}
 		policy.processPromptResult(pending)
 		v := <-pending.verdict

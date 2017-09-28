@@ -248,6 +248,7 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		int32(pc.procInfo().Pid),
 		pc.sandbox(),
 		pc.socks(),
+		pc.getTimestamp(),
 		pc.getOptString(),
 		FirewallConfig.PromptExpanded,
 		FirewallConfig.PromptExpert,
