@@ -350,6 +350,16 @@ func connectionReader(conn net.Conn, is_client bool, c chan connReader, done cha
 
 }
 
+func isExpected(val uint, possibilities []uint) bool {
+	for _, pval := range possibilities {
+		if val == pval {
+			return true
+		}
+	}
+
+	return false
+}
+
 func TLSGuard(conn, conn2 net.Conn, fqdn string) error {
 	x509Valid := false
 	ndone := 0
@@ -366,8 +376,8 @@ func TLSGuard(conn, conn2 net.Conn, fqdn string) error {
 	go connectionReader(conn, true, crChan, dChan)
 	go connectionReader(conn2, false, crChan, dChan2)
 
-	client_expected := SSL3_MT_CLIENT_HELLO
-	server_expected := SSL3_MT_SERVER_HELLO
+	client_expected := []uint{SSL3_MT_CLIENT_HELLO}
+	server_expected := []uint{SSL3_MT_SERVER_HELLO}
 
 	client_sess := false
 	server_sess := false
@@ -462,9 +472,9 @@ select_loop:
 
 				}
 
-				if cr.client && s != uint(client_expected) {
+				if cr.client && !isExpected(s, client_expected) {
 					return errors.New(fmt.Sprintf("Client sent handshake type %#x but expected %#x", s, client_expected))
-				} else if !cr.client && s != uint(server_expected) {
+				} else if !cr.client && !isExpected(s, server_expected) {
 					return errors.New(fmt.Sprintf("Server sent handshake type %#x but expected %#x", s, server_expected))
 				}
 
@@ -476,7 +486,7 @@ select_loop:
 					if s == SSL3_MT_CLIENT_HELLO {
 						SRC = "CLIENT"
 					} else {
-						server_expected = SSL3_MT_CERTIFICATE
+						server_expected = []uint{SSL3_MT_CERTIFICATE, SSL3_MT_HELLO_REQUEST}
 						SRC = "SERVER"
 					}
 
@@ -501,157 +511,73 @@ select_loop:
 						server_sess = true
 					}
 
-					/*					if sess_len != 0 {
-											fmt.Printf("ALERT: %v attempting to resume session; intercepting request\n", SRC)
-											rewrite = true
-											dcopy := make([]byte, len(cr.data))
-											copy(dcopy, cr.data)
-											// Copy the bytes before the session ID start
-											rewrite_buf = dcopy[0 : TLS_RECORD_HDR_LEN+hello_offset+1]
-											// Set the session ID to 0
-											rewrite_buf[len(rewrite_buf)-1] = 0
-											// Write the new TLS record length
-											binary.BigEndian.PutUint16(rewrite_buf[3:5], uint16(len(dcopy)-(int(sess_len)+TLS_RECORD_HDR_LEN)))
-											// Write the new ClientHello length
-											// Starts after the first 6 bytes (record header + type byte)
-											orig_len := binary.BigEndian.Uint32(handshakeMsg[0:4])
-											// But it's only 3 bytes so mask out the first one
-											b1 := orig_len & 0xff000000
-											orig_len &= 0x00ffffff
-											orig_len -= uint32(sess_len)
-											orig_len |= b1
-											binary.BigEndian.PutUint32(rewrite_buf[TLS_RECORD_HDR_LEN:], orig_len)
-											rewrite_buf = append(rewrite_buf, dcopy[TLS_RECORD_HDR_LEN+hello_offset+int(sess_len)+1:]...)
-										}
-
-										hello_offset += int(sess_len) + 1
-										// 2 byte cipher suite array
-										cs := binary.BigEndian.Uint16(handshakeMsg[hello_offset : hello_offset+2])
-										noCS := cs
-										fmt.Printf("cs = %v / %#x\n", noCS, noCS)
-
-										var ciphersuite_excisions = []int{}
-										saved_ciphersuite_size_off := hello_offset
-
-										if !cr.client {
-											fmt.Printf("SERVER selected ciphersuite: %#x (%s)\n", cs, getCipherSuiteName(uint(cs)))
-											hello_offset += 2
-										} else {
-
-											for csind := 0; csind < int(noCS/2); csind++ {
-												off := hello_offset + 2 + (csind * 2)
-												cs = binary.BigEndian.Uint16(handshakeMsg[off : off+2])
-												cname := getCipherSuiteName(uint(cs))
-												fmt.Printf("%s HELLO CIPHERSUITE: %d/%d: %#x (%s)\n", SRC, csind+1, noCS/2, cs, cname)
-
-												if isBadCipher(cname) {
-													fmt.Println("BAD CIPHER: ", cname)
-													ciphersuite_excisions = append(ciphersuite_excisions, off)
-												}
-
-											}
-
-											hello_offset += 2 + int(noCS)
-										}
-
-										clen := uint(handshakeMsg[hello_offset])
-										hello_offset++
-
-										if !cr.client {
-											fmt.Println("SERVER selected compression method: ", clen)
-										} else {
-											fmt.Println(SRC, "HELLO COMPRESSION METHODS LEN = ", clen)
-											fmt.Println(SRC, "HELLO COMPRESSION METHODS: ", handshakeMsg[hello_offset:hello_offset+int(clen)])
-											hello_offset += int(clen)
-										}
-
-										var extlen uint16 = 0
-
-										if hello_offset == len(handshakeMsg) {
-											fmt.Println("Message didn't have any extensions present")
-										} else {
-											extlen = binary.BigEndian.Uint16(handshakeMsg[hello_offset : hello_offset+2])
-											fmt.Println(SRC, "HELLO EXTENSIONS LENGTH: ", extlen)
-											hello_offset += 2
-										}
-
-										if cr.client {
-											ext_ctr := 0
-
-											for ext_ctr < int(extlen)-2 {
-												exttype := binary.BigEndian.Uint16(handshakeMsg[hello_offset : hello_offset+2])
-												hello_offset += 2
-												ext_ctr += 2
-												//							fmt.Printf("PROGRESS: %v of %v, %v of %v\n", ext_ctr, extlen, hello_offset, len(handshakeMsg))
-												fmt.Printf("EXTTYPE = %#x (%s)\n", exttype, gettlsExtensionName(uint(exttype)))
-												inner_len := binary.BigEndian.Uint16(handshakeMsg[hello_offset : hello_offset+2])
-												hello_offset += int(inner_len) + 2
-												ext_ctr += int(inner_len) + 2
-											}
-
-										}
-
 					/*
-										if extlen > 0 {
-											fmt.Printf("ALERT: %v attempting to send extensions; intercepting request\n", SRC)
-											rewrite = true
-											tocopy := cr.data
+						hello_offset += int(sess_len) + 1
+						// 2 byte cipher suite array
+						cs := binary.BigEndian.Uint16(handshakeMsg[hello_offset : hello_offset+2])
+						noCS := cs
+						fmt.Printf("cs = %v / %#x\n", noCS, noCS)
 
-											if len(rewrite_buf) > 0 {
-												tocopy = rewrite_buf
-											}
+						saved_ciphersuite_size_off := hello_offset
 
-											dcopy := make([]byte, len(tocopy)-int(extlen))
-											copy(dcopy, tocopy[0:len(tocopy)-int(extlen)])
-											rewrite_buf = dcopy
-											// Write the new TLS record length
-											binary.BigEndian.PutUint16(rewrite_buf[3:5], uint16(len(dcopy)-(int(sess_len)+TLS_RECORD_HDR_LEN)))
-											// Write the new ClientHello length
-											// Starts after the first 6 bytes (record header + type byte)
-											orig_len := binary.BigEndian.Uint32(rewrite_buf[TLS_RECORD_HDR_LEN:])
-											// But it's only 3 bytes so mask out the first one
-											b1 := orig_len & 0xff000000
-											orig_len &= 0x00ffffff
-											orig_len -= uint32(extlen)
-											orig_len |= b1
-											binary.BigEndian.PutUint32(rewrite_buf[TLS_RECORD_HDR_LEN:], orig_len)
-											// Write session length 0 at the end
-											rewrite_buf[len(rewrite_buf)-1] = 0
-											rewrite_buf[len(rewrite_buf)-2] = 0
-										} */
+						if !cr.client {
+							fmt.Printf("SERVER selected ciphersuite: %#x (%s)\n", cs, getCipherSuiteName(uint(cs)))
+							hello_offset += 2
+						} else {
 
-					sendbuf := cr.data
+							for csind := 0; csind < int(noCS/2); csind++ {
+								off := hello_offset + 2 + (csind * 2)
+								cs = binary.BigEndian.Uint16(handshakeMsg[off : off+2])
+								cname := getCipherSuiteName(uint(cs))
+								fmt.Printf("%s HELLO CIPHERSUITE: %d/%d: %#x (%s)\n", SRC, csind+1, noCS/2, cs, cname)
 
-					/*					if rewrite {
-											sendbuf = rewrite_buf
-										}
+								if isBadCipher(cname) {
+									fmt.Println("BAD CIPHER: ", cname)
+								}
 
-										if len(ciphersuite_excisions) > 0 {
-											fmt.Printf("Rewriting client handshake with %d ciphersuite options removed\n", len(ciphersuite_excisions))
-											fmt.Println("PREVIOUS: ", hex.Dump(sendbuf))
-											rewrite = true
-											mod := sendbuf
+							}
 
-											for _, exind := range ciphersuite_excisions {
-												mod = stripTLSData(mod, exind+TLS_RECORD_HDR_LEN, exind+TLS_RECORD_HDR_LEN+2, saved_ciphersuite_size_off+TLS_RECORD_HDR_LEN, 2)
+							hello_offset += 2 + int(noCS)
+						}
 
-												if mod == nil {
-													return errors.New("Unknown error occurred stripping ciphersuite from client TLS handshake")
-												}
+						clen := uint(handshakeMsg[hello_offset])
+						hello_offset++
 
-											}
+						if !cr.client {
+							fmt.Println("SERVER selected compression method: ", clen)
+						} else {
+							fmt.Println(SRC, "HELLO COMPRESSION METHODS LEN = ", clen)
+							fmt.Println(SRC, "HELLO COMPRESSION METHODS: ", handshakeMsg[hello_offset:hello_offset+int(clen)])
+							hello_offset += int(clen)
+						}
 
-											rewrite_buf = mod
-											sendbuf = rewrite_buf
-										}
+						var extlen uint16 = 0
 
-										if rewrite {
-											fmt.Println("TLSGuard writing back modified handshake data to server")
-											fmt.Printf("ORIGINAL[%d]: %v\n", len(cr.data), hex.Dump(cr.data))
-											fmt.Printf("NEW[%d]: %v\n", len(rewrite_buf), hex.Dump(rewrite_buf))
-										} */
+						if hello_offset == len(handshakeMsg) {
+							fmt.Println("Message didn't have any extensions present")
+						} else {
+							extlen = binary.BigEndian.Uint16(handshakeMsg[hello_offset : hello_offset+2])
+							fmt.Println(SRC, "HELLO EXTENSIONS LENGTH: ", extlen)
+							hello_offset += 2
+						}
 
-					other.Write(sendbuf)
+						if cr.client {
+							ext_ctr := 0
+
+							for ext_ctr < int(extlen)-2 {
+								exttype := binary.BigEndian.Uint16(handshakeMsg[hello_offset : hello_offset+2])
+								hello_offset += 2
+								ext_ctr += 2
+								//							fmt.Printf("PROGRESS: %v of %v, %v of %v\n", ext_ctr, extlen, hello_offset, len(handshakeMsg))
+								fmt.Printf("EXTTYPE = %#x (%s)\n", exttype, gettlsExtensionName(uint(exttype)))
+								inner_len := binary.BigEndian.Uint16(handshakeMsg[hello_offset : hello_offset+2])
+								hello_offset += int(inner_len) + 2
+								ext_ctr += int(inner_len) + 2
+							}
+
+						}*/
+
+					other.Write(cr.data)
 					continue
 				}
 
@@ -660,8 +586,8 @@ select_loop:
 					continue
 				}
 
-				if !cr.client && server_expected == SSL3_MT_SERVER_HELLO {
-					server_expected = SSL3_MT_CERTIFICATE
+				if !cr.client && isExpected(SSL3_MT_SERVER_HELLO, server_expected) {
+					server_expected = []uint{SSL3_MT_CERTIFICATE}
 				}
 
 				if !cr.client && s == SSL3_MT_HELLO_REQUEST {
@@ -674,7 +600,6 @@ select_loop:
 				}
 
 				if s == SSL3_MT_CERTIFICATE {
-					fmt.Println("HMM")
 					// fmt.Printf("chunk len = %v, handshakeMsgLen = %v, slint = %v\n", len(chunk), len(handshakeMsg), handshakeMessageLenInt)
 					if len(handshakeMsg) < handshakeMessageLenInt {
 						return errors.New(fmt.Sprintf("len(handshakeMsg) %v < handshakeMessageLenInt %v!\n", len(handshakeMsg), handshakeMessageLenInt))

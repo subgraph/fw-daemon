@@ -82,7 +82,6 @@ var radioOnce, radioProcess, radioParent, radioSession, radioPermanent *gtk.Radi
 var btnApprove, btnDeny, btnIgnore *gtk.Button
 var chkTLS, chkUser, chkGroup *gtk.CheckButton
 
-
 func promptInfo(msg string) {
 	dialog := gtk.MessageDialogNew(mainWin, 0, gtk.MESSAGE_INFO, gtk.BUTTONS_OK, "Displaying full log info:")
 	//	dialog.SetDefaultGeometry(500, 200)
@@ -941,71 +940,6 @@ func getSelectedRule() (ruleColumns, int, error) {
 	return rule, lIndex, nil
 }
 
-func addPendingPrompts(rules []string) {
-
-	for _, rule := range rules {
-		fields := strings.Split(rule, "|")
-
-		if len(fields) != 19 {
-			log.Printf("Got saved prompt message with strange data: \"%s\"", rule)
-			continue
-		}
-
-		guid := fields[0]
-		icon := fields[2]
-		path := fields[3]
-		address := fields[4]
-
-		port, err := strconv.Atoi(fields[5])
-		if err != nil {
-			log.Println("Error converting port in pending prompt message to integer:", err)
-			continue
-		}
-
-		ip := fields[6]
-		origin := fields[7]
-		proto := fields[8]
-
-		uid, err := strconv.Atoi(fields[9])
-		if err != nil {
-			log.Println("Error converting UID in pending prompt message to integer:", err)
-			continue
-		}
-
-		gid, err := strconv.Atoi(fields[10])
-		if err != nil {
-			log.Println("Error converting GID in pending prompt message to integer:", err)
-			continue
-		}
-
-		pid, err := strconv.Atoi(fields[13])
-		if err != nil {
-			log.Println("Error converting pid in pending prompt message to integer:", err)
-			continue
-		}
-
-		sandbox := fields[14]
-
-		is_socks, err := strconv.ParseBool(fields[15])
-		if err != nil {
-			log.Println("Error converting SOCKS flag in pending prompt message to boolean:", err)
-			continue
-		}
-
-		timestamp := fields[16]
-		optstring := fields[17]
-
-		action, err := strconv.Atoi(fields[18])
-		if err != nil {
-			log.Println("Error converting action in pending prompt message to integer:", err)
-			continue
-		}
-
-		addRequestAsync(nil, guid, path, icon, proto, int(pid), ip, address, int(port), int(uid), int(gid), origin, timestamp, is_socks, optstring, sandbox, action)
-	}
-
-}
-
 func buttonAction(action string) {
 	globalPromptLock.Lock()
 	rule, idx, err := getSelectedRule()
@@ -1336,14 +1270,14 @@ func main() {
 	mainWin.ShowAll()
 	//	mainWin.SetKeepAbove(true)
 
-	var dres = []string{}
+	var dres bool
 	call := dbuso.Call("GetPendingRequests", 0, "*")
 	err = call.Store(&dres)
 	if err != nil {
 		errmsg := "Could not query running SGFW instance (maybe it's not running?): " + err.Error()
 		promptError(errmsg)
-	} else {
-		addPendingPrompts(dres)
+	} else if !dres {
+		promptError("Call to sgfw did not succeed; fw-prompt may have loaded without retrieving all pending connections")
 	}
 
 	gtk.Main()

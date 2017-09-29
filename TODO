@@ -3,10 +3,6 @@ fw-daemon:
 
 	remove all stale references to SANDBOX: rules/policyForPathAndSandbox()
 
-	TLSGuard needs to handle unexpected SSL3_MT_HELLO_REQUEST properly - make expectations a slice
-
-	GetPendingRequests Dbus method should send a bunch of DBus requests
-
 
 fw-prompt:
 	apply once rules still do not work because they the DBus invocation requires the guid to be passed
