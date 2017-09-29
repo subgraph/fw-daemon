@@ -330,6 +330,11 @@ func createListStore(general bool) *gtk.ListStore {
 
 func removeRequest(listStore *gtk.ListStore, guid string) {
 	removed := false
+
+	if globalLS == nil {
+		return
+	}
+
 	globalPromptLock.Lock()
 	defer globalPromptLock.Unlock()
 

@@ -179,6 +179,7 @@ var whitelistedCiphers = []string{
 
 var blacklistedCiphers = []string{
 	"TLS_NULL_WITH_NULL_NULL",
+	"TLS_RSA_WITH_AES_128_CBC_SHA",
 }
 
 func getCipherSuiteName(value uint) string {
@@ -188,6 +189,16 @@ func getCipherSuiteName(value uint) string {
 	}
 
 	return val
+}
+
+func isBadCipher(cname string) bool {
+	for _, cipher := range blacklistedCiphers {
+		if cipher == cname {
+			return true
+		}
+	}
+
+	return false
 }
 
 func gettlsExtensionName(value uint) string {
@@ -205,6 +216,52 @@ func gettlsExtensionName(value uint) string {
 	}
 
 	return val
+}
+
+func stripTLSData(record []byte, start_ind, end_ind int, len_ind int, len_size int) []byte {
+	var size uint = 0
+
+	if len_size < 1 || len_size > 2 {
+		return nil
+	} else if (start_ind >= end_ind) {
+		return nil
+	} else if len_ind >= start_ind {
+		return nil
+	}
+
+	rcopy := make([]byte, len(record))
+	copy(rcopy, record)
+
+	if len_size == 1 {
+		size = uint(rcopy[len_ind])
+	} else if len_size == 2 {
+		size = uint(binary.BigEndian.Uint16(rcopy[len_ind:len_ind+len_size]))
+	}
+
+	size -= uint(end_ind - start_ind)
+
+	// Put back the length size
+	if len_size == 1 {
+		rcopy[len_ind] = byte(size)
+	} else if len_size == 2 {
+		binary.BigEndian.PutUint16(rcopy[len_ind:len_ind+len_size], uint16(size))
+	}
+
+	// Patch the record size
+	rsize := binary.BigEndian.Uint16(rcopy[3:5])
+	rsize -= uint16(end_ind - start_ind)
+	binary.BigEndian.PutUint16(rcopy[3:5], rsize)
+
+	// And finally the 3 byte hello record
+	hsize := binary.BigEndian.Uint32(rcopy[5:9])
+	saved_b := hsize & 0xff000000
+	hsize &= 0x00ffffff
+	hsize -= uint32(end_ind - start_ind)
+	hsize |= saved_b
+	binary.BigEndian.PutUint32(rcopy[5:9], hsize)
+
+	result := append(rcopy[:start_ind], rcopy[end_ind:]...)
+	return result
 }
 
 func connectionReader(conn net.Conn, is_client bool, c chan connReader, done chan bool) {
@@ -356,7 +413,7 @@ select_loop:
 							fmt.Println("SSL ALERT TYPE UNKNOWN")
 						}
 
-						alert_desc := int(int(cr.data[6])<<8 | int(cr.data[7]))
+						alert_desc := int(int(cr.data[5])<<8 | int(cr.data[6]))
 						fmt.Println("ALERT DESCRIPTION: ", alert_desc)
 
 						if cr.data[TLS_RECORD_HDR_LEN] == SSL3_AL_FATAL {
@@ -456,6 +513,9 @@ select_loop:
 					noCS := cs
 					fmt.Printf("cs = %v / %#x\n", noCS, noCS)
 
+					var ciphersuite_excisions = []int{}
+					saved_ciphersuite_size_off := hello_offset
+
 					if !cr.client {
 						fmt.Printf("SERVER selected ciphersuite: %#x (%s)\n", cs, getCipherSuiteName(uint(cs)))
 						hello_offset += 2
@@ -464,7 +524,14 @@ select_loop:
 						for csind := 0; csind < int(noCS/2); csind++ {
 							off := hello_offset + 2 + (csind * 2)
 							cs = binary.BigEndian.Uint16(handshakeMsg[off : off+2])
-							fmt.Printf("%s HELLO CIPHERSUITE: %d/%d: %#x (%s)\n", SRC, csind+1, noCS/2, cs, getCipherSuiteName(uint(cs)))
+							cname := getCipherSuiteName(uint(cs))
+							fmt.Printf("%s HELLO CIPHERSUITE: %d/%d: %#x (%s)\n", SRC, csind+1, noCS/2, cs, cname)
+
+							if isBadCipher(cname) {
+								fmt.Println("BAD CIPHER: ", cname)
+								ciphersuite_excisions = append(ciphersuite_excisions, off)
+							}
+
 						}
 
 						hello_offset += 2 + int(noCS)
@@ -541,15 +608,38 @@ select_loop:
 						rewrite_buf[len(rewrite_buf)-2] = 0
 					}
 
+					sendbuf := cr.data
+
+					if rewrite {
+						sendbuf = rewrite_buf
+					}
+
+					if len(ciphersuite_excisions) > 0 {
+						fmt.Printf("Rewriting client handshake with %d ciphersuite options removed\n", len(ciphersuite_excisions))
+						fmt.Println("PREVIOUS: ", hex.Dump(sendbuf))
+						rewrite = true
+						mod := sendbuf
+
+						for _, exind := range ciphersuite_excisions {
+							mod = stripTLSData(mod, exind+TLS_RECORD_HDR_LEN, exind+TLS_RECORD_HDR_LEN+2, saved_ciphersuite_size_off+TLS_RECORD_HDR_LEN, 2)
+
+							if mod == nil {
+								return errors.New("Unknown error occurred stripping ciphersuite from client TLS handshake")
+							}
+
+						}
+
+						rewrite_buf = mod
+						sendbuf = rewrite_buf
+					}
+
 					if rewrite {
 						fmt.Println("TLSGuard writing back modified handshake data to server")
 						fmt.Printf("ORIGINAL[%d]: %v\n", len(cr.data), hex.Dump(cr.data))
 						fmt.Printf("NEW[%d]: %v\n", len(rewrite_buf), hex.Dump(rewrite_buf))
-						other.Write(rewrite_buf)
-					} else {
-						other.Write(cr.data)
 					}
 
+					other.Write(sendbuf)
 					continue
 				}
 
