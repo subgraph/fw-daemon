@@ -54,6 +54,28 @@ type ruleColumns struct {
 	Scope     int
 }
 
+const (
+	COL_NO_NREFS = iota
+	COL_NO_ICON_PIXBUF
+	COL_NO_GUID
+	COL_NO_PATH
+	COL_NO_ICON
+	COL_NO_PROTO
+	COL_NO_PID
+	COL_NO_DSTIP
+	COL_NO_HOSTNAME
+	COL_NO_PORT
+	COL_NO_UID
+	COL_NO_GID
+	COL_NO_ORIGIN
+	COL_NO_TIMESTAMP
+	COL_NO_IS_SOCKS
+	COL_NO_OPTSTRING
+	COL_NO_ACTION
+	COL_NO_LAST
+)
+
+
 var dbuso *dbusObject
 var userPrefs fpPreferences
 var mainWin *gtk.Window
@@ -298,15 +320,27 @@ func get_label(text string) *gtk.Label {
 	return label
 }
 
-func createColumn(title string, id int) *gtk.TreeViewColumn {
-	cellRenderer, err := gtk.CellRendererTextNew()
+func createColumnImg(title string, id int) *gtk.TreeViewColumn {
+	cellRenderer, err := gtk.CellRendererPixbufNew()
+	if err != nil {
+		log.Fatal("Unable to create image cell renderer:", err)
+	}
 
+	column, err := gtk.TreeViewColumnNewWithAttribute(title, cellRenderer, "pixbuf", id)
+	if err != nil {
+		log.Fatal("Unable to create cell column:", err)
+	}
+
+	return column
+}
+
+func createColumnText(title string, id int) *gtk.TreeViewColumn {
+	cellRenderer, err := gtk.CellRendererTextNew()
 	if err != nil {
 		log.Fatal("Unable to create text cell renderer:", err)
 	}
 
 	column, err := gtk.TreeViewColumnNewWithAttribute(title, cellRenderer, "text", id)
-
 	if err != nil {
 		log.Fatal("Unable to create cell column:", err)
 	}
@@ -317,7 +351,7 @@ func createColumn(title string, id int) *gtk.TreeViewColumn {
 }
 
 func createTreeStore(general bool) *gtk.TreeStore {
-	colData := []glib.Type{glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_STRING,
+	colData := []glib.Type{glib.TYPE_INT, glib.TYPE_OBJECT, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_STRING,
 		glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_INT, glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_INT}
 
 	treeStore, err := gtk.TreeStoreNew(colData...)
@@ -410,34 +444,35 @@ func addRequestInc(treeStore *gtk.TreeStore, guid, path, icon, proto string, pid
 				}
 			}
 
-			var colVals = [16]interface{}{}
-			colVals[0] = 1
-			colVals[1] = guid
-			colVals[2] = path
-			colVals[3] = icon
-			colVals[4] = proto
-			colVals[5] = pid
+			var colVals = [COL_NO_LAST]interface{}{}
+			colVals[COL_NO_NREFS] = 1
+			colVals[COL_NO_ICON_PIXBUF] = nil
+			colVals[COL_NO_GUID] = guid
+			colVals[COL_NO_PATH] = path
+			colVals[COL_NO_ICON] = icon
+			colVals[COL_NO_PROTO] = proto
+			colVals[COL_NO_PID] = pid
 
 			if ipaddr == "" {
-				colVals[6] = "---"
+				colVals[COL_NO_DSTIP] = "---"
 			} else {
-				colVals[6] = ipaddr
+				colVals[COL_NO_DSTIP] = ipaddr
 			}
 
-			colVals[7] = hostname
-			colVals[8] = port
-			colVals[9] = uid
-			colVals[10] = gid
-			colVals[11] = origin
-			colVals[12] = timestamp
-			colVals[13] = 0
+			colVals[COL_NO_HOSTNAME] = hostname
+			colVals[COL_NO_PORT] = port
+			colVals[COL_NO_UID] = uid
+			colVals[COL_NO_GID] = gid
+			colVals[COL_NO_ORIGIN] = origin
+			colVals[COL_NO_TIMESTAMP] = timestamp
+			colVals[COL_NO_IS_SOCKS] = 0
 
 			if is_socks {
-				colVals[13] = 1
+				colVals[COL_NO_IS_SOCKS] = 1
 			}
 
-			colVals[14] = optstring
-			colVals[15] = action
+			colVals[COL_NO_OPTSTRING] = optstring
+			colVals[COL_NO_ACTION] = action
 
 			for n := 0; n < len(colVals); n++ {
 				err = globalTS.SetValue(subiter, n, colVals[n])
@@ -512,34 +547,47 @@ func addRequest(treeStore *gtk.TreeStore, guid, path, icon, proto string, pid in
 		}
 	}
 
-	var colVals = [16]interface{}{}
-	colVals[0] = 1
-	colVals[1] = guid
-	colVals[2] = path
-	colVals[3] = icon
-	colVals[4] = proto
-	colVals[5] = pid
+	var colVals = [COL_NO_LAST]interface{}{}
+	colVals[COL_NO_NREFS] = 1
+	colVals[COL_NO_ICON_PIXBUF] = nil
+	colVals[COL_NO_GUID] = guid
+	colVals[COL_NO_PATH] = path
+	colVals[COL_NO_ICON] = icon
+	colVals[COL_NO_PROTO] = proto
+	colVals[COL_NO_PID] = pid
 
 	if ipaddr == "" {
-		colVals[6] = "---"
+		colVals[COL_NO_DSTIP] = "---"
 	} else {
-		colVals[6] = ipaddr
+		colVals[COL_NO_DSTIP] = ipaddr
 	}
 
-	colVals[7] = hostname
-	colVals[8] = port
-	colVals[9] = uid
-	colVals[10] = gid
-	colVals[11] = origin
-	colVals[12] = timestamp
-	colVals[13] = 0
+	colVals[COL_NO_HOSTNAME] = hostname
+	colVals[COL_NO_PORT] = port
+	colVals[COL_NO_UID] = uid
+	colVals[COL_NO_GID] = gid
+	colVals[COL_NO_ORIGIN] = origin
+	colVals[COL_NO_TIMESTAMP] = timestamp
+	colVals[COL_NO_IS_SOCKS] = 0
 
 	if is_socks {
-		colVals[13] = 1
+		colVals[COL_NO_IS_SOCKS] = 1
 	}
 
-	colVals[14] = optstring
-	colVals[15] = action
+	colVals[COL_NO_OPTSTRING] = optstring
+	colVals[COL_NO_ACTION] = action
+
+	itheme, err := gtk.IconThemeGetDefault()
+	if err != nil {
+		log.Fatal("Could not load default icon theme:", err)
+	}
+
+	pb, err := itheme.LoadIcon(icon, 24, gtk.ICON_LOOKUP_GENERIC_FALLBACK)
+	if err != nil {
+		log.Println("Could not load icon:", err)
+	} else {
+		colVals[COL_NO_ICON_PIXBUF] = pb
+	}
 
 	for n := 0; n < len(colVals); n++ {
 		err := treeStore.SetValue(iter, n, colVals[n])
@@ -845,73 +893,73 @@ func getRuleByIdx(idx, subidx int) (ruleColumns, *gtk.TreeIter, error) {
 		return rule, nil, err
 	}
 
-	rule.nrefs, err = lsGetInt(globalTS, iter, 0)
+	rule.nrefs, err = lsGetInt(globalTS, iter, COL_NO_NREFS)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.GUID, err = lsGetStr(globalTS, iter, 1)
+	rule.GUID, err = lsGetStr(globalTS, iter, COL_NO_GUID)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.Path, err = lsGetStr(globalTS, iter, 2)
+	rule.Path, err = lsGetStr(globalTS, iter, COL_NO_PATH)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.Icon, err = lsGetStr(globalTS, iter, 3)
+	rule.Icon, err = lsGetStr(globalTS, iter, COL_NO_ICON)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.Proto, err = lsGetStr(globalTS, iter, 4)
+	rule.Proto, err = lsGetStr(globalTS, iter, COL_NO_PROTO)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.Pid, err = lsGetInt(globalTS, iter, 5)
+	rule.Pid, err = lsGetInt(globalTS, iter, COL_NO_PID)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.Target, err = lsGetStr(globalTS, iter, 6)
+	rule.Target, err = lsGetStr(globalTS, iter, COL_NO_DSTIP)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.Hostname, err = lsGetStr(globalTS, iter, 7)
+	rule.Hostname, err = lsGetStr(globalTS, iter, COL_NO_HOSTNAME)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.Port, err = lsGetInt(globalTS, iter, 8)
+	rule.Port, err = lsGetInt(globalTS, iter, COL_NO_PORT)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.UID, err = lsGetInt(globalTS, iter, 9)
+	rule.UID, err = lsGetInt(globalTS, iter, COL_NO_UID)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.GID, err = lsGetInt(globalTS, iter, 10)
+	rule.GID, err = lsGetInt(globalTS, iter, COL_NO_GID)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.Origin, err = lsGetStr(globalTS, iter, 11)
+	rule.Origin, err = lsGetStr(globalTS, iter, COL_NO_ORIGIN)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.Timestamp, err = lsGetStr(globalTS, iter, 12)
+	rule.Timestamp, err = lsGetStr(globalTS, iter, COL_NO_TIMESTAMP)
 	if err != nil {
 		return rule, nil, err
 	}
 
 	rule.IsSocks = false
-	is_socks, err := lsGetInt(globalTS, iter, 13)
+	is_socks, err := lsGetInt(globalTS, iter, COL_NO_IS_SOCKS)
 	if err != nil {
 		return rule, nil, err
 	}
@@ -920,7 +968,7 @@ func getRuleByIdx(idx, subidx int) (ruleColumns, *gtk.TreeIter, error) {
 		rule.IsSocks = true
 	}
 
-	rule.Scope, err = lsGetInt(globalTS, iter, 15)
+	rule.Scope, err = lsGetInt(globalTS, iter, COL_NO_ACTION)
 	if err != nil {
 		return rule, nil, err
 	}
@@ -1249,35 +1297,36 @@ func main() {
 	//	box.PackStart(tv, false, true, 5)
 	box.PackStart(scrollbox, false, true, 5)
 
-	tv.AppendColumn(createColumn("#", 0))
+	tv.AppendColumn(createColumnText("#", COL_NO_NREFS))
+	tv.AppendColumn(createColumnImg("", COL_NO_ICON_PIXBUF))
 
-	guidcol := createColumn("GUID", 1)
+	guidcol := createColumnText("GUID", COL_NO_GUID)
 	guidcol.SetVisible(false)
 	tv.AppendColumn(guidcol)
 
-	tv.AppendColumn(createColumn("Path", 2))
+	tv.AppendColumn(createColumnText("Path", COL_NO_PATH))
 
-	icol := createColumn("Icon", 3)
+	icol := createColumnText("Icon", COL_NO_ICON)
 	icol.SetVisible(false)
 	tv.AppendColumn(icol)
 
-	tv.AppendColumn(createColumn("Protocol", 4))
-	tv.AppendColumn(createColumn("PID", 5))
-	tv.AppendColumn(createColumn("IP Address", 6))
-	tv.AppendColumn(createColumn("Hostname", 7))
-	tv.AppendColumn(createColumn("Port", 8))
-	tv.AppendColumn(createColumn("UID", 9))
-	tv.AppendColumn(createColumn("GID", 10))
-	tv.AppendColumn(createColumn("Origin", 11))
-	tv.AppendColumn(createColumn("Timestamp", 12))
+	tv.AppendColumn(createColumnText("Protocol", COL_NO_PROTO))
+	tv.AppendColumn(createColumnText("PID", COL_NO_PID))
+	tv.AppendColumn(createColumnText("IP Address", COL_NO_DSTIP))
+	tv.AppendColumn(createColumnText("Hostname", COL_NO_HOSTNAME))
+	tv.AppendColumn(createColumnText("Port", COL_NO_PORT))
+	tv.AppendColumn(createColumnText("UID", COL_NO_UID))
+	tv.AppendColumn(createColumnText("GID", COL_NO_GID))
+	tv.AppendColumn(createColumnText("Origin", COL_NO_ORIGIN))
+	tv.AppendColumn(createColumnText("Timestamp", COL_NO_TIMESTAMP))
 
-	scol := createColumn("Is SOCKS", 13)
+	scol := createColumnText("Is SOCKS", COL_NO_IS_SOCKS)
 	scol.SetVisible(false)
 	tv.AppendColumn(scol)
 
-	tv.AppendColumn(createColumn("Details", 14))
+	tv.AppendColumn(createColumnText("Details", COL_NO_OPTSTRING))
 
-	acol := createColumn("Scope", 15)
+	acol := createColumnText("Scope", COL_NO_ACTION)
 	acol.SetVisible(false)
 	tv.AppendColumn(acol)
 
