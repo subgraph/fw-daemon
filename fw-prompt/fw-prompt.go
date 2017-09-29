@@ -25,14 +25,6 @@ type fpPreferences struct {
 	Winleft   uint
 }
 
-type decisionWaiter struct {
-	Cond  *sync.Cond
-	Lock  sync.Locker
-	Ready bool
-	Scope int
-	Rule  string
-}
-
 type ruleColumns struct {
 	nrefs     int
 	Path      string
@@ -83,7 +75,6 @@ var globalTS *gtk.TreeStore = nil
 var globalTV *gtk.TreeView
 var globalPromptLock = &sync.Mutex{}
 var globalIcon *gtk.Image
-var decisionWaiters []*decisionWaiter
 
 var editApp, editTarget, editPort, editUser, editGroup *gtk.Entry
 var comboProto *gtk.ComboBoxText
@@ -91,21 +82,6 @@ var radioOnce, radioProcess, radioParent, radioSession, radioPermanent *gtk.Radi
 var btnApprove, btnDeny, btnIgnore *gtk.Button
 var chkTLS, chkUser, chkGroup *gtk.CheckButton
 
-func dumpDecisions() {
-	return
-	fmt.Println("XXX Total of decisions pending: ", len(decisionWaiters))
-	for i := 0; i < len(decisionWaiters); i++ {
-		fmt.Printf("XXX %d ready = %v, rule = %v\n", i+1, decisionWaiters[i].Ready, decisionWaiters[i].Rule)
-	}
-}
-
-func addDecision() *decisionWaiter {
-	return nil
-	decision := decisionWaiter{Lock: &sync.Mutex{}, Ready: false, Scope: int(sgfw.APPLY_ONCE), Rule: ""}
-	decision.Cond = sync.NewCond(decision.Lock)
-	decisionWaiters = append(decisionWaiters, &decision)
-	return &decision
-}
 
 func promptInfo(msg string) {
 	dialog := gtk.MessageDialogNew(mainWin, 0, gtk.MESSAGE_INFO, gtk.BUTTONS_OK, "Displaying full log info:")
@@ -391,7 +367,7 @@ remove_outer:
 			if err != nil {
 				break remove_outer
 			} else if rule.GUID == guid {
-				removeSelectedRule(ridx, true)
+				removeSelectedRule(ridx)
 				removed = true
 				break
 			}
@@ -512,7 +488,7 @@ func addRequestAsync(treeStore *gtk.TreeStore, guid, path, icon, proto string, p
 }
 
 func addRequest(treeStore *gtk.TreeStore, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int,
-	origin, timestamp string, is_socks bool, optstring string, sandbox string, action int) *decisionWaiter {
+	origin, timestamp string, is_socks bool, optstring string, sandbox string, action int) bool {
 	if treeStore == nil {
 		treeStore = globalTS
 		waitTimes := []int{1, 2, 5, 10}
@@ -541,11 +517,10 @@ func addRequest(treeStore *gtk.TreeStore, guid, path, icon, proto string, pid in
 
 	if addRequestInc(treeStore, guid, path, icon, proto, pid, ipaddr, hostname, port, uid, gid, origin, timestamp, is_socks, optstring, sandbox, action) {
 		fmt.Println("REQUEST WAS DUPLICATE")
-		decision := addDecision()
 		globalPromptLock.Lock()
 		toggleHover()
 		globalPromptLock.Unlock()
-		return decision
+		return true
 	} else {
 		fmt.Println("NOT DUPLICATE")
 	}
@@ -556,10 +531,8 @@ func addRequest(treeStore *gtk.TreeStore, guid, path, icon, proto string, pid in
 	iter := treeStore.Append(nil)
 	storeNewEntry(treeStore, iter, guid, path, icon, proto, pid, ipaddr, hostname, port, uid, gid, origin, timestamp, is_socks, optstring, sandbox, action)
 
-	decision := addDecision()
-	dumpDecisions()
 	toggleHover()
-	return decision
+	return true
 }
 
 func setup_settings() {
@@ -663,14 +636,6 @@ func makeDecision(idx int, rule string, scope int) error {
 	}
 
 	fmt.Println("makeDecision remote result:", dres)
-
-	return nil
-	decisionWaiters[idx].Cond.L.Lock()
-	decisionWaiters[idx].Rule = rule
-	decisionWaiters[idx].Scope = scope
-	decisionWaiters[idx].Ready = true
-	decisionWaiters[idx].Cond.Signal()
-	decisionWaiters[idx].Cond.L.Unlock()
 	return nil
 }
 
@@ -800,7 +765,7 @@ func clearEditor() {
 	chkTLS.SetActive(false)
 }
 
-func removeSelectedRule(idx int, rmdecision bool) error {
+func removeSelectedRule(idx int) error {
 	fmt.Println("XXX: attempting to remove idx = ", idx)
 
 	path, err := gtk.TreePathNewFromString(fmt.Sprintf("%d", idx))
@@ -814,11 +779,6 @@ func removeSelectedRule(idx int, rmdecision bool) error {
 	}
 
 	globalTS.Remove(iter)
-
-	if rmdecision {
-		//		decisionWaiters = append(decisionWaiters[:idx], decisionWaiters[idx+1:]...)
-	}
-
 	toggleHover()
 	return nil
 }
@@ -1073,8 +1033,7 @@ func buttonAction(action string) {
 	rulestr += "|" + sgfw.RuleModeString[sgfw.RuleMode(rule.Scope)]
 	fmt.Println("RULESTR = ", rulestr)
 	makeDecision(idx, rulestr, int(rule.Scope))
-	fmt.Println("Decision made.")
-	err = removeSelectedRule(idx, true)
+	err = removeSelectedRule(idx)
 	globalPromptLock.Unlock()
 	if err == nil {
 		clearEditor()
@@ -1085,7 +1044,6 @@ func buttonAction(action string) {
 }
 
 func main() {
-	decisionWaiters = make([]*decisionWaiter, 0)
 	_, err := newDbusServer()
 	if err != nil {
 		log.Fatal("Error:", err)

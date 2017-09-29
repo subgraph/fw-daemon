@@ -11,8 +11,6 @@ fw-prompt:
 
 	more nesting for similar prompts (by application, pid, target host, etc)
 
-	remove old decision code
-
 
 gnome-shell:
 	Start using new async DBus methods
