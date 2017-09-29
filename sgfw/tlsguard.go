@@ -59,11 +59,65 @@ const TLS1_AD_USER_CANCELLED = 90
 const TLS1_AD_NO_RENEGOTIATION = 100
 const TLS1_AD_UNSUPPORTED_EXTENSION = 110
 
-const TLSEXT_TYPE_server_name = 1
+const TLSEXT_TYPE_server_name = 0
+const TLSEXT_TYPE_max_fragment_length = 1
+const TLSEXT_TYPE_client_certificate_url = 2
+const TLSEXT_TYPE_trusted_ca_keys = 3
+const TLSEXT_TYPE_truncated_hmac = 4
+const TLSEXT_TYPE_status_request = 5
+const TLSEXT_TYPE_user_mapping = 6
+const TLSEXT_TYPE_client_authz = 7
+const TLSEXT_TYPE_server_authz = 8
+const TLSEXT_TYPE_cert_type = 9
+const TLSEXT_TYPE_supported_groups = 10
+const TLSEXT_TYPE_ec_point_formats = 11
+const TLSEXT_TYPE_srp = 12
 const TLSEXT_TYPE_signature_algorithms = 13
+const TLSEXT_TYPE_use_srtp = 14
+const TLSEXT_TYPE_heartbeat = 15
+const TLSEXT_TYPE_application_layer_protocol_negotiation = 16
+const TLSEXT_TYPE_status_request_v2 = 17
+const TLSEXT_TYPE_signed_certificate_timestamp = 18
 const TLSEXT_TYPE_client_certificate_type = 19
+const TLSEXT_TYPE_server_certificate_type = 20
+const TLSEXT_TYPE_padding = 21
+const TLSEXT_TYPE_encrypt_then_mac = 22
 const TLSEXT_TYPE_extended_master_secret = 23
+const TLSEXT_TYPE_token_binding = 24
+const TLSEXT_TYPE_cached_info = 25
+const TLSEXT_TYPE_SessionTicket = 35
 const TLSEXT_TYPE_renegotiate = 0xff01
+
+var tlsExtensionMap map[uint16]string = map[uint16]string{
+	TLSEXT_TYPE_server_name:                            "TLSEXT_TYPE_server_name",
+	TLSEXT_TYPE_max_fragment_length:                    "TLSEXT_TYPE_max_fragment_length",
+	TLSEXT_TYPE_client_certificate_url:                 "TLSEXT_TYPE_client_certificate_url",
+	TLSEXT_TYPE_trusted_ca_keys:                        "TLSEXT_TYPE_trusted_ca_keys",
+	TLSEXT_TYPE_truncated_hmac:                         "TLSEXT_TYPE_truncated_hmac",
+	TLSEXT_TYPE_status_request:                         "TLSEXT_TYPE_status_request",
+	TLSEXT_TYPE_user_mapping:                           "TLSEXT_TYPE_user_mapping",
+	TLSEXT_TYPE_client_authz:                           "TLSEXT_TYPE_client_authz",
+	TLSEXT_TYPE_server_authz:                           "TLSEXT_TYPE_server_authz",
+	TLSEXT_TYPE_cert_type:                              "TLSEXT_TYPE_cert_type",
+	TLSEXT_TYPE_supported_groups:                       "TLSEXT_TYPE_supported_groups",
+	TLSEXT_TYPE_ec_point_formats:                       "TLSEXT_TYPE_ec_point_formats",
+	TLSEXT_TYPE_srp:                                    "TLSEXT_TYPE_srp",
+	TLSEXT_TYPE_signature_algorithms:                   "TLSEXT_TYPE_signature_algorithms",
+	TLSEXT_TYPE_use_srtp:                               "TLSEXT_TYPE_use_srtp",
+	TLSEXT_TYPE_heartbeat:                              "TLSEXT_TYPE_heartbeat",
+	TLSEXT_TYPE_application_layer_protocol_negotiation: "TLSEXT_TYPE_application_layer_protocol_negotiation",
+	TLSEXT_TYPE_status_request_v2:                      "TLSEXT_TYPE_status_request_v2",
+	TLSEXT_TYPE_signed_certificate_timestamp:           "TLSEXT_TYPE_signed_certificate_timestamp",
+	TLSEXT_TYPE_client_certificate_type:                "TLSEXT_TYPE_client_certificate_type",
+	TLSEXT_TYPE_server_certificate_type:                "TLSEXT_TYPE_server_certificate_type",
+	TLSEXT_TYPE_padding:                                "TLSEXT_TYPE_padding",
+	TLSEXT_TYPE_encrypt_then_mac:                       "TLSEXT_TYPE_encrypt_then_mac",
+	TLSEXT_TYPE_extended_master_secret:                 "TLSEXT_TYPE_extended_master_secret",
+	TLSEXT_TYPE_token_binding:                          "TLSEXT_TYPE_token_binding",
+	TLSEXT_TYPE_cached_info:                            "TLSEXT_TYPE_cached_info",
+	TLSEXT_TYPE_SessionTicket:                          "TLSEXT_TYPE_SessionTicket",
+	TLSEXT_TYPE_renegotiate:                            "TLSEXT_TYPE_renegotiate",
+}
 
 type connReader struct {
 	client bool
@@ -80,20 +134,72 @@ var cipherSuiteMap map[uint16]string = map[uint16]string{
 	0x0039: "TLS_DHE_RSA_WITH_AES_256_CBC_SHA",
 	0x0035: "TLS_RSA_WITH_AES_256_CBC_SHA",
 	0x0030: "TLS_DH_DSS_WITH_AES_128_CBC_SHA",
+	0x0067: "TLS_DHE_RSA_WITH_AES_128_CBC_SHA256",
+	0x006b: "TLS_DHE_RSA_WITH_AES_256_CBC_SHA256",
+	0x009e: "TLS_DHE_RSA_WITH_AES_128_GCM_SHA256",
+	0x009f: "TLS_DHE_RSA_WITH_AES_256_GCM_SHA384",
+	0x00c4: "TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256",
 	0xc009: "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA",
 	0xc00a: "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA",
 	0xc013: "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA",
 	0xc014: "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA",
+	0xc023: "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256",
+	0xc024: "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384",
+	0xc027: "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256",
+	0xc028: "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384",
 	0xc02b: "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
 	0xc02c: "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
 	0xc02f: "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
 	0xc030: "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+	0xc076: "TLS_ECDHE_RSA_WITH_CAMELLIA_128_CBC_SHA256",
+	0xc077: "TLS_ECDHE_RSA_WITH_CAMELLIA_256_CBC_SHA384",
+	0xcc13: "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
+	0xcc14: "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
+	0xcc15: "TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
 	0xcca9: "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
 	0xcca8: "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
 }
 
+var whitelistedCiphers = []string{
+	"SSL_DHE_RSA_WITH_3DES_EDE_CBC_SHA",
+	"TLS_DHE_RSA_WITH_AES_128_CBC_SHA",
+	"TLS_DHE_RSA_WITH_AES_128_GCM_SHA256",
+	"TLS_DHE_RSA_WITH_AES_256_GCM_SHA384",
+	"TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
+	"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+	"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+	"TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
+	"TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384",
+	"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+	"TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+	"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
+	"TLS_RSA_WITH_AES_128_CBC_SHA",
+	"SSL_RSA_WITH_3DES_EDE_CBC_SHA",
+}
+
+var blacklistedCiphers = []string{
+	"TLS_NULL_WITH_NULL_NULL",
+}
+
 func getCipherSuiteName(value uint) string {
 	val, ok := cipherSuiteMap[uint16(value)]
+	if !ok {
+		return "UNKNOWN"
+	}
+
+	return val
+}
+
+func gettlsExtensionName(value uint) string {
+	// 26-34: Unassigned
+	// 36-65280: Unassigned
+	// 65282-65535: Unassigned
+
+	if (value >= 26 && value <= 34) || (value >= 36 && value <= 65280) || (value >= 65282 && value <= 65535) {
+		return fmt.Sprintf("Unassigned TLS Extension %#x", value)
+	}
+
+	val, ok := tlsExtensionMap[uint16(value)]
 	if !ok {
 		return "UNKNOWN"
 	}
@@ -283,7 +389,7 @@ select_loop:
 				if cr.rtype == SSL3_RT_HANDSHAKE {
 					handshakeMessageLen := handshakeMsg[1:4]
 					handshakeMessageLenInt := int(int(handshakeMessageLen[0])<<16 | int(handshakeMessageLen[1])<<8 | int(handshakeMessageLen[2]))
-					fmt.Println("lenint = \n", handshakeMessageLenInt)
+					fmt.Println("lenint = ", handshakeMessageLenInt)
 				}
 
 				if cr.client && s != uint(client_expected) {
@@ -383,34 +489,24 @@ select_loop:
 						hello_offset += 2
 					}
 
-					var exttype uint16 = 0
-					if extlen > 2 {
-						exttype = binary.BigEndian.Uint16(handshakeMsg[hello_offset : hello_offset+2])
-						fmt.Println(SRC, "HELLO FIRST EXTENSION TYPE: ", exttype)
-					}
-
 					if cr.client {
 						ext_ctr := 0
 
 						for ext_ctr < int(extlen)-2 {
+							exttype := binary.BigEndian.Uint16(handshakeMsg[hello_offset : hello_offset+2])
 							hello_offset += 2
 							ext_ctr += 2
-							fmt.Printf("PROGRESS: %v of %v, %v of %v\n", ext_ctr, extlen, hello_offset, len(handshakeMsg))
-							exttype2 := binary.BigEndian.Uint16(handshakeMsg[hello_offset : hello_offset+2])
-							fmt.Printf("EXTTYPE = %v, 2 = %v\n", exttype, exttype2)
-							if exttype2 == TLSEXT_TYPE_server_name {
-								fmt.Println("CLIENT specified server_name extension:")
-							}
-							if exttype != TLSEXT_TYPE_signature_algorithms {
-								fmt.Println("WTF")
-							}
+							//							fmt.Printf("PROGRESS: %v of %v, %v of %v\n", ext_ctr, extlen, hello_offset, len(handshakeMsg))
+							fmt.Printf("EXTTYPE = %#x (%s)\n", exttype, gettlsExtensionName(uint(exttype)))
 
-							hello_offset += 2
-							ext_ctr += 2
+							// Should only apply to extensions returned by server
+							/*							if exttype != TLSEXT_TYPE_signature_algorithms {
+														fmt.Println("WTF")
+													}*/
+
 							inner_len := binary.BigEndian.Uint16(handshakeMsg[hello_offset : hello_offset+2])
-							//							fmt.Println("INNER LEN = ", inner_len)
-							hello_offset += int(inner_len)
-							ext_ctr += int(inner_len)
+							hello_offset += int(inner_len) + 2
+							ext_ctr += int(inner_len) + 2
 						}
 
 					}

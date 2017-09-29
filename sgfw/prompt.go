@@ -142,7 +142,7 @@ func monitorPromptFDLoop() {
 			}
 
 			inode := sb.Ino
-			fmt.Println("+++ INODE = ", inode)
+			//			fmt.Println("+++ INODE = ", inode)
 
 			if inode != fdmon.inode {
 				fmt.Printf("inode mismatch: %v vs %v\n", inode, fdmon.inode)
