@@ -58,7 +58,7 @@ func readConfig() {
 		PromptExpanded:  false,
 		PromptExpert:    false,
 		DefaultAction:   "SESSION",
-		DefaultActionID: 1,
+		DefaultActionID: 0,
 	}
 
 	if len(buf) > 0 {

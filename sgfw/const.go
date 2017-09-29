@@ -41,6 +41,7 @@ const (
 	RULE_MODE_PROCESS
 	RULE_MODE_PERMANENT
 	RULE_MODE_SYSTEM
+	RULE_MODE_ONCE
 )
 
 // RuleModeString is used to get a rule mode string from its id
@@ -49,6 +50,7 @@ var RuleModeString = map[RuleMode]string{
 	RULE_MODE_PROCESS:   "PROCESS",
 	RULE_MODE_PERMANENT: "PERMANENT",
 	RULE_MODE_SYSTEM:    "SYSTEM",
+	RULE_MODE_ONCE:      "ONCE",
 }
 
 // RuleModeValue converts a mode string to its id
@@ -57,16 +59,18 @@ var RuleModeValue = map[string]RuleMode{
 	RuleModeString[RULE_MODE_PROCESS]:   RULE_MODE_PROCESS,
 	RuleModeString[RULE_MODE_PERMANENT]: RULE_MODE_PERMANENT,
 	RuleModeString[RULE_MODE_SYSTEM]:    RULE_MODE_SYSTEM,
+	RuleModeString[RULE_MODE_ONCE]:      RULE_MODE_ONCE,
 }
 
 //FilterScope contains a filter's time scope
 type FilterScope uint16
 
 const (
-	APPLY_ONCE FilterScope = iota
-	APPLY_SESSION
+	APPLY_SESSION FilterScope = iota
 	APPLY_PROCESS
 	APPLY_FOREVER
+	APPLY_SYSTEM
+	APPLY_ONCE
 )
 
 // FilterScopeString converts a filter scope ID to its string

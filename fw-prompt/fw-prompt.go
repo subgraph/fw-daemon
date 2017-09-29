@@ -58,7 +58,7 @@ var dbuso *dbusObject
 var userPrefs fpPreferences
 var mainWin *gtk.Window
 var Notebook *gtk.Notebook
-var globalLS *gtk.ListStore = nil
+var globalTS *gtk.TreeStore = nil
 var globalTV *gtk.TreeView
 var globalPromptLock = &sync.Mutex{}
 var globalIcon *gtk.Image
@@ -316,38 +316,53 @@ func createColumn(title string, id int) *gtk.TreeViewColumn {
 	return column
 }
 
-func createListStore(general bool) *gtk.ListStore {
+func createTreeStore(general bool) *gtk.TreeStore {
 	colData := []glib.Type{glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_STRING,
 		glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_INT, glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_INT, glib.TYPE_STRING, glib.TYPE_INT}
-	listStore, err := gtk.ListStoreNew(colData...)
 
+	treeStore, err := gtk.TreeStoreNew(colData...)
 	if err != nil {
 		log.Fatal("Unable to create list store:", err)
 	}
 
-	return listStore
+	return treeStore
 }
 
-func removeRequest(listStore *gtk.ListStore, guid string) {
+func removeRequest(treeStore *gtk.TreeStore, guid string) {
 	removed := false
 
-	if globalLS == nil {
+	if globalTS == nil {
 		return
 	}
 
 	globalPromptLock.Lock()
 	defer globalPromptLock.Unlock()
 
+remove_outer:
 	/* XXX: This is horrible. Figure out how to do this properly. */
-	for ridx := 0; ridx < globalLS.IterNChildren(nil); ridx++ {
-
-		rule, _, err := getRuleByIdx(ridx)
+	for ridx := 0; ridx < globalTS.IterNChildren(nil); ridx++ {
+		nchildren := 0
+		this_iter, err := globalTS.GetIterFromString(fmt.Sprintf("%d", ridx))
 		if err != nil {
-			break
-		} else if rule.GUID == guid {
-			removeSelectedRule(ridx, true)
-			removed = true
-			break
+			log.Println("Strange condition; couldn't get iter of known tree index:", err)
+		} else {
+			nchildren = globalTS.IterNChildren(this_iter)
+		}
+
+		for cidx := 0; cidx < nchildren-1; cidx++ {
+			sidx := cidx
+			if cidx == nchildren {
+				cidx = -1
+			}
+
+			rule, _, err := getRuleByIdx(ridx, sidx)
+			if err != nil {
+				break remove_outer
+			} else if rule.GUID == guid {
+				removeSelectedRule(ridx, true)
+				removed = true
+				break
+			}
 		}
 
 	}
@@ -358,17 +373,17 @@ func removeRequest(listStore *gtk.ListStore, guid string) {
 
 }
 
-func addRequestInc(listStore *gtk.ListStore, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int,
-	origin string, is_socks bool, optstring string, sandbox string, action int) bool {
+func addRequestInc(treeStore *gtk.TreeStore, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int,
+	origin, timestamp string, is_socks bool, optstring string, sandbox string, action int) bool {
 	duplicated := false
 
 	globalPromptLock.Lock()
 	defer globalPromptLock.Unlock()
 
-	for ridx := 0; ridx < globalLS.IterNChildren(nil); ridx++ {
+	for ridx := 0; ridx < globalTS.IterNChildren(nil); ridx++ {
 
 		/* XXX: This is horrible. Figure out how to do this properly. */
-		rule, iter, err := getRuleByIdx(ridx)
+		rule, iter, err := getRuleByIdx(ridx, -1)
 		if err != nil {
 			break
 			// XXX: not compared: optstring/sandbox
@@ -376,7 +391,7 @@ func addRequestInc(listStore *gtk.ListStore, guid, path, icon, proto string, pid
 			(rule.Port == port) && (rule.UID == uid) && (rule.GID == gid) && (rule.Origin == origin) && (rule.IsSocks == is_socks) {
 			rule.nrefs++
 
-			err := globalLS.SetValue(iter, 0, rule.nrefs)
+			err := globalTS.SetValue(iter, 0, rule.nrefs)
 			if err != nil {
 				log.Println("Error creating duplicate firewall prompt entry:", err)
 				break
@@ -384,6 +399,53 @@ func addRequestInc(listStore *gtk.ListStore, guid, path, icon, proto string, pid
 
 			fmt.Println("YES REALLY DUPLICATE: ", rule.nrefs)
 			duplicated = true
+
+			subiter := globalTS.Append(iter)
+
+			if is_socks {
+				if (optstring != "") && (strings.Index(optstring, "SOCKS") == -1) {
+					optstring = "SOCKS5 / " + optstring
+				} else if optstring == "" {
+					optstring = "SOCKS5"
+				}
+			}
+
+			var colVals = [16]interface{}{}
+			colVals[0] = 1
+			colVals[1] = guid
+			colVals[2] = path
+			colVals[3] = icon
+			colVals[4] = proto
+			colVals[5] = pid
+
+			if ipaddr == "" {
+				colVals[6] = "---"
+			} else {
+				colVals[6] = ipaddr
+			}
+
+			colVals[7] = hostname
+			colVals[8] = port
+			colVals[9] = uid
+			colVals[10] = gid
+			colVals[11] = origin
+			colVals[12] = timestamp
+			colVals[13] = 0
+
+			if is_socks {
+				colVals[13] = 1
+			}
+
+			colVals[14] = optstring
+			colVals[15] = action
+
+			for n := 0; n < len(colVals); n++ {
+				err = globalTS.SetValue(subiter, n, colVals[n])
+				if err != nil {
+					log.Fatal("Unable to add row:", err)
+				}
+			}
+
 			break
 		}
 
@@ -392,27 +454,27 @@ func addRequestInc(listStore *gtk.ListStore, guid, path, icon, proto string, pid
 	return duplicated
 }
 
-func addRequestAsync(listStore *gtk.ListStore, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int,
+func addRequestAsync(treeStore *gtk.TreeStore, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int,
 	origin, timestamp string, is_socks bool, optstring string, sandbox string, action int) bool {
-	addRequest(listStore, guid, path, icon, proto, pid, ipaddr, hostname, port, uid, gid, origin, timestamp, is_socks,
+	addRequest(treeStore, guid, path, icon, proto, pid, ipaddr, hostname, port, uid, gid, origin, timestamp, is_socks,
 		optstring, sandbox, action)
 	return true
 }
 
-func addRequest(listStore *gtk.ListStore, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int,
+func addRequest(treeStore *gtk.TreeStore, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int,
 	origin, timestamp string, is_socks bool, optstring string, sandbox string, action int) *decisionWaiter {
-	if listStore == nil {
-		listStore = globalLS
+	if treeStore == nil {
+		treeStore = globalTS
 		waitTimes := []int{1, 2, 5, 10}
 
-		if listStore == nil {
+		if treeStore == nil {
 			log.Println("SGFW prompter was not ready to receive firewall request... waiting")
 
 			for _, wtime := range waitTimes {
 				time.Sleep(time.Duration(wtime) * time.Second)
-				listStore = globalLS
+				treeStore = globalTS
 
-				if listStore != nil {
+				if treeStore != nil {
 					break
 				}
 
@@ -423,11 +485,11 @@ func addRequest(listStore *gtk.ListStore, guid, path, icon, proto string, pid in
 
 	}
 
-	if listStore == nil {
+	if treeStore == nil {
 		log.Fatal("SGFW prompter GUI failed to load for unknown reasons")
 	}
 
-	if addRequestInc(listStore, guid, path, icon, proto, pid, ipaddr, hostname, port, uid, gid, origin, is_socks, optstring, sandbox, action) {
+	if addRequestInc(treeStore, guid, path, icon, proto, pid, ipaddr, hostname, port, uid, gid, origin, timestamp, is_socks, optstring, sandbox, action) {
 		fmt.Println("REQUEST WAS DUPLICATE")
 		decision := addDecision()
 		globalPromptLock.Lock()
@@ -439,7 +501,8 @@ func addRequest(listStore *gtk.ListStore, guid, path, icon, proto string, pid in
 	}
 
 	globalPromptLock.Lock()
-	iter := listStore.Append()
+	defer globalPromptLock.Unlock()
+	iter := treeStore.Append(nil)
 
 	if is_socks {
 		if (optstring != "") && (strings.Index(optstring, "SOCKS") == -1) {
@@ -449,7 +512,7 @@ func addRequest(listStore *gtk.ListStore, guid, path, icon, proto string, pid in
 		}
 	}
 
-	colVals := make([]interface{}, 16)
+	var colVals = [16]interface{}{}
 	colVals[0] = 1
 	colVals[1] = guid
 	colVals[2] = path
@@ -478,22 +541,16 @@ func addRequest(listStore *gtk.ListStore, guid, path, icon, proto string, pid in
 	colVals[14] = optstring
 	colVals[15] = action
 
-	colNums := make([]int, len(colVals))
-
 	for n := 0; n < len(colVals); n++ {
-		colNums[n] = n
-	}
-
-	err := listStore.Set(iter, colNums, colVals)
-
-	if err != nil {
-		log.Fatal("Unable to add row:", err)
+		err := treeStore.SetValue(iter, n, colVals[n])
+		if err != nil {
+			log.Fatal("Unable to add row:", err)
+		}
 	}
 
 	decision := addDecision()
 	dumpDecisions()
 	toggleHover()
-	globalPromptLock.Unlock()
 	return decision
 }
 
@@ -559,8 +616,8 @@ func setup_settings() {
 	Notebook.AppendPage(scrollbox, hLabel)
 }
 
-func lsGetStr(ls *gtk.ListStore, iter *gtk.TreeIter, idx int) (string, error) {
-	val, err := globalLS.GetValue(iter, idx)
+func lsGetStr(ls *gtk.TreeStore, iter *gtk.TreeIter, idx int) (string, error) {
+	val, err := globalTS.GetValue(iter, idx)
 	if err != nil {
 		return "", err
 	}
@@ -573,8 +630,8 @@ func lsGetStr(ls *gtk.ListStore, iter *gtk.TreeIter, idx int) (string, error) {
 	return sval, nil
 }
 
-func lsGetInt(ls *gtk.ListStore, iter *gtk.TreeIter, idx int) (int, error) {
-	val, err := globalLS.GetValue(iter, idx)
+func lsGetInt(ls *gtk.TreeStore, iter *gtk.TreeIter, idx int) (int, error) {
+	val, err := globalTS.GetValue(iter, idx)
 	if err != nil {
 		return 0, err
 	}
@@ -611,7 +668,7 @@ func makeDecision(idx int, rule string, scope int) error {
 
 /* Do we need to hold the lock while this is called? Stay safe... */
 func toggleHover() {
-	nitems := globalLS.IterNChildren(nil)
+	nitems := globalTS.IterNChildren(nil)
 
 	mainWin.SetKeepAbove(nitems > 0)
 }
@@ -743,12 +800,12 @@ func removeSelectedRule(idx int, rmdecision bool) error {
 		return err
 	}
 
-	iter, err := globalLS.GetIter(path)
+	iter, err := globalTS.GetIter(path)
 	if err != nil {
 		return err
 	}
 
-	globalLS.Remove(iter)
+	globalTS.Remove(iter)
 
 	if rmdecision {
 		//		decisionWaiters = append(decisionWaiters[:idx], decisionWaiters[idx+1:]...)
@@ -758,97 +815,103 @@ func removeSelectedRule(idx int, rmdecision bool) error {
 	return nil
 }
 
+// Needs to be locked by the caller
 func numSelections() int {
 	sel, err := globalTV.GetSelection()
 	if err != nil {
 		return -1
 	}
 
-	rows := sel.GetSelectedRows(globalLS)
+	rows := sel.GetSelectedRows(globalTS)
 	return int(rows.Length())
 }
 
 // Needs to be locked by the caller
-func getRuleByIdx(idx int) (ruleColumns, *gtk.TreeIter, error) {
+func getRuleByIdx(idx, subidx int) (ruleColumns, *gtk.TreeIter, error) {
 	rule := ruleColumns{}
+	tpath := fmt.Sprintf("%d", idx)
 
-	path, err := gtk.TreePathNewFromString(fmt.Sprintf("%d", idx))
+	if subidx != -1 {
+		tpath = fmt.Sprintf("%d:%d", idx, subidx)
+	}
+
+	path, err := gtk.TreePathNewFromString(tpath)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	iter, err := globalLS.GetIter(path)
+	iter, err := globalTS.GetIter(path)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.nrefs, err = lsGetInt(globalLS, iter, 0)
+	rule.nrefs, err = lsGetInt(globalTS, iter, 0)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.GUID, err = lsGetStr(globalLS, iter, 1)
+	rule.GUID, err = lsGetStr(globalTS, iter, 1)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.Path, err = lsGetStr(globalLS, iter, 2)
+	rule.Path, err = lsGetStr(globalTS, iter, 2)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.Icon, err = lsGetStr(globalLS, iter, 3)
+	rule.Icon, err = lsGetStr(globalTS, iter, 3)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.Proto, err = lsGetStr(globalLS, iter, 4)
+	rule.Proto, err = lsGetStr(globalTS, iter, 4)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.Pid, err = lsGetInt(globalLS, iter, 5)
+	rule.Pid, err = lsGetInt(globalTS, iter, 5)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.Target, err = lsGetStr(globalLS, iter, 6)
+	rule.Target, err = lsGetStr(globalTS, iter, 6)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.Hostname, err = lsGetStr(globalLS, iter, 7)
+	rule.Hostname, err = lsGetStr(globalTS, iter, 7)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.Port, err = lsGetInt(globalLS, iter, 8)
+	rule.Port, err = lsGetInt(globalTS, iter, 8)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.UID, err = lsGetInt(globalLS, iter, 9)
+	rule.UID, err = lsGetInt(globalTS, iter, 9)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.GID, err = lsGetInt(globalLS, iter, 10)
+	rule.GID, err = lsGetInt(globalTS, iter, 10)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.Origin, err = lsGetStr(globalLS, iter, 11)
+	rule.Origin, err = lsGetStr(globalTS, iter, 11)
 	if err != nil {
 		return rule, nil, err
 	}
 
-	rule.Timestamp, err = lsGetStr(globalLS, iter, 12)
+	rule.Timestamp, err = lsGetStr(globalTS, iter, 12)
 	if err != nil {
 		return rule, nil, err
 	}
 
 	rule.IsSocks = false
-	is_socks, err := lsGetInt(globalLS, iter, 13)
+	is_socks, err := lsGetInt(globalTS, iter, 13)
 	if err != nil {
 		return rule, nil, err
 	}
@@ -857,7 +920,7 @@ func getRuleByIdx(idx int) (ruleColumns, *gtk.TreeIter, error) {
 		rule.IsSocks = true
 	}
 
-	rule.Scope, err = lsGetInt(globalLS, iter, 15)
+	rule.Scope, err = lsGetInt(globalTS, iter, 15)
 	if err != nil {
 		return rule, nil, err
 	}
@@ -874,20 +937,35 @@ func getSelectedRule() (ruleColumns, int, error) {
 		return rule, -1, err
 	}
 
-	rows := sel.GetSelectedRows(globalLS)
+	rows := sel.GetSelectedRows(globalTS)
 
 	if rows.Length() <= 0 {
-		return rule, -1, errors.New("No selection was made")
+		return rule, -1, errors.New("no selection was made")
 	}
 
 	rdata := rows.NthData(0)
-	lIndex, err := strconv.Atoi(rdata.(*gtk.TreePath).String())
+	tpath := rdata.(*gtk.TreePath).String()
+
+	subidx := -1
+	ptoks := strings.Split(tpath, ":")
+
+	if len(ptoks) > 2 {
+		return rule, -1, errors.New("internal error parsing selected item tree path")
+	} else if len(ptoks) == 2 {
+		subidx, err = strconv.Atoi(ptoks[1])
+		if err != nil {
+			return rule, -1, err
+		}
+		tpath = ptoks[0]
+	}
+
+	lIndex, err := strconv.Atoi(tpath)
 	if err != nil {
 		return rule, -1, err
 	}
 
-	fmt.Println("lindex = ", lIndex)
-	rule, _, err = getRuleByIdx(lIndex)
+	fmt.Printf("lindex = %d : %d\n", lIndex, subidx)
+	rule, _, err = getRuleByIdx(lIndex, subidx)
 	if err != nil {
 		return rule, -1, err
 	}
@@ -1203,10 +1281,10 @@ func main() {
 	acol.SetVisible(false)
 	tv.AppendColumn(acol)
 
-	listStore := createListStore(true)
-	globalLS = listStore
+	treeStore := createTreeStore(true)
+	globalTS = treeStore
 
-	tv.SetModel(listStore)
+	tv.SetModel(treeStore)
 
 	btnApprove.Connect("clicked", func() {
 		buttonAction("ALLOW")
@@ -1242,7 +1320,7 @@ func main() {
 
 		editPort.SetText(strconv.Itoa(seldata.Port))
 		radioOnce.SetActive(seldata.Scope == int(sgfw.APPLY_ONCE))
-		radioProcess.SetSensitive(seldata.Pid > 0)
+		radioProcess.SetSensitive(seldata.Scope == int(sgfw.APPLY_PROCESS))
 		radioParent.SetActive(false)
 		radioSession.SetActive(seldata.Scope == int(sgfw.APPLY_SESSION))
 		radioPermanent.SetActive(seldata.Scope == int(sgfw.APPLY_FOREVER))

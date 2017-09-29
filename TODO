@@ -3,11 +3,15 @@ fw-daemon:
 
 	remove all stale references to SANDBOX: rules/policyForPathAndSandbox()
 
+	TLSGuard needs a lot of stuff removed
+
 
 fw-prompt:
-	scope returned by new rules is bad (always set to process)
+	apply once rules still do not work because they the DBus invocation requires the guid to be passed
 
-	Each duplicate prompt needs to be expandable into individual items
+	remove duplicate code for creating new treeview items
+
+	more nesting for similar prompts (by application, pid, target host, etc)
 
 
 gnome-shell:

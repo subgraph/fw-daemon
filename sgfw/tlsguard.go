@@ -223,7 +223,7 @@ func stripTLSData(record []byte, start_ind, end_ind int, len_ind int, len_size i
 
 	if len_size < 1 || len_size > 2 {
 		return nil
-	} else if (start_ind >= end_ind) {
+	} else if start_ind >= end_ind {
 		return nil
 	} else if len_ind >= start_ind {
 		return nil
@@ -235,7 +235,7 @@ func stripTLSData(record []byte, start_ind, end_ind int, len_ind int, len_size i
 	if len_size == 1 {
 		size = uint(rcopy[len_ind])
 	} else if len_size == 2 {
-		size = uint(binary.BigEndian.Uint16(rcopy[len_ind:len_ind+len_size]))
+		size = uint(binary.BigEndian.Uint16(rcopy[len_ind : len_ind+len_size]))
 	}
 
 	size -= uint(end_ind - start_ind)
