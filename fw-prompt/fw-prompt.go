@@ -75,7 +75,6 @@ const (
 	COL_NO_LAST
 )
 
-
 var dbuso *dbusObject
 var userPrefs fpPreferences
 var mainWin *gtk.Window
@@ -373,7 +372,6 @@ func removeRequest(treeStore *gtk.TreeStore, guid string) {
 	defer globalPromptLock.Unlock()
 
 remove_outer:
-	/* XXX: This is horrible. Figure out how to do this properly. */
 	for ridx := 0; ridx < globalTS.IterNChildren(nil); ridx++ {
 		nchildren := 0
 		this_iter, err := globalTS.GetIterFromString(fmt.Sprintf("%d", ridx))
@@ -407,6 +405,70 @@ remove_outer:
 
 }
 
+// Needs to be locked by caller
+func storeNewEntry(ts *gtk.TreeStore, iter *gtk.TreeIter, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int, origin,
+	timestamp string, is_socks bool, optstring, sandbox string, action int) {
+	var colVals = [COL_NO_LAST]interface{}{}
+
+	if is_socks {
+		if (optstring != "") && (strings.Index(optstring, "SOCKS") == -1) {
+			optstring = "SOCKS5 / " + optstring
+		} else if optstring == "" {
+			optstring = "SOCKS5"
+		}
+	}
+
+	colVals[COL_NO_NREFS] = 1
+	colVals[COL_NO_ICON_PIXBUF] = nil
+	colVals[COL_NO_GUID] = guid
+	colVals[COL_NO_PATH] = path
+	colVals[COL_NO_ICON] = icon
+	colVals[COL_NO_PROTO] = proto
+	colVals[COL_NO_PID] = pid
+
+	if ipaddr == "" {
+		colVals[COL_NO_DSTIP] = "---"
+	} else {
+		colVals[COL_NO_DSTIP] = ipaddr
+	}
+
+	colVals[COL_NO_HOSTNAME] = hostname
+	colVals[COL_NO_PORT] = port
+	colVals[COL_NO_UID] = uid
+	colVals[COL_NO_GID] = gid
+	colVals[COL_NO_ORIGIN] = origin
+	colVals[COL_NO_TIMESTAMP] = timestamp
+	colVals[COL_NO_IS_SOCKS] = 0
+
+	if is_socks {
+		colVals[COL_NO_IS_SOCKS] = 1
+	}
+
+	colVals[COL_NO_OPTSTRING] = optstring
+	colVals[COL_NO_ACTION] = action
+
+	itheme, err := gtk.IconThemeGetDefault()
+	if err != nil {
+		log.Fatal("Could not load default icon theme:", err)
+	}
+
+	pb, err := itheme.LoadIcon(icon, 24, gtk.ICON_LOOKUP_GENERIC_FALLBACK)
+	if err != nil {
+		log.Println("Could not load icon:", err)
+	} else {
+		colVals[COL_NO_ICON_PIXBUF] = pb
+	}
+
+	for n := 0; n < len(colVals); n++ {
+		err := ts.SetValue(iter, n, colVals[n])
+		if err != nil {
+			log.Fatal("Unable to add row:", err)
+		}
+	}
+
+	return
+}
+
 func addRequestInc(treeStore *gtk.TreeStore, guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int,
 	origin, timestamp string, is_socks bool, optstring string, sandbox string, action int) bool {
 	duplicated := false
@@ -415,8 +477,6 @@ func addRequestInc(treeStore *gtk.TreeStore, guid, path, icon, proto string, pid
 	defer globalPromptLock.Unlock()
 
 	for ridx := 0; ridx < globalTS.IterNChildren(nil); ridx++ {
-
-		/* XXX: This is horrible. Figure out how to do this properly. */
 		rule, iter, err := getRuleByIdx(ridx, -1)
 		if err != nil {
 			break
@@ -435,52 +495,7 @@ func addRequestInc(treeStore *gtk.TreeStore, guid, path, icon, proto string, pid
 			duplicated = true
 
 			subiter := globalTS.Append(iter)
-
-			if is_socks {
-				if (optstring != "") && (strings.Index(optstring, "SOCKS") == -1) {
-					optstring = "SOCKS5 / " + optstring
-				} else if optstring == "" {
-					optstring = "SOCKS5"
-				}
-			}
-
-			var colVals = [COL_NO_LAST]interface{}{}
-			colVals[COL_NO_NREFS] = 1
-			colVals[COL_NO_ICON_PIXBUF] = nil
-			colVals[COL_NO_GUID] = guid
-			colVals[COL_NO_PATH] = path
-			colVals[COL_NO_ICON] = icon
-			colVals[COL_NO_PROTO] = proto
-			colVals[COL_NO_PID] = pid
-
-			if ipaddr == "" {
-				colVals[COL_NO_DSTIP] = "---"
-			} else {
-				colVals[COL_NO_DSTIP] = ipaddr
-			}
-
-			colVals[COL_NO_HOSTNAME] = hostname
-			colVals[COL_NO_PORT] = port
-			colVals[COL_NO_UID] = uid
-			colVals[COL_NO_GID] = gid
-			colVals[COL_NO_ORIGIN] = origin
-			colVals[COL_NO_TIMESTAMP] = timestamp
-			colVals[COL_NO_IS_SOCKS] = 0
-
-			if is_socks {
-				colVals[COL_NO_IS_SOCKS] = 1
-			}
-
-			colVals[COL_NO_OPTSTRING] = optstring
-			colVals[COL_NO_ACTION] = action
-
-			for n := 0; n < len(colVals); n++ {
-				err = globalTS.SetValue(subiter, n, colVals[n])
-				if err != nil {
-					log.Fatal("Unable to add row:", err)
-				}
-			}
-
+			storeNewEntry(globalTS, subiter, guid, path, icon, proto, pid, ipaddr, hostname, port, uid, gid, origin, timestamp, is_socks, optstring, sandbox, action)
 			break
 		}
 
@@ -537,64 +552,9 @@ func addRequest(treeStore *gtk.TreeStore, guid, path, icon, proto string, pid in
 
 	globalPromptLock.Lock()
 	defer globalPromptLock.Unlock()
+
 	iter := treeStore.Append(nil)
-
-	if is_socks {
-		if (optstring != "") && (strings.Index(optstring, "SOCKS") == -1) {
-			optstring = "SOCKS5 / " + optstring
-		} else if optstring == "" {
-			optstring = "SOCKS5"
-		}
-	}
-
-	var colVals = [COL_NO_LAST]interface{}{}
-	colVals[COL_NO_NREFS] = 1
-	colVals[COL_NO_ICON_PIXBUF] = nil
-	colVals[COL_NO_GUID] = guid
-	colVals[COL_NO_PATH] = path
-	colVals[COL_NO_ICON] = icon
-	colVals[COL_NO_PROTO] = proto
-	colVals[COL_NO_PID] = pid
-
-	if ipaddr == "" {
-		colVals[COL_NO_DSTIP] = "---"
-	} else {
-		colVals[COL_NO_DSTIP] = ipaddr
-	}
-
-	colVals[COL_NO_HOSTNAME] = hostname
-	colVals[COL_NO_PORT] = port
-	colVals[COL_NO_UID] = uid
-	colVals[COL_NO_GID] = gid
-	colVals[COL_NO_ORIGIN] = origin
-	colVals[COL_NO_TIMESTAMP] = timestamp
-	colVals[COL_NO_IS_SOCKS] = 0
-
-	if is_socks {
-		colVals[COL_NO_IS_SOCKS] = 1
-	}
-
-	colVals[COL_NO_OPTSTRING] = optstring
-	colVals[COL_NO_ACTION] = action
-
-	itheme, err := gtk.IconThemeGetDefault()
-	if err != nil {
-		log.Fatal("Could not load default icon theme:", err)
-	}
-
-	pb, err := itheme.LoadIcon(icon, 24, gtk.ICON_LOOKUP_GENERIC_FALLBACK)
-	if err != nil {
-		log.Println("Could not load icon:", err)
-	} else {
-		colVals[COL_NO_ICON_PIXBUF] = pb
-	}
-
-	for n := 0; n < len(colVals); n++ {
-		err := treeStore.SetValue(iter, n, colVals[n])
-		if err != nil {
-			log.Fatal("Unable to add row:", err)
-		}
-	}
+	storeNewEntry(treeStore, iter, guid, path, icon, proto, pid, ipaddr, hostname, port, uid, gid, origin, timestamp, is_socks, optstring, sandbox, action)
 
 	decision := addDecision()
 	dumpDecisions()
