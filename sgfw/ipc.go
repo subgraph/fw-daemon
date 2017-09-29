@@ -337,12 +337,7 @@ const OzSocketName = "@oz-control"
 
 var bSockName = OzSocketName
 
-var messageFactory = ipc.NewMsgFactory(
-	new(ListProxiesMsg),
-	new(ListProxiesResp),
-)
-
-func clientConnect() (*ipc.MsgConn, error) {
+func init() {
 	bSockName = os.Getenv("SOCKET_NAME")
 
 	if bSockName != "" {
@@ -356,7 +351,14 @@ func clientConnect() (*ipc.MsgConn, error) {
 	} else {
 		bSockName = OzSocketName
 	}
+}
 
+var messageFactory = ipc.NewMsgFactory(
+	new(ListProxiesMsg),
+	new(ListProxiesResp),
+)
+
+func clientConnect() (*ipc.MsgConn, error) {
 	return ipc.Connect(bSockName, messageFactory, nil)
 }
 
