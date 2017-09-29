@@ -302,8 +302,9 @@ func TLSGuard(conn, conn2 net.Conn, fqdn string) error {
 	fmt.Println("-------- STARTING HANDSHAKE LOOP")
 	crChan := make(chan connReader)
 	dChan := make(chan bool, 10)
+	dChan2 := make(chan bool, 10)
 	go connectionReader(conn, true, crChan, dChan)
-	go connectionReader(conn2, false, crChan, dChan)
+	go connectionReader(conn2, false, crChan, dChan2)
 
 	client_expected := SSL3_MT_CLIENT_HELLO
 	server_expected := SSL3_MT_SERVER_HELLO
@@ -313,6 +314,7 @@ select_loop:
 		if ndone == 2 {
 			fmt.Println("DONE channel got both notifications. Terminating loop.")
 			close(dChan)
+			close(dChan2)
 			close(crChan)
 			break
 		}
@@ -631,6 +633,7 @@ select_loop:
 				if x509Valid || (s == SSL3_MT_SERVER_DONE) || (s == SSL3_MT_CERTIFICATE_REQUEST) {
 					fmt.Println("BREAKING OUT OF LOOP 1")
 					dChan <- true
+					dChan2 <- true
 					fmt.Println("BREAKING OUT OF LOOP 2")
 					break select_loop
 				}
@@ -672,6 +675,7 @@ select_loop:
 
 	//	dChan <- true
 	close(dChan)
+	close(dChan2)
 
 	if !x509Valid {
 		return errors.New("Unknown error: TLS connection could not be validated")
