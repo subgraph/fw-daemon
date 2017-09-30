@@ -261,12 +261,12 @@ func (ds *dbusServer) GetPendingRequests(policy string) (bool, *dbus.Error) {
 	return succeeded, nil
 }
 
-func (ds *dbusServer) AddRuleAsync(scope uint32, rule string, policy string) (bool, *dbus.Error) {
-	log.Warningf("AddRuleAsync %v, %v / %v\n", scope, rule, policy)
+func (ds *dbusServer) AddRuleAsync(scope uint32, rule, policy, guid string) (bool, *dbus.Error) {
+	log.Warningf("AddRuleAsync %v, %v / %v / %v\n", scope, rule, policy, guid)
 	ds.fw.lock.Lock()
 	defer ds.fw.lock.Unlock()
 
-	prule := PendingRule{rule: rule, scope: int(scope), policy: policy}
+	prule := PendingRule{rule: rule, scope: int(scope), policy: policy, guid: guid}
 
 	for pname := range ds.fw.policyMap {
 		log.Debug("+++ Adding prule to policy")

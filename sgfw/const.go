@@ -147,9 +147,3 @@ type DbusRule struct {
 	Mode    uint16
 	Sandbox string
 }
-
-/*const (
-	OZ_FWRULE_WHITELIST = iota
-	OZ_FWRULE_BLACKLIST
-	OZ_FWRULE_NONE
-) */

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"io/ioutil"
@@ -74,6 +75,7 @@ var Notebook *gtk.Notebook
 var globalTS *gtk.TreeStore = nil
 var globalTV *gtk.TreeView
 var globalPromptLock = &sync.Mutex{}
+var recentLock = &sync.Mutex{}
 var globalIcon *gtk.Image
 
 var editApp, editTarget, editPort, editUser, editGroup *gtk.Entry
@@ -81,6 +83,28 @@ var comboProto *gtk.ComboBoxText
 var radioOnce, radioProcess, radioParent, radioSession, radioPermanent *gtk.RadioButton
 var btnApprove, btnDeny, btnIgnore *gtk.Button
 var chkTLS, chkUser, chkGroup *gtk.CheckButton
+var recentlyRemoved = []string{}
+
+func wasRecentlyRemoved(guid string) bool {
+	recentLock.Lock()
+	defer recentLock.Unlock()
+
+	for gind, g := range recentlyRemoved {
+		if g == guid {
+			recentlyRemoved = append(recentlyRemoved[:gind], recentlyRemoved[gind+1:]...)
+			return true
+		}
+	}
+
+	return false
+}
+
+func addRecentlyRemoved(guid string) {
+	recentLock.Lock()
+	defer recentLock.Unlock()
+	fmt.Println("RECENTLY REMOVED: ", guid)
+	recentlyRemoved = append(recentlyRemoved, guid)
+}
 
 func promptInfo(msg string) {
 	dialog := gtk.MessageDialogNew(mainWin, 0, gtk.MESSAGE_INFO, gtk.BUTTONS_OK, "Displaying full log info:")
@@ -337,6 +361,11 @@ func createTreeStore(general bool) *gtk.TreeStore {
 }
 
 func removeRequest(treeStore *gtk.TreeStore, guid string) {
+	if wasRecentlyRemoved(guid) {
+		fmt.Printf("Entry for %s was recently removed; deleting from cache\n", guid)
+		return
+	}
+
 	removed := false
 
 	if globalTS == nil {
@@ -366,7 +395,7 @@ remove_outer:
 			if err != nil {
 				break remove_outer
 			} else if rule.GUID == guid {
-				removeSelectedRule(ridx)
+				removeSelectedRule(ridx, sidx)
 				removed = true
 				break
 			}
@@ -427,11 +456,36 @@ func storeNewEntry(ts *gtk.TreeStore, iter *gtk.TreeIter, guid, path, icon, prot
 		log.Fatal("Could not load default icon theme:", err)
 	}
 
-	pb, err := itheme.LoadIcon(icon, 24, gtk.ICON_LOOKUP_GENERIC_FALLBACK)
-	if err != nil {
-		log.Println("Could not load icon:", err)
+	make_blank := false
+	if icon != "" {
+		pb, err := itheme.LoadIcon(icon, 24, gtk.ICON_LOOKUP_GENERIC_FALLBACK)
+		if err != nil {
+			log.Println("Could not load icon:", err)
+			make_blank = true
+		} else {
+			colVals[COL_NO_ICON_PIXBUF] = pb
+		}
 	} else {
-		colVals[COL_NO_ICON_PIXBUF] = pb
+		make_blank = true
+	}
+
+	if make_blank {
+		pb, err := gdk.PixbufNew(gdk.COLORSPACE_RGB, true, 8, 24, 24)
+		if err != nil {
+			log.Println("Error creating blank icon:", err)
+		} else {
+			colVals[COL_NO_ICON_PIXBUF] = pb
+
+			img, err := gtk.ImageNewFromPixbuf(pb)
+			if err != nil {
+				log.Println("Error creating image from pixbuf:", err)
+			} else {
+				img.Clear()
+				pb = img.GetPixbuf()
+				colVals[COL_NO_ICON_PIXBUF] = pb
+			}
+		}
+
 	}
 
 	for n := 0; n < len(colVals); n++ {
@@ -466,9 +520,7 @@ func addRequestInc(treeStore *gtk.TreeStore, guid, path, icon, proto string, pid
 				break
 			}
 
-			fmt.Println("YES REALLY DUPLICATE: ", rule.nrefs)
 			duplicated = true
-
 			subiter := globalTS.Append(iter)
 			storeNewEntry(globalTS, subiter, guid, path, icon, proto, pid, ipaddr, hostname, port, uid, gid, origin, timestamp, is_socks, optstring, sandbox, action)
 			break
@@ -515,13 +567,11 @@ func addRequest(treeStore *gtk.TreeStore, guid, path, icon, proto string, pid in
 	}
 
 	if addRequestInc(treeStore, guid, path, icon, proto, pid, ipaddr, hostname, port, uid, gid, origin, timestamp, is_socks, optstring, sandbox, action) {
-		fmt.Println("REQUEST WAS DUPLICATE")
+		fmt.Println("Request was duplicate: ", guid)
 		globalPromptLock.Lock()
 		toggleHover()
 		globalPromptLock.Unlock()
 		return true
-	} else {
-		fmt.Println("NOT DUPLICATE")
 	}
 
 	globalPromptLock.Lock()
@@ -624,9 +674,9 @@ func lsGetInt(ls *gtk.TreeStore, iter *gtk.TreeIter, idx int) (int, error) {
 	return ival.(int), nil
 }
 
-func makeDecision(idx int, rule string, scope int) error {
+func makeDecision(rule string, scope int, guid string) error {
 	var dres bool
-	call := dbuso.Call("AddRuleAsync", 0, uint32(scope), rule, "*")
+	call := dbuso.Call("AddRuleAsync", 0, uint32(scope), rule, "*", guid)
 
 	err := call.Store(&dres)
 	if err != nil {
@@ -764,20 +814,86 @@ func clearEditor() {
 	chkTLS.SetActive(false)
 }
 
-func removeSelectedRule(idx int) error {
-	fmt.Println("XXX: attempting to remove idx = ", idx)
+func removeSelectedRule(idx, subidx int) error {
+	fmt.Printf("XXX: attempting to remove idx = %v, %v\n", idx, subidx)
+	ppathstr := fmt.Sprintf("%d", idx)
+	pathstr := ppathstr
 
-	path, err := gtk.TreePathNewFromString(fmt.Sprintf("%d", idx))
+	if subidx > -1 {
+		pathstr = fmt.Sprintf("%d:%d", idx, subidx)
+	}
+
+	iter, err := globalTS.GetIterFromString(pathstr)
 	if err != nil {
 		return err
 	}
 
-	iter, err := globalTS.GetIter(path)
-	if err != nil {
-		return err
+	nchildren := globalTS.IterNChildren(iter)
+
+	if nchildren >= 1 {
+		firstpath := fmt.Sprintf("%d:0", idx)
+		citer, err := globalTS.GetIterFromString(firstpath)
+		if err != nil {
+			return err
+		}
+
+		gnrefs, err := globalTS.GetValue(iter, COL_NO_NREFS)
+		if err != nil {
+			return err
+		}
+
+		vnrefs, err := gnrefs.GoValue()
+		if err != nil {
+			return err
+		}
+
+		nrefs := vnrefs.(int) - 1
+
+		for n := 0; n < COL_NO_LAST; n++ {
+			val, err := globalTS.GetValue(citer, n)
+			if err != nil {
+				return err
+			}
+
+			if n == COL_NO_NREFS {
+				err = globalTS.SetValue(iter, n, nrefs)
+			} else {
+				err = globalTS.SetValue(iter, n, val)
+			}
+
+			if err != nil {
+				return err
+			}
+		}
+
+		globalTS.Remove(citer)
+		return nil
 	}
 
 	globalTS.Remove(iter)
+
+	if subidx > -1 {
+		ppath, err := gtk.TreePathNewFromString(ppathstr)
+		if err != nil {
+			return err
+		}
+
+		piter, err := globalTS.GetIter(ppath)
+		if err != nil {
+			return err
+		}
+
+		nrefs, err := lsGetInt(globalTS, piter, COL_NO_NREFS)
+		if err != nil {
+			return err
+		}
+
+		err = globalTS.SetValue(piter, COL_NO_NREFS, nrefs-1)
+		if err != nil {
+			return err
+		}
+	}
+
 	toggleHover()
 	return nil
 }
@@ -896,18 +1012,18 @@ func getRuleByIdx(idx, subidx int) (ruleColumns, *gtk.TreeIter, error) {
 }
 
 // Needs to be locked by the caller
-func getSelectedRule() (ruleColumns, int, error) {
+func getSelectedRule() (ruleColumns, int, int, error) {
 	rule := ruleColumns{}
 
 	sel, err := globalTV.GetSelection()
 	if err != nil {
-		return rule, -1, err
+		return rule, -1, -1, err
 	}
 
 	rows := sel.GetSelectedRows(globalTS)
 
 	if rows.Length() <= 0 {
-		return rule, -1, errors.New("no selection was made")
+		return rule, -1, -1, errors.New("no selection was made")
 	}
 
 	rdata := rows.NthData(0)
@@ -917,44 +1033,56 @@ func getSelectedRule() (ruleColumns, int, error) {
 	ptoks := strings.Split(tpath, ":")
 
 	if len(ptoks) > 2 {
-		return rule, -1, errors.New("internal error parsing selected item tree path")
+		return rule, -1, -1, errors.New("internal error parsing selected item tree path")
 	} else if len(ptoks) == 2 {
 		subidx, err = strconv.Atoi(ptoks[1])
 		if err != nil {
-			return rule, -1, err
+			return rule, -1, -1, err
 		}
 		tpath = ptoks[0]
 	}
 
 	lIndex, err := strconv.Atoi(tpath)
 	if err != nil {
-		return rule, -1, err
+		return rule, -1, -1, err
 	}
 
-	fmt.Printf("lindex = %d : %d\n", lIndex, subidx)
+	//	fmt.Printf("lindex = %d : %d\n", lIndex, subidx)
 	rule, _, err = getRuleByIdx(lIndex, subidx)
 	if err != nil {
-		return rule, -1, err
+		return rule, -1, -1, err
 	}
 
-	return rule, lIndex, nil
+	return rule, lIndex, subidx, nil
 }
 
 func buttonAction(action string) {
 	globalPromptLock.Lock()
-	rule, idx, err := getSelectedRule()
+	rule, idx, subidx, err := getSelectedRule()
 	if err != nil {
 		globalPromptLock.Unlock()
 		promptError("Error occurred processing request: " + err.Error())
 		return
 	}
 
-	rule, err = createCurrentRule()
+	urule, err := createCurrentRule()
 	if err != nil {
 		globalPromptLock.Unlock()
 		promptError("Error occurred constructing new rule: " + err.Error())
 		return
 	}
+
+	// Overlay the rules
+	rule.Scope = urule.Scope
+	//rule.Path = urule.Path
+	rule.Port = urule.Port
+	rule.Target = urule.Target
+	rule.Proto = urule.Proto
+	// rule.UID = urule.UID
+	// rule.GID = urule.GID
+	// rule.Uname = urule.Uname
+	// rule.Gname = urule.Gname
+	rule.ForceTLS = urule.ForceTLS
 
 	fmt.Println("rule = ", rule)
 	rulestr := action
@@ -966,8 +1094,9 @@ func buttonAction(action string) {
 	rulestr += "|" + rule.Proto + ":" + rule.Target + ":" + strconv.Itoa(rule.Port)
 	rulestr += "|" + sgfw.RuleModeString[sgfw.RuleMode(rule.Scope)]
 	fmt.Println("RULESTR = ", rulestr)
-	makeDecision(idx, rulestr, int(rule.Scope))
-	err = removeSelectedRule(idx)
+	makeDecision(rulestr, int(rule.Scope), rule.GUID)
+	err = removeSelectedRule(idx, subidx)
+	addRecentlyRemoved(rule.GUID)
 	globalPromptLock.Unlock()
 	if err == nil {
 		clearEditor()
@@ -1087,6 +1216,7 @@ func main() {
 
 	//	globalIcon.SetFromIconName("firefox", gtk.ICON_SIZE_DND)
 	editApp = get_entry("")
+	editApp.SetEditable(false)
 	editApp.Connect("changed", toggleValidRuleState)
 	hbox.PackStart(lbl, false, false, 10)
 	hbox.PackStart(editApp, true, true, 10)
@@ -1198,7 +1328,7 @@ func main() {
 	//	tv.SetActivateOnSingleClick(true)
 	tv.Connect("row-activated", func() {
 		globalPromptLock.Lock()
-		seldata, _, err := getSelectedRule()
+		seldata, _, _, err := getSelectedRule()
 		globalPromptLock.Unlock()
 		if err != nil {
 			promptError("Unexpected error reading selected rule: " + err.Error())

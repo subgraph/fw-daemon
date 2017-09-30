@@ -10,9 +10,6 @@ fw-prompt:
 	more nesting for similar prompts (by application, pid, target host, etc)
 
 
-gnome-shell:
-	Start using new async DBus methods
-
 
 
 new go-procsnitch vendor package changes should be pushed into main project

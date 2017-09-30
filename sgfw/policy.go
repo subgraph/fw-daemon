@@ -23,17 +23,6 @@ var _interpreters = []string{
 	"bash",
 }
 
-/*type sandboxRule struct {
-	SrcIf net.IP
-	DstIP net.IP
-	DstPort uint16
-	Whitelist bool
-}
-
-var sandboxRules = []sandboxRule {
-//	{ net.IP{172,16,1,42}, net.IP{140,211,166,134}, 21, false },
-} */
-
 type pendingConnection interface {
 	policy() *Policy
 	procInfo() *procsnitch.Info
@@ -222,6 +211,7 @@ type PendingRule struct {
 	rule   string
 	scope  int
 	policy string
+	guid   string
 }
 
 type Policy struct {
@@ -313,7 +303,6 @@ func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, timestamp time.Time, pinf
 	if !FirewallConfig.LogRedact {
 		log.Infof("Lookup(%s): %s", dstip.String(), name)
 	}
-	//	fwo := matchAgainstOzRules(srcip, dstip, dstp)
 
 	result := p.rules.filterPacket(pkt, pinfo, srcip, name, optstr)
 	switch result {
@@ -331,12 +320,8 @@ func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, timestamp time.Time, pinf
 
 func (p *Policy) processPromptResult(pc pendingConnection) {
 	p.pendingQueue = append(p.pendingQueue, pc)
-	//fmt.Println("processPromptResult(): p.promptInProgress = ", p.promptInProgress)
-	//if DoMultiPrompt || (!DoMultiPrompt && !p.promptInProgress) {
-	//	if !p.promptInProgress {
 	p.promptInProgress = true
 	go p.fw.dbus.prompter.prompt(p)
-	//	}
 }
 
 func (p *Policy) nextPending() (pendingConnection, bool) {
@@ -370,6 +355,15 @@ func (p *Policy) removePending(pc pendingConnection) {
 	if len(remaining) != len(p.pendingQueue) {
 		p.pendingQueue = remaining
 	}
+}
+
+func (p *Policy) processNewRuleOnce(r *Rule, guid string) bool {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	fmt.Println("----------------------- processNewRule() ONCE")
+	p.filterPendingOne(r, guid)
+	return true
 }
 
 func (p *Policy) processNewRule(r *Rule, scope FilterScope) bool {
@@ -417,6 +411,47 @@ func (p *Policy) removeRule(r *Rule) {
 		}
 	}
 	p.rules = newRules
+}
+
+func (p *Policy) filterPendingOne(rule *Rule, guid string) {
+	remaining := []pendingConnection{}
+
+	for _, pc := range p.pendingQueue {
+		if guid != "" && guid != pc.getGUID() {
+			continue
+		}
+
+		if rule.match(pc.src(), pc.dst(), pc.dstPort(), pc.hostname(), pc.proto(), pc.procInfo().UID, pc.procInfo().GID, uidToUser(pc.procInfo().UID), gidToGroup(pc.procInfo().GID), pc.procInfo().Sandbox) {
+			prompter := pc.getPrompter()
+
+			if prompter == nil {
+				fmt.Println("-------- prompter = NULL")
+			} else {
+				call := prompter.dbusObj.Call("com.subgraph.FirewallPrompt.RemovePrompt", 0, pc.getGUID())
+				fmt.Println("CAAAAAAAAAAAAAAALL = ", call)
+			}
+
+			log.Infof("Adding rule for: %s", rule.getString(FirewallConfig.LogRedact))
+			// log.Noticef("%s > %s", rule.getString(FirewallConfig.LogRedact), pc.print())
+			if rule.rtype == RULE_ACTION_ALLOW {
+				pc.accept()
+			} else if rule.rtype == RULE_ACTION_ALLOW_TLSONLY {
+				pc.acceptTLSOnly()
+			} else {
+				srcs := pc.src().String() + ":" + strconv.Itoa(int(pc.srcPort()))
+				log.Warningf("DENIED outgoing connection attempt by %s from %s %s -> %s:%d (user prompt) %v",
+					pc.procInfo().ExePath, pc.proto(), srcs, pc.dst(), pc.dstPort, rule.rtype)
+				pc.drop()
+			}
+
+			// XXX: If matching a GUID, we can break out immediately
+		} else {
+			remaining = append(remaining, pc)
+		}
+	}
+	if len(remaining) != len(p.pendingQueue) {
+		p.pendingQueue = remaining
+	}
 }
 
 func (p *Policy) filterPending(rule *Rule) {
@@ -532,18 +567,6 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket, timestamp time.Time) {
 	*/
 	_, dstip := getPacketIPAddrs(pkt)
 	/*	_, dstp := getPacketPorts(pkt)
-		fwo := eatchAgainstOzRules(srcip, dstip, dstp)
-		log.Notice("XXX: Attempting [2] to filter packet on rules -> ", fwo)
-
-		if fwo == OZ_FWRULE_WHITELIST {
-			log.Noticef("Automatically passed through whitelisted sandbox traffic from %s to %s:%d\n", srcip, dstip, dstp)
-			pkt.Accept()
-			return
-		} else if fwo == OZ_FWRULE_BLACKLIST {
-			log.Noticef("Automatically blocking blacklisted sandbox traffic from %s to %s:%d\n", srcip, dstip, dstp)
-			pkt.SetMark(1)
-			pkt.Accept()
-			return
 		} */
 
 	ppath := "*"
@@ -942,21 +965,3 @@ func getPacketPorts(pkt *nfqueue.NFQPacket) (uint16, uint16) {
 
 	return s, d
 }
-
-/*func matchAgainstOzRules(srci, dsti net.IP, dstp uint16) int {
-
-	for i := 0; i < len(sandboxRules); i++ {
-
-	log.Notice("XXX: Attempting to match: ", srci, " / ", dsti, " / ", dstp, " | ", sandboxRules[i])
-
-		if sandboxRules[i].SrcIf.Equal(srci) && sandboxRules[i].DstIP.Equal(dsti) && sandboxRules[i].DstPort == dstp {
-			if sandboxRules[i].Whitelist {
-				return OZ_FWRULE_WHITELIST
-			}
-			return OZ_FWRULE_BLACKLIST
-		}
-
-	}
-
-	return OZ_FWRULE_NONE
-} */

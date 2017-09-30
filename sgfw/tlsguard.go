@@ -592,7 +592,6 @@ select_loop:
 
 				if !cr.client && s == SSL3_MT_HELLO_REQUEST {
 					fmt.Println("Server sent hello request")
-					continue
 				}
 
 				if s > SSL3_MT_CERTIFICATE_STATUS {

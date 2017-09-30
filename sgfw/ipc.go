@@ -139,19 +139,6 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 				c.Write([]byte(ruledesc))
 			}
 
-			/*			for i := 0; i < len(sandboxRules); i++ {
-						rulestr := ""
-
-						if sandboxRules[i].Whitelist {
-							rulestr += "whitelist"
-						} else {
-							rulestr += "blacklist"
-						}
-
-						rulestr += " " + sandboxRules[i].SrcIf.String() + " -> " + sandboxRules[i].DstIP.String() + " : " + strconv.Itoa(int(sandboxRules[i].DstPort)) + "\n"
-						c.Write([]byte(rulestr))
-					} */
-
 			return
 		} else {
 			tokens := strings.Split(data, " ")
