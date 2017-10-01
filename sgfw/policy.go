@@ -656,6 +656,7 @@ func readFileDirect(filename string) ([]byte, error) {
 
 func getAllProcNetDataLocal() ([]string, error) {
 	data := ""
+	OzInitPidsLock.Lock()
 
 	for i := 0; i < len(OzInitPids); i++ {
 		fname := fmt.Sprintf("/proc/%d/net/tcp", OzInitPids[i])
@@ -669,6 +670,8 @@ func getAllProcNetDataLocal() ([]string, error) {
 		}
 
 	}
+
+	OzInitPidsLock.Unlock()
 
 	lines := strings.Split(data, "\n")
 	rlines := make([]string, 0)
@@ -715,6 +718,7 @@ func LookupSandboxProc(srcip net.IP, srcp uint16, dstip net.IP, dstp uint16, pro
 	var res *procsnitch.Info = nil
 	var optstr string
 	removePids := make([]int, 0)
+	OzInitPidsLock.Lock()
 
 	for i := 0; i < len(OzInitPids); i++ {
 		data := ""
@@ -769,6 +773,8 @@ func LookupSandboxProc(srcip net.IP, srcp uint16, dstip net.IP, dstp uint16, pro
 
 	}
 
+	OzInitPidsLock.Unlock()
+
 	for _, p := range removePids {
 		removeInitPid(p)
 	}
@@ -820,6 +826,7 @@ func findProcessForPacket(pkt *nfqueue.NFQPacket, reverse bool, strictness int) 
 
 	if res == nil {
 		removePids := make([]int, 0)
+		OzInitPidsLock.Lock()
 
 		for i := 0; i < len(OzInitPids); i++ {
 			data := ""
@@ -867,6 +874,8 @@ func findProcessForPacket(pkt *nfqueue.NFQPacket, reverse bool, strictness int) 
 			}
 
 		}
+
+		OzInitPidsLock.Unlock()
 
 		for _, p := range removePids {
 			removeInitPid(p)

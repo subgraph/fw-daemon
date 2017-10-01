@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/subgraph/oz/ipc"
 )
@@ -21,9 +22,14 @@ type OzInitProc struct {
 }
 
 var OzInitPids []OzInitProc = []OzInitProc{}
+var OzInitPidsLock = sync.Mutex{}
+
 
 func addInitPid(pid int, name string, sboxid int) {
 	fmt.Println("::::::::::: init pid added: ", pid, " -> ", name)
+	OzInitPidsLock.Lock()
+	defer OzInitPidsLock.Unlock()
+
 	for i := 0; i < len(OzInitPids); i++ {
 		if OzInitPids[i].Pid == pid {
 			return
@@ -36,6 +42,9 @@ func addInitPid(pid int, name string, sboxid int) {
 
 func removeInitPid(pid int) {
 	fmt.Println("::::::::::: removing PID: ", pid)
+	OzInitPidsLock.Lock()
+	defer OzInitPidsLock.Unlock()
+
 	for i := 0; i < len(OzInitPids); i++ {
 		if OzInitPids[i].Pid == pid {
 			OzInitPids = append(OzInitPids[:i], OzInitPids[i+1:]...)

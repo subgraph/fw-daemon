@@ -5,8 +5,6 @@ fw-daemon:
 
 
 fw-prompt:
-	apply once rules still do not work because they the DBus invocation requires the guid to be passed
-
 	more nesting for similar prompts (by application, pid, target host, etc)
 
 
