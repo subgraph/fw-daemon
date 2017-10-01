@@ -61,6 +61,9 @@ func (p *prompter) processNextPacket() bool {
 		p.lock.Lock()
 		pc, empty = p.nextConnection()
 		p.lock.Unlock()
+		if pc != nil {
+			fmt.Println("GOT NON NIL")
+		}
 		//fmt.Println("XXX: processNextPacket() loop; empty = ", empty, " / pc = ", pc)
 		if pc == nil && empty {
 			return false
@@ -142,7 +145,7 @@ func monitorPromptFDLoop() {
 			}
 
 			inode := sb.Ino
-			fmt.Println("+++ INODE = ", inode)
+			//			fmt.Println("+++ INODE = ", inode)
 
 			if inode != fdmon.inode {
 				fmt.Printf("inode mismatch: %v vs %v\n", inode, fdmon.inode)
@@ -268,38 +271,6 @@ func (p *prompter) processConnection(pc pendingConnection) {
 
 	return
 
-	/*	p.dbusObj.Go("com.subgraph.FirewallPrompt.RequestPrompt", 0, callChan,
-				pc.getGUID(),
-				policy.application,
-				policy.icon,
-				policy.path,
-				addr,
-				int32(pc.dstPort()),
-				dststr,
-				pc.src().String(),
-				pc.proto(),
-				int32(pc.procInfo().UID),
-				int32(pc.procInfo().GID),
-				uidToUser(pc.procInfo().UID),
-				gidToGroup(pc.procInfo().GID),
-				int32(pc.procInfo().Pid),
-				pc.sandbox(),
-				pc.socks(),
-				pc.getOptString(),
-				FirewallConfig.PromptExpanded,
-				FirewallConfig.PromptExpert,
-				int32(FirewallConfig.DefaultActionID))
-
-			saveChannel(callChan, false, true)
-
-		/*	err := call.Store(&scope, &rule)
-			if err != nil {
-				log.Warningf("Error sending dbus RequestPrompt message: %v", err)
-				policy.removePending(pc)
-				pc.drop()
-				return
-			} */
-
 	// the prompt sends:
 	// ALLOW|dest or DENY|dest
 	//
@@ -370,6 +341,7 @@ func (p *prompter) nextConnection() (pendingConnection, bool) {
 	fmt.Println("policy queue len = ", len(p.policyQueue))
 
 	for pind < len(p.policyQueue) {
+		fmt.Printf("policy loop %d of %d\n", pind, len(p.policyQueue))
 		//fmt.Printf("XXX: pind = %v of %v\n", pind, len(p.policyQueue))
 		policy := p.policyQueue[pind]
 		pc, qempty := policy.nextPending()
@@ -379,21 +351,54 @@ func (p *prompter) nextConnection() (pendingConnection, bool) {
 			continue
 		} else {
 			pind++
+
+			pendingOnce := make([]PendingRule, 0)
+			pendingOther := make([]PendingRule, 0)
+
+			for _, r := range policy.rulesPending {
+				if r.scope == int(APPLY_ONCE) {
+					pendingOnce = append(pendingOnce, r)
+				} else {
+					pendingOther = append(pendingOther, r)
+				}
+			}
+			fmt.Printf("# pending once = %d, other = %d, pc = %p / policy = %p\n", len(pendingOnce), len(pendingOther), pc, policy)
+			policy.rulesPending = pendingOther
+
+			// One time filters are all applied right here, at once.
+			for _, pr := range pendingOnce {
+				toks := strings.Split(pr.rule, "|")
+				sandbox := ""
+
+				if len(toks) > 2 {
+					sandbox = toks[2]
+				}
+
+				tempRule := fmt.Sprintf("%s|%s", toks[0], toks[1])
+				tempRule += "||-1:-1|" + sandbox + "|"
+
+				r, err := policy.parseRule(tempRule, false)
+				if err != nil {
+					log.Warningf("Error parsing rule string returned from dbus RequestPrompt: %v", err)
+					continue
+				}
+
+				r.mode = RuleMode(pr.scope)
+				fmt.Println("+++++++ processing one time rule: ", pr.rule)
+				policy.processNewRuleOnce(r, pr.guid)
+			}
+
 			//			if pc == nil && !qempty {
-
 			if len(policy.rulesPending) > 0 {
-				fmt.Println("policy rules pending = ", len(policy.rulesPending))
-
+				fmt.Println("non/once policy rules pending = ", len(policy.rulesPending))
 				prule := policy.rulesPending[0]
 				policy.rulesPending = append(policy.rulesPending[:0], policy.rulesPending[1:]...)
-
 				toks := strings.Split(prule.rule, "|")
 				sandbox := ""
 
 				if len(toks) > 2 {
 					sandbox = toks[2]
 				}
-				sandbox += ""
 
 				tempRule := fmt.Sprintf("%s|%s", toks[0], toks[1])
 				tempRule += "||-1:-1|" + sandbox + "|"

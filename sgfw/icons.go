@@ -85,5 +85,14 @@ func loadDesktopFile(path string) {
 			icon: icon,
 			name: name,
 		}
+
+		lname := exec
+		for i := 0; i < 5; i++ {
+			lname, err = os.Readlink(lname)
+			if err == nil {
+				entryMap[lname] = entryMap[exec]
+			}
+		}
+
 	}
 }

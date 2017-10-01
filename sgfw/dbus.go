@@ -199,18 +199,19 @@ func (ds *dbusServer) DeleteRule(id uint32) *dbus.Error {
 	return nil
 }
 
-func (ds *dbusServer) GetPendingRequests(policy string) ([]string, *dbus.Error) {
+func (ds *dbusServer) GetPendingRequests(policy string) (bool, *dbus.Error) {
+	succeeded := true
+
 	log.Debug("+++ GetPendingRequests()")
 	ds.fw.lock.Lock()
 	defer ds.fw.lock.Unlock()
-
-	pending_data := make([]string, 0)
 
 	for pname := range ds.fw.policyMap {
 		policy := ds.fw.policyMap[pname]
 		pqueue := policy.pendingQueue
 
 		for _, pc := range pqueue {
+			var dres bool
 			addr := pc.hostname()
 			if addr == "" {
 				addr = pc.dst().String()
@@ -224,40 +225,48 @@ func (ds *dbusServer) GetPendingRequests(policy string) ([]string, *dbus.Error) 
 				dststr = addr + " (via proxy resolver)"
 			}
 
-			pstr := ""
-			pstr += pc.getGUID() + "|"
-			pstr += policy.application + "|"
-			pstr += policy.icon + "|"
-			pstr += policy.path + "|"
-			pstr += addr + "|"
-			pstr += strconv.FormatUint(uint64(pc.dstPort()), 10) + "|"
-			pstr += dststr + "|"
-			pstr += pc.src().String() + "|"
-			pstr += pc.proto() + "|"
-			pstr += strconv.FormatInt(int64(pc.procInfo().UID), 10) + "|"
-			pstr += strconv.FormatInt(int64(pc.procInfo().GID), 10) + "|"
-			pstr += uidToUser(pc.procInfo().UID) + "|"
-			pstr += gidToGroup(pc.procInfo().GID) + "|"
-			pstr += strconv.FormatInt(int64(pc.procInfo().Pid), 10) + "|"
-			pstr += pc.sandbox() + "|"
-			pstr += strconv.FormatBool(pc.socks()) + "|"
-			pstr += pc.getTimestamp() + "|"
-			pstr += pc.getOptString() + "|"
-			pstr += strconv.FormatUint(uint64(FirewallConfig.DefaultActionID), 10)
-			pending_data = append(pending_data, pstr)
+			call := ds.prompter.dbusObj.Call("com.subgraph.FirewallPrompt.RequestPromptAsync", 0,
+				pc.getGUID(),
+				policy.application,
+				policy.icon,
+				policy.path,
+				addr,
+				int32(pc.dstPort()),
+				dststr,
+				pc.src().String(),
+				pc.proto(),
+				int32(pc.procInfo().UID),
+				int32(pc.procInfo().GID),
+				uidToUser(pc.procInfo().UID),
+				gidToGroup(pc.procInfo().GID),
+				int32(pc.procInfo().Pid),
+				pc.sandbox(),
+				pc.socks(),
+				pc.getTimestamp(),
+				pc.getOptString(),
+				FirewallConfig.PromptExpanded,
+				FirewallConfig.PromptExpert,
+				int32(FirewallConfig.DefaultActionID))
+
+			err := call.Store(&dres)
+			if err != nil {
+				log.Warningf("Error sending DBus async pending RequestPrompt message: %v", err)
+				succeeded = false
+			}
+
 		}
 
 	}
 
-	return pending_data, nil
+	return succeeded, nil
 }
 
-func (ds *dbusServer) AddRuleAsync(scope uint32, rule string, policy string) (bool, *dbus.Error) {
-	log.Warningf("AddRuleAsync %v, %v / %v\n", scope, rule, policy)
+func (ds *dbusServer) AddRuleAsync(scope uint32, rule, policy, guid string) (bool, *dbus.Error) {
+	log.Warningf("AddRuleAsync %v, %v / %v / %v\n", scope, rule, policy, guid)
 	ds.fw.lock.Lock()
 	defer ds.fw.lock.Unlock()
 
-	prule := PendingRule{rule: rule, scope: int(scope), policy: policy}
+	prule := PendingRule{rule: rule, scope: int(scope), policy: policy, guid: guid}
 
 	for pname := range ds.fw.policyMap {
 		log.Debug("+++ Adding prule to policy")

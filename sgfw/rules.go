@@ -50,6 +50,7 @@ func (r *Rule) getString(redact bool) string {
 	if r.rtype == RULE_ACTION_ALLOW || r.rtype == RULE_ACTION_ALLOW_TLSONLY {
 		rtype = RuleActionString[r.rtype]
 	}
+
 	rmode := "|" + RuleModeString[r.mode]
 	protostr := ""
 
@@ -247,7 +248,7 @@ func (r *Rule) parse(s string) bool {
 	r.saddr = nil
 	parts := strings.Split(s, "|")
 	if len(parts) < 4 || len(parts) > 6 {
-		log.Notice("invalid number ", len(parts), " of rule parts in line ", s)
+		log.Notice("Error: invalid number ", len(parts), " of rule parts in line ", s)
 		return false
 	}
 	if parts[2] == "SYSTEM" {
@@ -275,7 +276,7 @@ func (r *Rule) parse(s string) bool {
 		r.saddr = net.ParseIP(parts[5])
 
 		if r.saddr == nil {
-			log.Notice("invalid source IP ", parts[5], " in line ", s)
+			log.Notice("Error: invalid source IP ", parts[5], " in line ", s)
 			return false
 		}
 

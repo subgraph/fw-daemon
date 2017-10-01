@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/subgraph/oz/ipc"
 )
@@ -21,9 +22,14 @@ type OzInitProc struct {
 }
 
 var OzInitPids []OzInitProc = []OzInitProc{}
+var OzInitPidsLock = sync.Mutex{}
+
 
 func addInitPid(pid int, name string, sboxid int) {
 	fmt.Println("::::::::::: init pid added: ", pid, " -> ", name)
+	OzInitPidsLock.Lock()
+	defer OzInitPidsLock.Unlock()
+
 	for i := 0; i < len(OzInitPids); i++ {
 		if OzInitPids[i].Pid == pid {
 			return
@@ -36,6 +42,9 @@ func addInitPid(pid int, name string, sboxid int) {
 
 func removeInitPid(pid int) {
 	fmt.Println("::::::::::: removing PID: ", pid)
+	OzInitPidsLock.Lock()
+	defer OzInitPidsLock.Unlock()
+
 	for i := 0; i < len(OzInitPids); i++ {
 		if OzInitPids[i].Pid == pid {
 			OzInitPids = append(OzInitPids[:i], OzInitPids[i+1:]...)
@@ -138,19 +147,6 @@ func ReceiverLoop(fw *Firewall, c net.Conn) {
 				ruledesc := fmt.Sprintf("id %v, %v | %v, src:%v -> %v%v: %v\n", rl[r].id, RuleModeString[rl[r].mode], RuleActionString[rl[r].rtype], rl[r].saddr, rl[r].addr, hostname, portstr)
 				c.Write([]byte(ruledesc))
 			}
-
-			/*			for i := 0; i < len(sandboxRules); i++ {
-						rulestr := ""
-
-						if sandboxRules[i].Whitelist {
-							rulestr += "whitelist"
-						} else {
-							rulestr += "blacklist"
-						}
-
-						rulestr += " " + sandboxRules[i].SrcIf.String() + " -> " + sandboxRules[i].DstIP.String() + " : " + strconv.Itoa(int(sandboxRules[i].DstPort)) + "\n"
-						c.Write([]byte(rulestr))
-					} */
 
 			return
 		} else {
@@ -337,12 +333,7 @@ const OzSocketName = "@oz-control"
 
 var bSockName = OzSocketName
 
-var messageFactory = ipc.NewMsgFactory(
-	new(ListProxiesMsg),
-	new(ListProxiesResp),
-)
-
-func clientConnect() (*ipc.MsgConn, error) {
+func init() {
 	bSockName = os.Getenv("SOCKET_NAME")
 
 	if bSockName != "" {
@@ -356,7 +347,14 @@ func clientConnect() (*ipc.MsgConn, error) {
 	} else {
 		bSockName = OzSocketName
 	}
+}
 
+var messageFactory = ipc.NewMsgFactory(
+	new(ListProxiesMsg),
+	new(ListProxiesResp),
+)
+
+func clientConnect() (*ipc.MsgConn, error) {
 	return ipc.Connect(bSockName, messageFactory, nil)
 }
 
