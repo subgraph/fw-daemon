@@ -20,6 +20,30 @@ _Application firewalls_ cannot prevent all malicious code from connecting to the
 Sophisticated malicious code can subvert the _allowed_ connections to bypass the firewall.
 However, the firewall may alert the user of connection attempts by less sophisticated malicious code.
 
+The configuration settings for Subgraph Firewall are stored in /etc/sgfw.
+
+From /etc/sgfw/sgfw.conf:
+
+Log level specifies the level of verbosity of logging:
+
+		LogLevel = "NOTICE"
+    
+Log redaction this tells SGFW to write destination hostnames to system logs, or not:
+
+		LogRedact = true / false
+
+PromptExpanded controls the level of detail in the prompt:
+
+		PromptExpanded = true / false
+    
+PromptExpert enables or disables "export mode":
+
+		PromptExpert = true / false
+    
+Specifies the default rule action:
+
+		DefaultAction = "SESSION"
+
 Read more in the [Subgraph OS Handbook](https://subgraph.com/sgos-handbook/sgos_handbook.shtml#monitoring-outgoing-connections-with-subgraph-firewall).
 
 
