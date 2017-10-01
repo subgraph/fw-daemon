@@ -404,16 +404,20 @@ func (c *socksChainSession) handleConnect(tls bool) {
 func (c *socksChainSession) forwardTraffic(tls bool) {
 	if tls == true {
 		err := TLSGuard(c.clientConn, c.upstreamConn, c.req.Addr.addrStr)
+		dest := STR_REDACTED
+	        if !FirewallConfig.LogRedact {
+			dest = c.req.Addr.addrStr
+        	}
 
 		if err != nil {
 			if c.pinfo.Sandbox != "" {
-				log.Errorf("TLSGuard violation: Dropping traffic from %s (sandbox: %s) to %s: %v", c.pinfo.ExePath, c.pinfo.Sandbox, c.req.Addr.addrStr, err)
+				log.Errorf("TLSGuard violation: Dropping traffic from %s (sandbox: %s) to %s: %v", c.pinfo.ExePath, c.pinfo.Sandbox, dest, err)
 			} else {
-				log.Errorf("TLSGuard violation: Dropping traffic from %s (unsandboxed) to %s: %v", c.pinfo.ExePath, c.req.Addr.addrStr, err)
+				log.Errorf("TLSGuard violation: Dropping traffic from %s (unsandboxed) to %s: %v", c.pinfo.ExePath, dest, err)
 			}
 			return
 		} else {
-			log.Notice("TLSGuard approved certificate presented for connection to: ", c.req.Addr.addrStr)
+			log.Notice("TLSGuard approved certificate presented for connection to: ", dest)
 		}
 	}
 
