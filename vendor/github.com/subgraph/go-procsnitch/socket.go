@@ -154,7 +154,7 @@ func findUDPSocketAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort ui
 									ifip = x.IP
 							}
 							if ss.local.ip.Equal(ifip) {
-								fmt.Printf("Matched on UDP socket bound to %v:%d\n",ifip,srcPort)
+								// fmt.Printf("Matched on UDP socket bound to %v:%d\n",ifip,srcPort)
 								return true
 							}
 						}
