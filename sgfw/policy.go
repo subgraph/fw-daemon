@@ -252,7 +252,6 @@ func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, pinfo *procsnitch.Info, o
 	dstip := net.IP(dstb)
 	srcip := net.IP(pkt.Packet.NetworkLayer().NetworkFlow().Src().Raw())
 	name := p.fw.dns.Lookup(dstip, pinfo.Pid)
-	log.Infof("Lookup(%s): %s", dstip.String(), name)
 
 	if !FirewallConfig.LogRedact {
 		log.Infof("Lookup(%s): %s", dstip.String(), name)
@@ -380,8 +379,12 @@ func (p *Policy) filterPending(rule *Rule) {
 				pc.acceptTLSOnly()
 			} else {
 				srcs := pc.src().String() + ":" + strconv.Itoa(int(pc.srcPort()))
-				log.Warningf("DENIED outgoing connection attempt by %s from %s %s -> %s:%d (user prompt) %v",
-					pc.procInfo().ExePath, pc.proto(), srcs, pc.dst(), pc.dstPort, rule.rtype)
+				dests := STR_REDACTED
+        			if !FirewallConfig.LogRedact {
+					dests = fmt.Sprintf("%s%d",pc.dst(), pc.dstPort)
+        			}
+				log.Warningf("DENIED outgoing connection attempt by %s from %s %s -> %s (user prompt) %v",
+					pc.procInfo().ExePath, pc.proto(), srcs, dests, rule.rtype)
 				pc.drop()
 			}
 		} else {
@@ -573,6 +576,8 @@ func readFileDirect(filename string) ([]byte, error) {
 func getAllProcNetDataLocal() ([]string, error) {
 	data := ""
 
+	OzInitPidsLock.Lock()
+
 	for i := 0; i < len(OzInitPids); i++ {
 		fname := fmt.Sprintf("/proc/%d/net/tcp", OzInitPids[i])
 		//fmt.Println("XXX: opening: ", fname)
@@ -583,6 +588,8 @@ func getAllProcNetDataLocal() ([]string, error) {
 		} else {
 			data += string(bdata)
 		}
+
+	OzInitPidsLock.Unlock()
 
 	}
 
@@ -631,6 +638,7 @@ func LookupSandboxProc(srcip net.IP, srcp uint16, dstip net.IP, dstp uint16, pro
 	var res *procsnitch.Info = nil
 	var optstr string
 	removePids := make([]int, 0)
+	OzInitPidsLock.Lock()
 
 	for i := 0; i < len(OzInitPids); i++ {
 		data := ""
@@ -684,6 +692,8 @@ func LookupSandboxProc(srcip net.IP, srcp uint16, dstip net.IP, dstp uint16, pro
 		}
 
 	}
+
+	OzInitPidsLock.Unlock()
 
 	for _, p := range removePids {
 		removeInitPid(p)
