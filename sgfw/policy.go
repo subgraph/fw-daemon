@@ -298,7 +298,6 @@ func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, timestamp time.Time, pinf
 	}*/
 
 	name := p.fw.dns.Lookup(dstip, pinfo.Pid)
-	log.Infof("Lookup(%s): %s", dstip.String(), name)
 
 	if !FirewallConfig.LogRedact {
 		log.Infof("Lookup(%s): %s", dstip.String(), name)
@@ -475,8 +474,12 @@ func (p *Policy) filterPending(rule *Rule) {
 				pc.acceptTLSOnly()
 			} else {
 				srcs := pc.src().String() + ":" + strconv.Itoa(int(pc.srcPort()))
-				log.Warningf("DENIED outgoing connection attempt by %s from %s %s -> %s:%d (user prompt) %v",
-					pc.procInfo().ExePath, pc.proto(), srcs, pc.dst(), pc.dstPort, rule.rtype)
+				dests := STR_REDACTED
+				if !FirewallConfig.LogRedact {
+					dests = fmt.Sprintf("%s%d",pc.dst(), pc.dstPort)
+				}
+				log.Warningf("DENIED outgoing connection attempt by %s from %s %s -> %s (user prompt) %v",
+					pc.procInfo().ExePath, pc.proto(), srcs, dests, rule.rtype)
 				pc.drop()
 			}
 		} else {

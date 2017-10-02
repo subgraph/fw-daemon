@@ -328,7 +328,7 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		r.mode = RULE_MODE_PERMANENT
 		policy.fw.saveRules()
 	}
-	log.Warningf("Prompt returning rule: %v", tempRule)
+	//log.Warningf("Prompt returning rule: %v", tempRule)
 	dbusp.alertRule("sgfw prompt added new rule")
 }
 
@@ -434,7 +434,7 @@ func (p *prompter) nextConnection() (pendingConnection, bool) {
 						r.mode = RULE_MODE_PERMANENT
 						policy.fw.saveRules()
 					}
-					log.Warningf("Prompt returning rule: %v", tempRule)
+					//log.Warningf("Prompt returning rule: %v", tempRule)
 					dbusp.alertRule("sgfw prompt added new rule")
 				}
 

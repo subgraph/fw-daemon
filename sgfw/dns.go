@@ -69,7 +69,9 @@ func (dc *dnsCache) processDNS(pkt *nfqueue.NFQPacket) {
 			pinfo, _ = findProcessForPacket(pkt, true, procsnitch.MATCH_LOOSEST)
 
 			if pinfo == nil {
-				log.Warningf("Skipping attempted DNS cache entry for process that can't be found: %v -> %v\n", q.Name, dns.answer)
+				if !FirewallConfig.LogRedact {
+					log.Warningf("Skipping attempted DNS cache entry for process that can't be found: %v -> %v\n", q.Name, dns.answer)
+				}
 				return
 			}
 		}
@@ -77,7 +79,11 @@ func (dc *dnsCache) processDNS(pkt *nfqueue.NFQPacket) {
 		dc.processRecordAddress(q.Name, dns.answer, pinfo.Pid)
 		return
 	}
-	log.Infof("Unhandled DNS message: %v", dns)
+	if !FirewallConfig.LogRedact {
+		log.Infof("Unhandled DNS message: %v", dns)
+	} else {
+		log.Infof("Unhandled DNS message [redacted]")
+	}
 
 }
 
@@ -118,7 +124,11 @@ func (dc *dnsCache) processRecordAddress(name string, answers []dnsRR, pid int) 
 		case *dnsRR_CNAME:
 			// Not that exotic; just ignore it
 		default:
-			log.Warningf("Unexpected RR type in answer section of A response: %v", rec)
+			if !FirewallConfig.LogRedact {
+				log.Warningf("Unexpected RR type in answer section of A response: %v", rec)
+			} else {
+				log.Warningf("Unexpected RR type in answer section of A response: [redacted]")
+			}
 		}
 
 		if aBytes == nil {
@@ -134,7 +144,8 @@ func (dc *dnsCache) processRecordAddress(name string, answers []dnsRR, pid int) 
 		if pid < 0 {
 			pid = 0
 		}
-		log.Noticef("______ Adding to dns map: %s: %s -> pid %d", name, ip, pid)
+
+//		log.Noticef("______ Adding to dns map: %s: %s -> pid %d", name, ip, pid)
 
 		_, ok := dc.ipMap[pid]
 		if !ok {
@@ -169,8 +180,10 @@ func (dc *dnsCache) Lookup(ip net.IP, pid int) string {
 				// log.Noticef("XXX: LOOKUP on %v / %v = %v, ttl = %v / %v\n", pid, ip.String(), entry.name, entry.ttl, entry.exp)
 				return entry.name
 			} else {
-				log.Warningf("Skipping expired per-pid (%d) DNS cache entry: %s -> %s / exp. %v (%ds)\n",
+				if !FirewallConfig.LogRedact {
+					log.Warningf("Skipping expired per-pid (%d) DNS cache entry: %s -> %s / exp. %v (%ds)\n",
 					pid, ip.String(), entry.name, entry.exp, entry.ttl)
+				}
 			}
 		}
 	}
@@ -182,8 +195,10 @@ func (dc *dnsCache) Lookup(ip net.IP, pid int) string {
 			str = entry.name
 			// log.Noticef("XXX: LOOKUP on %v / 0 RETURNING %v, ttl = %v / %v\n", ip.String(), str, entry.ttl, entry.exp)
 		} else {
-			log.Warningf("Skipping expired global DNS cache entry: %s -> %s / exp. %v (%ds)\n",
+			if !FirewallConfig.LogRedact {
+				log.Warningf("Skipping expired global DNS cache entry: %s -> %s / exp. %v (%ds)\n",
 				ip.String(), entry.name, entry.exp, entry.ttl)
+			}
 		}
 	}
 

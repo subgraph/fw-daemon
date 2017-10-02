@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/subgraph/oz/ipc"
 )
