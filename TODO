@@ -5,13 +5,8 @@ fw-daemon:
 
 
 fw-prompt:
-	scope returned by new rules is bad (always set to process)
+	more nesting for similar prompts (by application, pid, target host, etc)
 
-	Each duplicate prompt needs to be expandable into individual items
-
-
-gnome-shell:
-	Start using new async DBus methods
 
 
 
