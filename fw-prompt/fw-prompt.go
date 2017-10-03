@@ -1351,7 +1351,7 @@ func main() {
 
 		editPort.SetText(strconv.Itoa(seldata.Port))
 		radioOnce.SetActive(seldata.Scope == int(sgfw.APPLY_ONCE))
-		radioProcess.SetSensitive(seldata.Scope == int(sgfw.APPLY_PROCESS))
+		radioProcess.SetActive(seldata.Scope == int(sgfw.APPLY_PROCESS))
 		radioParent.SetActive(false)
 		radioSession.SetActive(seldata.Scope == int(sgfw.APPLY_SESSION))
 		radioPermanent.SetActive(seldata.Scope == int(sgfw.APPLY_FOREVER))

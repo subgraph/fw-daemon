@@ -4,6 +4,8 @@ import (
 	"errors"
 	"path"
 	"strconv"
+	"net"
+	"time"
 
 	"github.com/godbus/dbus"
 	"github.com/godbus/dbus/introspect"
@@ -273,6 +275,38 @@ func (ds *dbusServer) AddRuleAsync(scope uint32, rule, policy, guid string) (boo
 		ds.fw.policyMap[pname].rulesPending = append(ds.fw.policyMap[pname].rulesPending, prule)
 	}
 
+	return true, nil
+}
+
+func (ds *dbusServer) AddTestVPC(proto string, srcip string, sport uint16, dstip string, dport uint16, hostname string) (bool, *dbus.Error) {
+	log.Warningf("AddTestVPC(proto=%s, srcip=%s, sport=%v, dstip=%s, dport=%v, hostname=%s)\n",
+		proto, srcip, sport, dstip, dport, hostname)
+
+	sip := net.ParseIP(srcip)
+	if sip == nil {
+		log.Error("Test virtual rule supplied bad source IP: ", srcip)
+		return false, nil
+	}
+
+	dip := net.ParseIP(srcip)
+	if dip == nil {
+		log.Error("Test virtual rule supplied bad dst IP: ", dstip)
+		return false, nil
+	}
+
+	now := time.Now()
+	optstring := "[virtual connection (TEST)]"
+	pinfo := getEmptyPInfo()
+
+	exepath := "/bin/bla"
+	pid := 666
+	sandbox := ""
+
+	policy := ds.fw.PolicyForPathAndSandbox(GetRealRoot(exepath, pid), sandbox)
+	vpc := &virtualPkt{_proto: proto, srcip: sip, sport: sport, dstip: dip, dport: dport, name: hostname, timestamp: now, optstring: optstring, pol: policy, pinfo: pinfo}
+	policy.processPromptResult(vpc)
+
+	log.Warning("NEW VPC: ", vpc)
 	return true, nil
 }
 
