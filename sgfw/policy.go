@@ -89,8 +89,8 @@ func (pp *pendingPkt) sandbox() string {
 	return pp.pinfo.Sandbox
 }
 
-func (pc *pendingPkt) getTimestamp() string {
-	return pc.timestamp.Format("15:04:05.00")
+func (pp *pendingPkt) getTimestamp() string {
+	return pp.timestamp.Format("15:04:05.00")
 }
 
 func (pp *pendingPkt) socks() bool {
@@ -701,7 +701,7 @@ func GetRealRoot(pathname string, pid int) string {
 	lnk, err := os.Readlink(pfname)
 
 	if err != nil {
-		fmt.Printf("Error reading link at %s: %v", pfname, err)
+		fmt.Printf("Error reading link at %s: %v\n", pfname, err)
 		return pathname
 	}
 
