@@ -1,6 +1,7 @@
 package sgfw
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -444,22 +445,42 @@ func (c *socksChainSession) handleConnect(tls bool) {
 
 func (c *socksChainSession) forwardTraffic(tls bool) {
 	if tls == true {
+		logstr, logstrRedacted := "", ""
 		err := TLSGuard(c.clientConn, c.upstreamConn, c.req.Addr.addrStr)
-		dest := STR_REDACTED
-	        if !FirewallConfig.LogRedact {
-			dest = c.req.Addr.addrStr
-		}
 
 		if err != nil {
 			if c.pinfo.Sandbox != "" {
-				log.Errorf("TLSGuard violation: Dropping traffic from %s (sandbox: %s) to %s: %v", c.pinfo.ExePath, c.pinfo.Sandbox, dest, err)
+				logstr = fmt.Sprintf("TLSGuard violation: Dropping traffic from %s (sandbox: %s) to %s: %v", c.pinfo.ExePath, c.pinfo.Sandbox, c.req.Addr.addrStr, err)
+				logstrRedacted = fmt.Sprintf("TLSGuard violation: Dropping traffic from %s (sandbox: %s) to %s: %v", c.pinfo.ExePath, c.pinfo.Sandbox, STR_REDACTED, err)
 			} else {
-				log.Errorf("TLSGuard violation: Dropping traffic from %s (unsandboxed) to %s: %v", c.pinfo.ExePath, dest, err)
+				logstr = fmt.Sprintf("TLSGuard violation: Dropping traffic from %s (unsandboxed) to %s: %v", c.pinfo.ExePath, c.req.Addr.addrStr, err)
+				logstrRedacted = fmt.Sprintf("TLSGuard violation: Dropping traffic from %s (unsandboxed) to %s: %v", c.pinfo.ExePath, STR_REDACTED, err)
 			}
-			return
+
+			if FirewallConfig.LogRedact {
+				log.Error(logstrRedacted)
+			} else {
+				log.Error(logstr)
+			}
 		} else {
-			log.Notice("TLSGuard approved certificate presented for connection to: ", dest)
+			logstr = fmt.Sprintf("TLSGuard approved certificate presented for connection to: ", c.req.Addr.addrStr)
+			logstrRedacted = fmt.Sprintf("TLSGuard approved certificate presented for connection to: ", STR_REDACTED)
+
+			if FirewallConfig.LogRedact {
+				log.Notice(logstrRedacted)
+			} else {
+				log.Notice(logstr)
+			}
 		}
+
+		if FirewallConfig.LogRedact {
+			dbLogger.logRedacted("default", logstr)
+		}
+
+		if err != nil {
+			return
+		}
+
 	}
 
 	var wg sync.WaitGroup

@@ -2,6 +2,7 @@ package sgfw
 
 import (
 	"encoding/binary"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -71,7 +72,10 @@ func (dc *dnsCache) processDNS(pkt *nfqueue.NFQPacket) {
 			if pinfo == nil {
 				if !FirewallConfig.LogRedact {
 					log.Warningf("Skipping attempted DNS cache entry for process that can't be found: %v -> %v\n", q.Name, dns.answer)
+				} else {
+					dbLogger.logRedacted("default", fmt.Sprintf("Skipping attempted DNS cache entry for process that can't be found: %v -> %v\n", q.Name, dns.answer))
 				}
+
 				return
 			}
 		}
@@ -82,7 +86,8 @@ func (dc *dnsCache) processDNS(pkt *nfqueue.NFQPacket) {
 	if !FirewallConfig.LogRedact {
 		log.Infof("Unhandled DNS message: %v", dns)
 	} else {
-		log.Infof("Unhandled DNS message [redacted]")
+		log.Infof("Unhandled DNS message: %s", STR_REDACTED)
+		dbLogger.logRedacted("default", fmt.Sprintf("Unhandled DNS message: %v", dns))
 	}
 
 }
@@ -128,6 +133,7 @@ func (dc *dnsCache) processRecordAddress(name string, answers []dnsRR, pid int) 
 				log.Warningf("Unexpected RR type in answer section of A response: %v", rec)
 			} else {
 				log.Warningf("Unexpected RR type in answer section of A response: [redacted]")
+				dbLogger.logRedacted("default", fmt.Sprintf("Unexpected RR type in answer section of A response: %v", rec))
 			}
 		}
 
@@ -145,7 +151,7 @@ func (dc *dnsCache) processRecordAddress(name string, answers []dnsRR, pid int) 
 			pid = 0
 		}
 
-//		log.Noticef("______ Adding to dns map: %s: %s -> pid %d", name, ip, pid)
+		//		log.Noticef("______ Adding to dns map: %s: %s -> pid %d", name, ip, pid)
 
 		_, ok := dc.ipMap[pid]
 		if !ok {
@@ -159,6 +165,8 @@ func (dc *dnsCache) processRecordAddress(name string, answers []dnsRR, pid int) 
 		}
 		if !FirewallConfig.LogRedact {
 			log.Infof("Adding %s: %s", name, ip)
+		} else {
+			dbLogger.logRedacted("default", fmt.Sprintf("Adding %s: %s", name, ip))
 		}
 	}
 }
@@ -182,7 +190,10 @@ func (dc *dnsCache) Lookup(ip net.IP, pid int) string {
 			} else {
 				if !FirewallConfig.LogRedact {
 					log.Warningf("Skipping expired per-pid (%d) DNS cache entry: %s -> %s / exp. %v (%ds)\n",
-					pid, ip.String(), entry.name, entry.exp, entry.ttl)
+						pid, ip.String(), entry.name, entry.exp, entry.ttl)
+				} else {
+					dbLogger.logRedacted("default", fmt.Sprintf("Skipping expired per-pid (%d) DNS cache entry: %s -> %s / exp. %v (%ds)\n",
+						pid, ip.String(), entry.name, entry.exp, entry.ttl))
 				}
 			}
 		}
@@ -197,7 +208,10 @@ func (dc *dnsCache) Lookup(ip net.IP, pid int) string {
 		} else {
 			if !FirewallConfig.LogRedact {
 				log.Warningf("Skipping expired global DNS cache entry: %s -> %s / exp. %v (%ds)\n",
-				ip.String(), entry.name, entry.exp, entry.ttl)
+					ip.String(), entry.name, entry.exp, entry.ttl)
+			} else {
+				dbLogger.logRedacted("default", fmt.Sprintf("Skipping expired global DNS cache entry: %s -> %s / exp. %v (%ds)\n",
+					ip.String(), entry.name, entry.exp, entry.ttl))
 			}
 		}
 	}

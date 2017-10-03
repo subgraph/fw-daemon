@@ -22,6 +22,7 @@ import (
 )
 
 var dbusp *dbusObjectP = nil
+var dbLogger *dbusObjectP = nil
 
 type Firewall struct {
 	dbus *dbusServer
@@ -263,7 +264,12 @@ func Main() {
 
 	dbusp, err = newDbusObjectPrompt()
 	if err != nil {
-		panic(fmt.Sprintf("Failed to connect to dbus system bus for sgfw prompt events: %v", err))
+		panic(fmt.Sprintf("Failed to connect to DBus system bus for SGFW prompt events: %v", err))
+	}
+
+	dbLogger, err = newDbusRedactedLogger()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to connect to DBus system bus for redacted logger: %v", err))
 	}
 
 	dbusp.alertRule("fw-daemon initialization")

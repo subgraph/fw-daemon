@@ -214,9 +214,11 @@ func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint
 			if r.rtype == RULE_ACTION_DENY {
 				//TODO: Optionally redact below log entry
 				log.Warningf("DENIED outgoing connection attempt by %s from %s %s -> %s:%d",
-					pinfo.ExePath, r.proto,
-					srcStr,
-					dstStr, dstPort)
+					pinfo.ExePath, r.proto, srcStr, dstStr, dstPort)
+				if FirewallConfig.LogRedact {
+					dbLogger.logRedacted("default", fmt.Sprintf("DENIED outgoing connection attempt by %s from %s %s -> %s:%d",
+						pinfo.ExePath, r.proto, srcStr, dst.String(), dstPort))
+				}
 				return FILTER_DENY
 			} else if r.rtype == RULE_ACTION_ALLOW {
 				result = FILTER_ALLOW

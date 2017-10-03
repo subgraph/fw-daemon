@@ -301,6 +301,8 @@ func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, timestamp time.Time, pinf
 
 	if !FirewallConfig.LogRedact {
 		log.Infof("Lookup(%s): %s", dstip.String(), name)
+	} else {
+		dbLogger.logRedacted("default", fmt.Sprintf("Lookup(%s): %s", dstip.String(), name))
 	}
 
 	result := p.rules.filterPacket(pkt, pinfo, srcip, name, optstr)
@@ -431,6 +433,9 @@ func (p *Policy) filterPendingOne(rule *Rule, guid string) {
 			}
 
 			log.Infof("Adding rule for: %s", rule.getString(FirewallConfig.LogRedact))
+			if FirewallConfig.LogRedact {
+				dbLogger.logRedacted("default", fmt.Sprintf("Adding rule for: %s", rule.getString(false)))
+			}
 			// log.Noticef("%s > %s", rule.getString(FirewallConfig.LogRedact), pc.print())
 			if rule.rtype == RULE_ACTION_ALLOW {
 				pc.accept()
@@ -467,6 +472,9 @@ func (p *Policy) filterPending(rule *Rule) {
 			}
 
 			log.Infof("Adding rule for: %s", rule.getString(FirewallConfig.LogRedact))
+			if FirewallConfig.LogRedact {
+				dbLogger.logRedacted("default", fmt.Sprintf("Adding rule for: %s", rule.getString(false)))
+			}
 			// log.Noticef("%s > %s", rule.getString(FirewallConfig.LogRedact), pc.print())
 			if rule.rtype == RULE_ACTION_ALLOW {
 				pc.accept()
@@ -476,8 +484,13 @@ func (p *Policy) filterPending(rule *Rule) {
 				srcs := pc.src().String() + ":" + strconv.Itoa(int(pc.srcPort()))
 				dests := STR_REDACTED
 				if !FirewallConfig.LogRedact {
-					dests = fmt.Sprintf("%s%d",pc.dst(), pc.dstPort)
+					dests = fmt.Sprintf("%s%d", pc.dst(), pc.dstPort)
+				} else {
+					dbLogger.logRedacted("default",
+						fmt.Sprintf("DENIED outgoing connection attempt by %s from %s %s -> %s:%d (user prompt) %v",
+							pc.procInfo().ExePath, pc.proto(), srcs, pc.dst(), pc.dstPort, rule.rtype))
 				}
+
 				log.Warningf("DENIED outgoing connection attempt by %s from %s %s -> %s (user prompt) %v",
 					pc.procInfo().ExePath, pc.proto(), srcs, dests, rule.rtype)
 				pc.drop()
