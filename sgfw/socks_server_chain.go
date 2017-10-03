@@ -410,15 +410,19 @@ func (c *socksChainSession) forwardTraffic(tls bool) {
         	}
 
 		if err != nil {
+			x509ValidationError := STR_REDACTED
+			if !FirewallConfig.LogRedact {
+				x509ValidationError = err.Error()
+			}
 			if c.pinfo.Sandbox != "" {
-				log.Errorf("TLSGuard violation: Dropping traffic from %s (sandbox: %s) to %s: %v", c.pinfo.ExePath, c.pinfo.Sandbox, dest, err)
+				log.Errorf("TLSGuard violation: Dropping traffic from %s (sandbox: %s) to %s: %s", c.pinfo.ExePath, c.pinfo.Sandbox, dest, x509ValidationError)
 			} else {
-				log.Errorf("TLSGuard violation: Dropping traffic from %s (unsandboxed) to %s: %v", c.pinfo.ExePath, dest, err)
+				log.Errorf("TLSGuard violation: Dropping traffic from %s (unsandboxed) to %s: %s", c.pinfo.ExePath, dest, x509ValidationError)
 			}
 			return
-		} else {
+		} /*else {
 			log.Notice("TLSGuard approved certificate presented for connection to: ", dest)
-		}
+		} */
 	}
 
 	var wg sync.WaitGroup
