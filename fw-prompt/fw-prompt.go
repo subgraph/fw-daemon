@@ -1107,6 +1107,10 @@ func buttonAction(action string) {
 }
 
 func main() {
+	if len(os.Args) == 3 && os.Args[1] == "-display" {
+		os.Setenv("DISPLAY", os.Args[2])
+	}
+
 	_, err := newDbusServer()
 	if err != nil {
 		log.Fatal("Error:", err)
