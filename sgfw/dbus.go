@@ -6,6 +6,7 @@ import (
 	"net"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/godbus/dbus"
@@ -287,6 +288,19 @@ func (ds *dbusServer) AddRuleAsync(scope uint32, rule, policy, guid string) (boo
 	}
 
 	return true, nil
+}
+
+func (ds *dbusServer) RunDebugCmd(cmd string, params string) (string, *dbus.Error) {
+	cmd = strings.ToLower(cmd)
+	result := "Unrecognized debug command: " + cmd
+
+	if cmd == "monitorfds" {
+		result = dumpMonitoredFDs()
+	} else if cmd == "listpending" {
+		result = dumpPendingQueues()
+	}
+
+	return result, nil
 }
 
 func (ds *dbusServer) AddTestVPC(proto string, srcip string, sport uint16, dstip string, dport uint16, hostname string) (bool, *dbus.Error) {

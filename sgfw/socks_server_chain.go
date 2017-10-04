@@ -161,7 +161,8 @@ func (sc *pendingSocksConnection) setPrompting(val bool) {
 }
 
 func (sc *pendingSocksConnection) print() string {
-	return "socks connection"
+	return fmt.Sprintf("SOCKS5 %s {%v:%v -> %v:%v (%s)}",
+		sc.policy().path, sc.srcIP, sc.sourcePort, sc.destIP, sc.destPort, sc.hname)
 }
 
 func NewSocksChain(cfg *socksChainConfig, wg *sync.WaitGroup, fw *Firewall) *socksChain {

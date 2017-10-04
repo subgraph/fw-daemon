@@ -7,7 +7,6 @@ import (
 	"github.com/godbus/dbus"
 )
 
-
 const busName = "com.subgraph.FirewallTest"
 const objectPath = "/com/subgraph/FirewallTest"
 const interfaceName = "com.subgraph.FirewallTest"
@@ -26,7 +25,7 @@ func newDbusObjectAdd() (*dbusObjectP, error) {
 }
 
 type dbusServer struct {
-	conn     *dbus.Conn
+	conn *dbus.Conn
 }
 
 func newDbusServer() (*dbusServer, error) {
@@ -58,10 +57,27 @@ func (ds *dbusServer) SGFWTestAlert(accepted int32, guid string, other string) (
 	return true, nil
 }
 
+func CallRunDebugCmd(d *dbusObjectP, cmd string, params string) string {
+	var dres string
+
+	fmt.Printf("> CallRunDebugCmd(cmd = %s, params = %s)\n", cmd, params)
+
+	call := d.Call("RunDebugCmd", 0,
+		cmd, params)
+
+	err := call.Store(&dres)
+	if err != nil {
+		fmt.Println("Error sending DBus RunDebugCmd() request:", err)
+		return ""
+	}
+
+	return dres
+}
+
 func CallAddTestVPC(d *dbusObjectP, proto string, srcip string, sport uint16, dstip string, dport uint16, hostname string) bool {
 	var dres bool
 
-	fmt.Printf("CallAddTestVPC(proto=%s, srcip=%s, sport=%u, dstip=%s, dport=%u, hostname=%s)\n",
+	fmt.Printf("> CallAddTestVPC(proto=%s, srcip=%s, sport=%u, dstip=%s, dport=%u, hostname=%s)\n",
 		proto, srcip, sport, dstip, dport, hostname)
 
 	call := d.Call("AddTestVPC", 0,

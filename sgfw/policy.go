@@ -279,7 +279,7 @@ func (fw *Firewall) policyForPath(path string) *Policy {
 }
 
 func (p *Policy) processPacket(pkt *nfqueue.NFQPacket, timestamp time.Time, pinfo *procsnitch.Info, optstr string) {
-	fmt.Println("policy processPacket()")
+	fmt.Println("policy processPacket() running against packet...")
 
 	p.lock.Lock()
 	defer p.lock.Unlock()
@@ -554,7 +554,7 @@ func printPacket(pkt *nfqueue.NFQPacket, hostname string, pinfo *procsnitch.Info
 }
 
 func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket, timestamp time.Time) {
-	fmt.Println("firewall: filterPacket()")
+	// fmt.Println("firewall: filterPacket()")
 	isudp := pkt.Packet.Layer(layers.LayerTypeUDP) != nil
 
 	if basicAllowPacket(pkt) {

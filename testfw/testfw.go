@@ -8,7 +8,6 @@ import (
 
 var dbuso *dbusObjectP
 
-
 func main() {
 	fmt.Println("Starting up test units...")
 
@@ -26,11 +25,26 @@ func main() {
 	res := CallAddTestVPC(dbuso, "udp", "10.0.0.1", 61921, "8.8.8.8", 53, "dnsthing.google.com")
 	fmt.Println("res =", res)
 
-
-	fmt.Println("Waiting until interrupted...")
+	fmt.Println("Looping until interrupted...")
 
 	for true {
-		time.Sleep(1 * time.Second)
+		result := CallRunDebugCmd(dbuso, "monitorfds", "")
+
+		if result == "" {
+			fmt.Println("Error: could not read monitored FDs information from SGFW.")
+		} else {
+			fmt.Println(result)
+		}
+
+		result = CallRunDebugCmd(dbuso, "listpending", "")
+
+		if result == "" {
+			fmt.Println("Error: could not read pending queue(s) information from SGFW.")
+		} else {
+			fmt.Println(result)
+		}
+
+		time.Sleep(5 * time.Second)
 	}
 
 }
