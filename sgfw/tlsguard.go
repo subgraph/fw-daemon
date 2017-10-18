@@ -351,7 +351,7 @@ func connectionReader(conn net.Conn, is_client bool, c chan connReader, done cha
 				}
 
 				buffered = append(buffered, remainder...)
-				// fmt.Printf("------- CHUNK READ: client: %v, err = %v, bytes = %v\n", is_client, err, len(buffered))
+				//fmt.Printf("------- CHUNK READ: client: %v, err = %v, bytes = %v\n", is_client, err, len(buffered))
 				cr := connReader{client: is_client, data: buffered, rtype: rtype, err: err}
 				c <- cr
 
@@ -387,7 +387,7 @@ func TLSGuard(conn, conn2 net.Conn, fqdn string) error {
 	//conn client
 	//conn2 server
 
-	// fmt.Println("-------- STARTING HANDSHAKE LOOP")
+	//fmt.Println("-------- STARTING HANDSHAKE LOOP")
 	crChan := make(chan connReader)
 	dChan := make(chan bool, 10)
 	dChan2 := make(chan bool, 10)
@@ -405,7 +405,7 @@ func TLSGuard(conn, conn2 net.Conn, fqdn string) error {
 select_loop:
 	for {
 		if ndone == 2 {
-			//fmt.Println("DONE channel got both notifications. Terminating loop.")
+			// fmt.Println("DONE channel got both notifications. Terminating loop.")
 			close(dChan)
 			close(dChan2)
 			close(crChan)
@@ -433,7 +433,7 @@ select_loop:
 
 					/* We expect only a single byte of data */
 					if cr.rtype == SSL3_RT_CHANGE_CIPHER_SPEC {
-						// fmt.Println("CHANGE CIPHER_SPEC: ", cr.data[TLS_RECORD_HDR_LEN])
+						//fmt.Println("CHANGE CIPHER_SPEC: ", cr.data[TLS_RECORD_HDR_LEN])
 						if len(cr.data) != 6 {
 							return errors.New(fmt.Sprintf("TLSGuard dropped connection with strange change cipher spec data length (%v bytes)", len(cr.data)))
 						}
@@ -456,7 +456,7 @@ select_loop:
 						}
 
 						alert_desc := int(int(cr.data[5])<<8 | int(cr.data[6]))
-				//		fmt.Println("ALERT DESCRIPTION: ", alert_desc)
+						//fmt.Println("ALERT DESCRIPTION: ", alert_desc)
 
 						if cr.data[TLS_RECORD_HDR_LEN] == SSL3_AL_FATAL {
 							return errors.New(fmt.Sprintf("TLSGuard dropped connection after fatal error alert detected"))
@@ -475,12 +475,12 @@ select_loop:
 				s := uint(handshakeMsg[0])
 				handshakeMessageLen := handshakeMsg[1:4]
 				handshakeMessageLenInt := int(int(handshakeMessageLen[0])<<16 | int(handshakeMessageLen[1])<<8 | int(handshakeMessageLen[2]))
-				// fmt.Printf("s = %#x, lenint = %v, total = %d\n", s, handshakeMessageLenInt, len(cr.data))
+				//fmt.Printf("s = %#x, lenint = %v, total = %d\n", s, handshakeMessageLenInt, len(cr.data))
 
 				if (client_sess || server_sess) && (client_change_cipher || server_change_cipher) {
 
 					if handshakeMessageLenInt > len(cr.data)+9 {
-				//		log.Notice("TLSGuard saw what looks like a resumed encrypted session... passing connection through")
+						// log.Notice("TLSGuard saw what looks like a resumed encrypted session... passing connection through")
 						other.Write(cr.data)
 						dChan <- true
 						dChan2 <- true
@@ -499,29 +499,26 @@ select_loop:
 				if (cr.client && s == SSL3_MT_CLIENT_HELLO) || (!cr.client && s == SSL3_MT_SERVER_HELLO) {
 					//					rewrite := false
 					//					rewrite_buf := []byte{}
-					/* SRC := ""
+					//SRC := ""
 
-					if s == SSL3_MT_CLIENT_HELLO {
-						SRC = "CLIENT"
-					} else {
+					if s != SSL3_MT_CLIENT_HELLO {
 						server_expected = []uint{SSL3_MT_CERTIFICATE, SSL3_MT_HELLO_REQUEST}
-						SRC = "SERVER"
 					}
-*/
+
 					hello_offset := 4
 					// 2 byte protocol version
-				//	fmt.Println(SRC, "HELLO VERSION = ", handshakeMsg[hello_offset:hello_offset+2])
+					//fmt.Println(SRC, "HELLO VERSION = ", handshakeMsg[hello_offset:hello_offset+2])
 					hello_offset += 2
 					// 4 byte Random/GMT time
 					//gmtbytes := binary.BigEndian.Uint32(handshakeMsg[hello_offset : hello_offset+4])
 					//gmt := time.Unix(int64(gmtbytes), 0)
-				//	fmt.Println(SRC, "HELLO GMT = ", gmt)
+					//fmt.Println(SRC, "HELLO GMT = ", gmt)
 					hello_offset += 4
 					// 28 bytes Random/random_bytes
 					hello_offset += 28
 					// 1 byte (32-bit session ID)
 					sess_len := uint(handshakeMsg[hello_offset])
-				//	fmt.Println(SRC, "HELLO SESSION ID = ", sess_len)
+					//fmt.Println(SRC, "HELLO SESSION ID = ", sess_len)
 
 					if cr.client && sess_len > 0 {
 						client_sess = true
@@ -660,7 +657,7 @@ select_loop:
 					}
 
 					verifyOptions.Intermediates = pool
-					//fmt.Println("ATTEMPTING TO VERIFY: ", fqdn)
+					// fmt.Println("ATTEMPTING TO VERIFY: ", fqdn)
 					_, err := c.Verify(verifyOptions)
 					//fmt.Println("ATTEMPTING TO VERIFY RESULT: ", err)
 					if err != nil {
@@ -701,12 +698,12 @@ select_loop:
 		}
 	}
 
-	// fmt.Println("WAITING; ndone = ", ndone)
+	//fmt.Println("WAITING; ndone = ", ndone)
 	for ndone < 2 {
-	//	fmt.Println("WAITING; ndone = ", ndone)
+		//fmt.Println("WAITING; ndone = ", ndone)
 		select {
 		case cr := <-crChan:
-	//		fmt.Printf("CHAN DATA: %v, %v, %v\n", cr.client, cr.err, len(cr.data))
+			//fmt.Printf("CHAN DATA: %v, %v, %v\n", cr.client, cr.err, len(cr.data))
 			if cr.err != nil || cr.data == nil {
 				ndone++
 			} else if cr.client {
@@ -731,4 +728,3 @@ select_loop:
 	return nil
 
 }
-
