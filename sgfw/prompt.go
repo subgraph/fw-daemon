@@ -14,11 +14,19 @@ import (
 	"github.com/subgraph/fw-daemon/proc-coroner"
 )
 
+var gPrompter *prompter = nil
+
 func newPrompter(conn *dbus.Conn) *prompter {
 	p := new(prompter)
 	p.cond = sync.NewCond(&p.lock)
 	p.dbusObj = conn.Object("com.subgraph.FirewallPrompt", "/com/subgraph/FirewallPrompt")
 	p.policyMap = make(map[string]*Policy)
+
+	if gPrompter != nil {
+		fmt.Println("Unexpected: global prompter variable was already set!")
+	}
+
+	gPrompter = p
 	go p.promptLoop()
 	return p
 }
@@ -62,12 +70,14 @@ func (p *prompter) processNextPacket() bool {
 		pc, empty = p.nextConnection()
 		p.lock.Unlock()
 		if pc != nil {
-			fmt.Println("GOT NON NIL")
+			fmt.Println("Got next pending connection...")
 		}
 		//fmt.Println("XXX: processNextPacket() loop; empty = ", empty, " / pc = ", pc)
 		if pc == nil && empty {
+			time.Sleep(100 * time.Millisecond)
 			return false
 		} else if pc == nil {
+			time.Sleep(100 * time.Millisecond)
 			continue
 		} else if pc != nil {
 			break
@@ -80,7 +90,6 @@ func (p *prompter) processNextPacket() bool {
 	}
 
 	pc.setPrompting(true)
-	fmt.Println("processConnection")
 	go p.processConnection(pc)
 	return true
 }
@@ -93,9 +102,48 @@ type PC2FDMapping struct {
 	prompter *prompter
 }
 
+func dumpPendingQueues() string {
+	result := ""
+	pctotal := 0
+
+	if gPrompter == nil {
+		return "Cannot query pending connections; no prompts have been issued yet!"
+	}
+
+	all_policies := make([]*Policy, 0)
+	gPrompter.lock.Lock()
+	defer gPrompter.lock.Unlock()
+
+	for _, policy := range gPrompter.policyMap {
+		all_policies = append(all_policies, policy)
+	}
+
+	result += fmt.Sprintf("Total policies: %d\n", len(all_policies))
+
+	for pind, policy := range all_policies {
+		policy.lock.Lock()
+
+		if len(policy.pendingQueue) > 0 {
+			result += fmt.Sprintf("  Policy %d of %d (%s): #pc = %d\n", pind+1,
+				len(all_policies), policy.application, len(policy.pendingQueue))
+
+			for pcind, pc := range policy.pendingQueue {
+				result += fmt.Sprintf("    %d: %s\n", pcind+1, pc.print())
+				pctotal++
+			}
+
+		}
+
+		policy.lock.Unlock()
+	}
+
+	result += "-----------------------------------\n"
+	result = fmt.Sprintf("Pending Queues / total pending connections = %d\n", pctotal) + result
+	return result
+}
+
 var PC2FDMap = map[string]PC2FDMapping{}
 var PC2FDMapLock = &sync.Mutex{}
-var PC2FDMapRunning = false
 
 func monitorPromptFDs(pc pendingConnection) {
 	guid := pc.getGUID()
@@ -104,7 +152,7 @@ func monitorPromptFDs(pc pendingConnection) {
 	fd := pc.procInfo().FD
 	prompter := pc.getPrompter()
 
-	fmt.Printf("ADD TO MONITOR: %v | %v / %v / %v\n", pc.policy().application, guid, pid, fd)
+	//fmt.Printf("ADD TO MONITOR: %v | %v / %v / %v\n", pc.policy().application, guid, pid, fd)
 
 	if pid == -1 || fd == -1 || prompter == nil {
 		log.Warning("Unexpected error condition occurred while adding socket fd to monitor")
@@ -119,16 +167,28 @@ func monitorPromptFDs(pc pendingConnection) {
 	return
 }
 
+func dumpMonitoredFDs() string {
+	PC2FDMapLock.Lock()
+	defer PC2FDMapLock.Unlock()
+
+	cnt := 1
+	result := fmt.Sprintf("Monitored FDs: %v total\n", len(PC2FDMap))
+	for guid, fdmon := range PC2FDMap {
+		result += fmt.Sprintf("%d: %s -> [inode=%v, fd=%d, fdpath=%s]\n", cnt, guid, fdmon.inode, fdmon.fd, fdmon.fdpath)
+		cnt++
+	}
+
+	result += "-----------------------------------\n"
+	return result
+}
+
 func monitorPromptFDLoop() {
-	fmt.Println("++++++++++= monitorPromptFDLoop()")
 
 	for true {
 		delete_guids := []string{}
 		PC2FDMapLock.Lock()
-		fmt.Println("++++ nentries = ", len(PC2FDMap))
 
 		for guid, fdmon := range PC2FDMap {
-			fmt.Println("ENTRY:", fdmon)
 
 			lsb, err := os.Stat(fdmon.fdpath)
 			if err != nil {
@@ -154,7 +214,10 @@ func monitorPromptFDLoop() {
 
 		}
 
-		fmt.Println("guids to delete: ", delete_guids)
+		if len(delete_guids) > 0 {
+			fmt.Println("guids to delete: ", delete_guids)
+		}
+
 		saved_mappings := []PC2FDMapping{}
 		for _, guid := range delete_guids {
 			saved_mappings = append(saved_mappings, PC2FDMap[guid])
@@ -164,9 +227,10 @@ func monitorPromptFDLoop() {
 		PC2FDMapLock.Unlock()
 
 		for _, mapping := range saved_mappings {
-			call := mapping.prompter.dbusObj.Call("com.subgraph.FirewallPrompt.RemovePrompt", 0, mapping.guid)
-			fmt.Println("DISPOSING CALL = ", call)
+			_ = mapping.prompter.dbusObj.Call("com.subgraph.FirewallPrompt.RemovePrompt", 0, mapping.guid)
+			// fmt.Println("DISPOSING CALL = ", call)
 			prompter := mapping.prompter
+			found := false
 
 			prompter.lock.Lock()
 
@@ -177,8 +241,9 @@ func monitorPromptFDLoop() {
 				for pcind < len(policy.pendingQueue) {
 
 					if policy.pendingQueue[pcind].getGUID() == mapping.guid {
-						fmt.Println("-------------- found guid to remove")
+						// fmt.Println("-------------- found guid to remove")
 						policy.pendingQueue = append(policy.pendingQueue[:pcind], policy.pendingQueue[pcind+1:]...)
+						found = true
 					} else {
 						pcind++
 					}
@@ -188,32 +253,26 @@ func monitorPromptFDLoop() {
 				policy.lock.Unlock()
 			}
 
+			if !found {
+				fmt.Println("Warning: FD monitor could not find pending connection to map to removed GUID: %s", mapping.guid)
+			}
+
 			prompter.lock.Unlock()
 		}
 
-		fmt.Println("++++++++++= monitorPromptFDLoop WAIT")
 		time.Sleep(5 * time.Second)
 	}
 
+}
+
+func init() {
+	go monitorPromptFDLoop()
 }
 
 func (p *prompter) processConnection(pc pendingConnection) {
 	var scope int32
 	var dres bool
 	var rule string
-
-	if !PC2FDMapRunning {
-		PC2FDMapLock.Lock()
-
-		if !PC2FDMapRunning {
-			PC2FDMapRunning = true
-			PC2FDMapLock.Unlock()
-			go monitorPromptFDLoop()
-		} else {
-			PC2FDMapLock.Unlock()
-		}
-
-	}
 
 	if pc.getPrompter() == nil {
 		pc.setPrompter(p)
@@ -338,10 +397,10 @@ func (p *prompter) nextConnection() (pendingConnection, bool) {
 	if len(p.policyQueue) == 0 {
 		return nil, true
 	}
-	fmt.Println("policy queue len = ", len(p.policyQueue))
+	//fmt.Println("policy queue len = ", len(p.policyQueue))
 
 	for pind < len(p.policyQueue) {
-		fmt.Printf("policy loop %d of %d\n", pind, len(p.policyQueue))
+		//fmt.Printf("policy loop %d of %d\n", pind, len(p.policyQueue))
 		//fmt.Printf("XXX: pind = %v of %v\n", pind, len(p.policyQueue))
 		policy := p.policyQueue[pind]
 		pc, qempty := policy.nextPending()
@@ -362,7 +421,11 @@ func (p *prompter) nextConnection() (pendingConnection, bool) {
 					pendingOther = append(pendingOther, r)
 				}
 			}
-			fmt.Printf("# pending once = %d, other = %d, pc = %p / policy = %p\n", len(pendingOnce), len(pendingOther), pc, policy)
+
+			if len(pendingOnce) > 0 || len(pendingOther) > 0 {
+				fmt.Printf("# pending once = %d, other = %d, pc = %p / policy = %p\n", len(pendingOnce), len(pendingOther), pc, policy)
+			}
+
 			policy.rulesPending = pendingOther
 
 			// One time filters are all applied right here, at once.

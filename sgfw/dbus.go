@@ -2,9 +2,11 @@ package sgfw
 
 import (
 	"errors"
+	"fmt"
+	"net"
 	"path"
 	"strconv"
-	"net"
+	"strings"
 	"time"
 
 	"github.com/godbus/dbus"
@@ -61,7 +63,17 @@ func newDbusObjectPrompt() (*dbusObjectP, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &dbusObjectP{conn.Object("com.subgraph.fwprompt.EventNotifier", "/com/subgraph/fwprompt/EventNotifier")}, nil
+}
+
+func newDbusRedactedLogger() (*dbusObjectP, error) {
+	conn, err := dbus.SystemBus()
+	if err != nil {
+		return nil, err
+	}
+
+	return &dbusObjectP{conn.Object("com.subgraph.sublogmon", "/com/subgraph/sublogmon")}, nil
 }
 
 type dbusServer struct {
@@ -155,7 +167,7 @@ func createDbusRule(r *Rule) DbusRule {
 	} else if r.gid >= 0 {
 		pstr += ":" + strconv.Itoa(r.gid)
 	}
-	log.Debugf("SANDBOX SANDBOX SANDBOX: %s", r.sandbox)
+
 	return DbusRule{
 		ID:      uint32(r.id),
 		Net:     netstr,
@@ -278,6 +290,19 @@ func (ds *dbusServer) AddRuleAsync(scope uint32, rule, policy, guid string) (boo
 	return true, nil
 }
 
+func (ds *dbusServer) RunDebugCmd(cmd string, params string) (string, *dbus.Error) {
+	cmd = strings.ToLower(cmd)
+	result := "Unrecognized debug command: " + cmd
+
+	if cmd == "monitorfds" {
+		result = dumpMonitoredFDs()
+	} else if cmd == "listpending" {
+		result = dumpPendingQueues()
+	}
+
+	return result, nil
+}
+
 func (ds *dbusServer) AddTestVPC(proto string, srcip string, sport uint16, dstip string, dport uint16, hostname string) (bool, *dbus.Error) {
 	log.Warningf("AddTestVPC(proto=%s, srcip=%s, sport=%v, dstip=%s, dport=%v, hostname=%s)\n",
 		proto, srcip, sport, dstip, dport, hostname)
@@ -381,4 +406,23 @@ func (ds *dbusServer) SetConfig(key string, val dbus.Variant) *dbus.Error {
 
 func (ob *dbusObjectP) alertRule(data string) {
 	ob.Call("com.subgraph.fwprompt.EventNotifier.Alert", 0, data)
+}
+
+func (ob *dbusObjectP) logRedacted(level string, logline string) bool {
+	var dres bool
+	timestamp := time.Now()
+	id := "fw-daemon"
+
+	log.Noticef("logRedacted(level=%s, timestamp=%v, logline=%s)\n", level, timestamp, logline)
+
+	call := ob.Call("com.subgraph.sublogmon.Logger", 0,
+		id, level, uint64(timestamp.UnixNano()), logline)
+
+	err := call.Store(&dres)
+	if err != nil {
+		fmt.Println("Error sending redacted log message to sublogmon:", err)
+		return false
+	}
+
+	return true
 }

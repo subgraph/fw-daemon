@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=com.subgraph.FirewallPrompt
+Exec=/usr/bin/fw-prompt -display :0
+User=user

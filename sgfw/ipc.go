@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"sync"
 	"os"
 	"strconv"
 	"strings"
@@ -24,7 +23,6 @@ type OzInitProc struct {
 
 var OzInitPids []OzInitProc = []OzInitProc{}
 var OzInitPidsLock = sync.Mutex{}
-
 
 func addInitPid(pid int, name string, sboxid int) {
 	fmt.Println("::::::::::: init pid added: ", pid, " -> ", name)

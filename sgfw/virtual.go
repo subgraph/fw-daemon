@@ -3,11 +3,11 @@ package sgfw
 import (
 	"fmt"
 	"net"
-	"time"
 	"sync"
+	"time"
 
-	"github.com/subgraph/go-procsnitch"
 	"github.com/godbus/dbus"
+	"github.com/subgraph/go-procsnitch"
 )
 
 type virtualPkt struct {
@@ -27,11 +27,9 @@ type virtualPkt struct {
 	dport     uint16
 }
 
-
 var tdb *dbusObjectP
 var tdbMutex = &sync.Mutex{}
 var tdbInit = false
-
 
 func init() {
 	fmt.Println("Initializing virtual packet test subsystem...")
