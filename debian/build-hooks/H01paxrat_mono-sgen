@@ -1,0 +1,7 @@
+#!/bin/sh
+# paxrat /usr/bin/mono-sgen before building environment to prevent build failure
+
+apt-get install -y --force-yes paxrat
+apt-get install -y --force-yes mono-runtime-sgen
+paxrat
+apt-get install -yf
