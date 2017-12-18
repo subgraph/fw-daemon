@@ -3,5 +3,5 @@
 
 apt-get install -y --force-yes paxrat
 apt-get install -y --force-yes mono-runtime-sgen
-paxrat /usr/bin/mono-sgen
+paxrat
 apt-get install -yf
