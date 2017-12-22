@@ -52,7 +52,7 @@ func (v *ComboBox) toCellLayout() *C.GtkCellLayout {
 
 func marshalComboBox(p uintptr) (interface{}, error) {
 	c := C.g_value_get_object((*C.GValue)(unsafe.Pointer(p)))
-	obj := wrapObject(unsafe.Pointer(c))
+	obj := glib.Take(unsafe.Pointer(c))
 	return wrapComboBox(obj), nil
 }
 
@@ -67,7 +67,7 @@ func ComboBoxNew() (*ComboBox, error) {
 	if c == nil {
 		return nil, nilPtrErr
 	}
-	obj := wrapObject(unsafe.Pointer(c))
+	obj := glib.Take(unsafe.Pointer(c))
 	return wrapComboBox(obj), nil
 }
 
@@ -77,7 +77,7 @@ func ComboBoxNewWithEntry() (*ComboBox, error) {
 	if c == nil {
 		return nil, nilPtrErr
 	}
-	obj := wrapObject(unsafe.Pointer(c))
+	obj := glib.Take(unsafe.Pointer(c))
 	return wrapComboBox(obj), nil
 }
 
@@ -87,7 +87,7 @@ func ComboBoxNewWithModel(model ITreeModel) (*ComboBox, error) {
 	if c == nil {
 		return nil, nilPtrErr
 	}
-	obj := wrapObject(unsafe.Pointer(c))
+	obj := glib.Take(unsafe.Pointer(c))
 	return wrapComboBox(obj), nil
 }
 
@@ -141,13 +141,21 @@ func (v *ComboBox) GetModel() (*TreeModel, error) {
 	if c == nil {
 		return nil, nilPtrErr
 	}
-	obj := wrapObject(unsafe.Pointer(c))
+	obj := glib.Take(unsafe.Pointer(c))
 	return wrapTreeModel(obj), nil
 }
 
 // SetModel is a wrapper around gtk_combo_box_set_model().
 func (v *ComboBox) SetModel(model ITreeModel) {
 	C.gtk_combo_box_set_model(v.native(), model.toTreeModel())
+}
+
+func (v *ComboBox) Popup() {
+	C.gtk_combo_box_popup(v.native())
+}
+
+func (v *ComboBox) Popdown() {
+	C.gtk_combo_box_popdown(v.native())
 }
 
 /*
@@ -170,7 +178,7 @@ func (v *ComboBoxText) native() *C.GtkComboBoxText {
 
 func marshalComboBoxText(p uintptr) (interface{}, error) {
 	c := C.g_value_get_object((*C.GValue)(unsafe.Pointer(p)))
-	obj := wrapObject(unsafe.Pointer(c))
+	obj := glib.Take(unsafe.Pointer(c))
 	return wrapComboBoxText(obj), nil
 }
 
@@ -184,7 +192,7 @@ func ComboBoxTextNew() (*ComboBoxText, error) {
 	if c == nil {
 		return nil, nilPtrErr
 	}
-	obj := wrapObject(unsafe.Pointer(c))
+	obj := glib.Take(unsafe.Pointer(c))
 	return wrapComboBoxText(obj), nil
 }
 
@@ -194,7 +202,7 @@ func ComboBoxTextNewWithEntry() (*ComboBoxText, error) {
 	if c == nil {
 		return nil, nilPtrErr
 	}
-	obj := wrapObject(unsafe.Pointer(c))
+	obj := glib.Take(unsafe.Pointer(c))
 	return wrapComboBoxText(obj), nil
 }
 

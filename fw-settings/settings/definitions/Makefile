@@ -1,0 +1,17 @@
+.PHONY: generate
+
+all: generate
+
+gschemas.compiled: *.xml
+	glib-compile-schemas .
+
+schemas.go: gschemas.compiled
+	ruby ./generate.rb
+
+generate: touch schemas.go
+
+touch:
+	ls *.xml | xargs -n1 touch
+
+doctor: touch generate
+	git diff --exit-code .

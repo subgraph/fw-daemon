@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<schemalist>
+  <schema id="com.subgraph.Firewall.Settings">
+    <key name="window-height" type="u">
+      <default>0</default>
+      <summary>Main window height</summary>
+      <description>Preserved height of the main window</description>
+    </key>
+    <key name="window-width" type="u">
+      <default>0</default>
+      <summary>Main window width</summary>
+      <description>Preserved width of the main window</description>
+    </key>
+    <key name="window-top" type="u">
+      <default>0</default>
+      <summary>Main window top</summary>
+      <description>Preserved top coordinate of the main window</description>
+    </key>
+    <key name="window-left" type="u">
+      <default>0</default>
+      <summary>Main window left</summary>
+      <description>Preserved left coordinate of the main window</description>
+    </key>
+    <key name="prompt-toplevel" type="b">
+      <default>true</default>
+      <summary>GTK Prompt As Top Level</summary>
+      <description>Bring the prompt window as front most and sticky on new prompt requests</description>
+    </key>
+  </schema>
+</schemalist>

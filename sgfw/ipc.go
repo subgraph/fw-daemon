@@ -332,7 +332,7 @@ const OzSocketName = "@oz-control"
 
 var bSockName = OzSocketName
 
-func init() {
+func InitIPC() {
 	bSockName = os.Getenv("SOCKET_NAME")
 
 	if bSockName != "" {

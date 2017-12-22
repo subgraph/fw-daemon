@@ -50,6 +50,11 @@
     font-weight: bold;
 }
 
+.fw-prompt-waiting {
+    font-size: 10pt;
+    text-align: right;
+}
+
 .fw-prompt-icon {
     padding: 10px;
 }
@@ -77,4 +82,34 @@
 
 .fw-details-left {
     padding-right: 10px;
+}
+
+.fw-toggle-tlsguard {
+    margin-top: 1.75em;
+}
+
+.fw-details-section .check-box {
+    margin: 0 !important;
+    padding: 0 !important;
+    vertical-align: middle;
+}
+
+.fw-details-section .check-box StBoxLayout {
+    margin: 0 !important;
+    padding: 0 !important;
+    spacing: 0.3em;
+    vertical-align: middle;
+}
+
+.fw-details-section .check-box StBin {
+    margin: 0 !important;
+    padding: 0 !important;
+    vertical-align: middle;
+}
+
+.fw-details-section .check-box StLabel {
+    margin: 0 !important;
+    padding: 0 !important;
+    padding-top: 2px !important;
+    vertical-align: middle;
 }

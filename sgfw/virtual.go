@@ -31,7 +31,7 @@ var tdb *dbusObjectP
 var tdbMutex = &sync.Mutex{}
 var tdbInit = false
 
-func init() {
+func InitVirtual() {
 	fmt.Println("Initializing virtual packet test subsystem...")
 
 	conn, err := dbus.SystemBus()

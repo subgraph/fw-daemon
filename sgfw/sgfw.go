@@ -21,7 +21,6 @@ import (
 	"github.com/subgraph/go-procsnitch"
 )
 
-var dbusp *dbusObjectP = nil
 var dbLogger *dbusObjectP = nil
 
 type Firewall struct {
@@ -262,17 +261,12 @@ func Main() {
 		log.Notice("Did not find SOCKS5 configuration file at", scfile, "; ignoring subsystem...")
 	}
 
-	dbusp, err = newDbusObjectPrompt()
-	if err != nil {
-		panic(fmt.Sprintf("Failed to connect to DBus system bus for SGFW prompt events: %v", err))
-	}
-
 	dbLogger, err = newDbusRedactedLogger()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to connect to DBus system bus for redacted logger: %v", err))
 	}
 
-	dbusp.alertRule("fw-daemon initialization")
+	fw.dbus.emitRefresh("init")
 
 	go OzReceiver(fw)
 

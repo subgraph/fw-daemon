@@ -6,14 +6,16 @@ const Pango = imports.gi.Pango;
 const Signals = imports.signals;
 const St = imports.gi.St;
 
+const CheckBox = imports.ui.checkBox
 const ModalDialog = imports.ui.modalDialog;
 const Tweener = imports.ui.tweener;
 
 const RuleScope = {
-    APPLY_ONCE: 0,
-    APPLY_SESSION: 1,
-    APPLY_PROCESS: 2,
-    APPLY_FOREVER: 3,
+    APPLY_SESSION: 0,
+    APPLY_PROCESS: 1,
+    APPLY_PERMANENT: 2,
+    APPLY_SYSTEM: 3,
+    APPLY_ONCE: 4,
 };
 
 const DetailSection = new Lang.Class({
@@ -21,8 +23,8 @@ const DetailSection = new Lang.Class({
 
     _init: function(sandboxed) {
         this.actor = new St.BoxLayout({ style_class: 'fw-details-section' });
-        this._left = new St.BoxLayout({ vertical: true,  style_class: 'fw-details-left'});
-        this._right = new St.BoxLayout({ vertical: true });
+        this._left = new St.BoxLayout({ vertical: true, style_class: 'fw-details-left'});
+        this._right = new St.BoxLayout({ vertical: true, style_class: 'fw-details-right' });
         this.actor.add_child(this._left);
         this.actor.add_child(this._right);
 
@@ -30,8 +32,8 @@ const DetailSection = new Lang.Class({
         this.path = this._addDetails("Path:");
         this.pid = this._addDetails("Process ID:");
         this.origin = this._addDetails("Origin:");
-        this.user = this._addDetails("User:");
-        this.group = this._addDetails("Group:");
+        this.user = this._addCheckboxDetails("User:");
+        this.group = this._addCheckboxDetails("Group:");
         this.sandboxed = sandboxed;
 
         if (sandboxed) {
@@ -40,15 +42,43 @@ const DetailSection = new Lang.Class({
         this.optstring = this._addDetails("");
     },
 
-    _addDetails: function(text) {
+    _addDetails: function(text, d) {
         let title = new St.Label({ style_class: 'fw-detail-title', text: text});
-        let msg = new St.Label({ style_class: 'fw-detail-message' });
         this._left.add(title, { expand: true, x_fill: false, x_align: St.Align.END});
-        this._right.add(msg);
+        let msg = new St.Label({ style_class: 'fw-detail-message' });
+        if (d === undefined) {
+            this._right.add(msg);
+        } else {
+            let inner = new St.BoxLayout({ vertical: false, style_class: 'fw-ugid-apply-checkbox' });
+            inner.add(msg);
+            inner.add(d.actor);
+            this._right.add(inner);
+        }
         return msg;
     },
 
-    setDetails: function(ip, path, pid, uid, gid, user, group, origin, proto, optstring, sandbox) {
+    _addCheckboxDetails: function(text) {
+        let title = new St.Label({ style_class: 'fw-detail-title', text: text});
+        title.hide();
+        this._left.add(title, { expand: true, x_fill: false, x_align: St.Align.END});
+        //let msg = new St.Label({ style_class: 'fw-detail-message' });
+        
+        let check = new CheckBox.CheckBox("");
+        check.actor.checked = true;
+        check.actor.hide();
+        this._right.add(check.actor);
+        
+        /*
+        let inner = new St.BoxLayout({ vertical: false, style_class: 'fw-ugid-apply-checkbox' });
+        inner.add(msg);
+        inner.add(check.actor);
+        this._right.add(inner);
+        */
+
+        return [title, check];
+    },
+
+    setDetails: function(ip, path, pid, uid, gid, user, group, origin, proto, optstring, sandbox, expert) {
         this.ipAddr.text = ip;
         this.path.text = path;
 
@@ -60,22 +90,28 @@ const DetailSection = new Lang.Class({
 
         this.origin.text = origin;
 
-        if (user != "") {
-            this.user.text = user;
-            if (uid != -1) {
-                this.user.text += " (" + uid.toString() + ")";
+        if (expert === true) {
+            this.user[0].show();
+            this.user[1].actor.show();
+            if (user != "") {
+                this.user[1].getLabelActor().text = user;
+                if (uid != -1) {
+                    this.user[1].getLabelActor().text += " (" + uid.toString() + ")";
+                }
+            } else {
+                this.user[1].getLabelActor().text = "uid:" + uid.toString();
             }
-        } else {
-            this.user.text = "uid:" + uid.toString();
-        }
 
-        if (group != "") {
-            this.group.text = group;
-            if (gid != -1) {
-                this.group.text += " (" + gid.toString() + ")";
+            this.group[0].show();
+            this.group[1].actor.show();
+            if (group != "") {
+                this.group[1].getLabelActor().text = group;
+                if (gid != -1) {
+                    this.group[1].getLabelActor().text += " (" + gid.toString() + ")";
+                }
+            } else {
+                this.group[1].getLabelActor().text = "gid:" + gid.toString();
             }
-        } else {
-            this.group.text = "gid:" + gid.toString();
         }
 
         if (sandbox != "") {
@@ -142,9 +178,9 @@ const OptionList = new Lang.Class({
     _init: function(pid_known, sandboxed) {
         this.actor = new St.BoxLayout({vertical: true, style_class: 'fw-option-list'});
         if (pid_known) {
-                this.buttonGroup = new ButtonGroup("Forever", "Session", "Once", "PID");
+                this.buttonGroup = new ButtonGroup("Permanent", "Session", "Process", "Once");
         } else {
-                this.buttonGroup = new ButtonGroup("Forever", "Session", "Once");
+                this.buttonGroup = new ButtonGroup("Permanent", "Session", "Once");
         }
         this.actor.add_child(this.buttonGroup.actor);
         this.items = [];
@@ -224,13 +260,13 @@ const OptionList = new Lang.Class({
     selectedScope: function() {
         switch(this.buttonGroup._checked) {
         case 0:
-            return RuleScope.APPLY_FOREVER;
+            return RuleScope.APPLY_PERMANENT;
         case 1:
             return RuleScope.APPLY_SESSION;
         case 2:
-            return RuleScope.APPLY_ONCE;
-        case 3:
             return RuleScope.APPLY_PROCESS;
+        case 3:
+            return RuleScope.APPLY_ONCE;
         default:
             log("SGFW: unexpected scope value "+ this.buttonGroup._selected);
             return RuleScope.APPLY_SESSION;
@@ -238,18 +274,42 @@ const OptionList = new Lang.Class({
     },
 
     scopeToIdx: function(scope) {
+        if (scope === undefined) {
+            scope = this.buttonGroup._checked;
+        }
         switch (scope) {
-        case RuleScope.APPLY_PROCESS:
-            return 3;
         case RuleScope.APPLY_ONCE:
+            return 3;
+        case RuleScope.APPLY_PROCESS:
             return 2;
         case RuleScope.APPLY_SESSION:
             return 1;
-        case RuleScope.APPLY_FOREVER:
+        case RuleScope.APPLY_PERMANENT:
             return 0;
         default:
             log("SGFW: unexpected scope value "+ scope);
             return 1;
+        }
+    },
+
+    scopeToString: function(scope) {
+        if (scope === undefined) {
+            scope = this.buttonGroup._checked;
+        }
+        switch (this.selectedScope(scope)) {
+        case RuleScope.APPLY_PROCESS:
+            return "PROCESS";
+        case RuleScope.APPLY_ONCE:
+            return "ONCE";
+        case RuleScope.APPLY_SESSION:
+            return "SESSION";
+        case RuleScope.APPLY_PERMANENT:
+            return "PERMANENT";
+        case RuleScope.APPLY_SYSTEM:
+            return "SYSTEM";
+        default:
+            log("SGFW: unexpected scope value "+ scope);
+            return "SESSION";
         }
     },
 
@@ -484,12 +544,22 @@ const PromptDialogHeader = new Lang.Class({
 
     _init: function() {
         this.actor = new St.BoxLayout();
-        let inner = new St.BoxLayout({ vertical: true });
+        let inner = new St.BoxLayout({ vertical: true, x_expand: true });
         this.icon = new St.Icon({style_class: 'fw-prompt-icon'})
         this.title = new St.Label({style_class: 'fw-prompt-title'})
         this.message = new St.Label({style_class: 'fw-prompt-message'});
         this.message.clutter_text.line_wrap = true;
         this.message.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
+
+        this.wb = new St.BoxLayout({x_expand: true});
+        let spacer = new St.Bin();
+        this.wb.add(spacer, {expand: true});
+        
+        this.waiting = new St.Label({style_class: 'fw-prompt-waiting'});
+        this.waiting.text = "";
+        this.wb.add_child(this.waiting);
+
+        inner.add_child(this.wb);
         inner.add_child(this.title);
         inner.add_child(this.message);
         this.actor.add_child(this.icon);
@@ -521,16 +591,27 @@ const PromptDialogHeader = new Lang.Class({
         this.icon.icon_name = 'security-high-symbolic';
     },
 
+    setRemainingPrompts: function(remaining) {
+        if (!remaining) {
+            this.waiting.text;
+        } else {
+            this.waiting.text = "Remaining: " + remaining;
+        }
+    },
+
 });
 
+//XXX: InhibitShortcutsDialog
 const PromptDialog = new Lang.Class({
     Name: 'PromptDialog',
     Extends: ModalDialog.ModalDialog,
 
-    _init: function(invocation, pid_known, sandboxed, tlsguard, cbClose) {
+    _init: function(guid, timestamp, pid_known, sandboxed, tlsguard, cbClose) {
         this.cbClose = cbClose;
         this.parent({ styleClass: 'fw-prompt-dialog' });
-        this._invocation = invocation;
+        this._guid = guid;
+        this._timestamp = timestamp;
+        this._expert = false;
         this.header = new PromptDialogHeader();
         this.contentLayout.add_child(this.header.actor);
 
@@ -552,12 +633,29 @@ const PromptDialog = new Lang.Class({
         if (tlsguard) {
             this.optionList.addTLSOption(true);
         }
-
+/*
+        this.buttonToggleTLSGuard = null;
+        let button = new St.Button({ style_class: "button",
+                             button_mask: St.ButtonMask.ONE,
+                             reactive:    true,
+                             can_focus:   true,
+                             x_expand:    true,
+                             y_expand:    true,
+                             label:       "Enable TLS Guard" });
+        button.connect("clicked", Lang.bind(this, this.onToggleTLSGuard));
+        let actor = new St.BoxLayout({style_class: "fw-toggle-tlsguard"});
+        actor.add_child(button);
+        this.contentLayout.add(actor);
+*/
         this._initialKeyFocusDestroyId = 1;
         this.setButtons([
             { label: "Allow", action: Lang.bind(this, this.onAllow) },
             { label: "Deny", action: Lang.bind(this, this.onDeny) }
         ]);
+    },
+
+    activate: function() {
+        this.open();
     },
 
     _onPromptScopeNext: function() {
@@ -603,23 +701,22 @@ const PromptDialog = new Lang.Class({
     },
 
     onAllow: function() {
-        if (this.cbClose !== undefined && this.cbClose !== null) {
-            this.cbClose();
-        }
         this.close();
         this.sendReturnValue(true);
     },
 
     onDeny: function() {
-        if (this.cbClose !== undefined && this.cbClose !== null) {
-            this.cbClose();
-        }
         this.close();
         this.sendReturnValue(false);
     },
+/*
+    onToggleTLSGuard: function(item) {
+        log("SGFW: Toggle TLS Guard: " + item);
+    },
+*/
 
     sendReturnValue: function(allow) {
-        if (!this._invocation) {
+        if (!this._guid || this.cbClose === undefined || this.cbClose === null) {
             return;
         }
         let verb = "DENY";
@@ -631,18 +728,24 @@ const PromptDialog = new Lang.Class({
                 verb = "ALLOW";
             }
         }
-        let rule = verb + "|" + this.ruleTarget() + "|" + this.ruleSandbox();
-
-        let scope = this.optionList.selectedScope();
-        this._invocation.return_value(GLib.Variant.new('(is)', [scope, rule]));
-        this._invocation = null;
+        //ALLOW|tcp:textsecure-service-ca.whispersystems.org:4433|-1:-1|PERMANENT
+        //DENY|subgraph.com:8183|-1:-1|0
+        let privs = ["-1", "-1"];
+        if (this.info.user[1].actor.checked === true) {
+            privs[0] = this._privs.uid;
+        }
+        if (this.info.group[1].actor.checked === true) {
+            privs[1] = this._privs.gid;
+        }
+        let rule = verb + "|" + this.ruleTarget() + "|" + privs.join(":") + "|" + this.optionList.scopeToString();
+        this.cbClose(this._guid, this._timestamp, rule, this.optionList.selectedScope());
     },
 
     ruleTarget: function() {
         let base = "";
-        if (this._proto != "tcp") {
+        //if (this._proto != "tcp") {
             base = this._proto + ":";
-        }
+        //}
         switch(this.optionList.selectedIdx()) {
         case 0:
             return base + this._address + ":" + this._port;
@@ -669,6 +772,8 @@ const PromptDialog = new Lang.Class({
         this._proto = proto;
         this._sandbox = sandbox;
         this._tlsGuard = tlsguard;
+        this._expert = expert;
+        this._privs = {"uid": uid, "gid": gid};
 
         let port_str = (proto+"").toUpperCase() + " Port "+ port;
 
@@ -707,7 +812,7 @@ const PromptDialog = new Lang.Class({
             this.optionList.setOptionText(0, "Only "+ address + " on "+ port_str);
         }
 
-        if (expert) {
+        if (this._expert) {
             if (proto == "icmp") {
                this.optionList.setOptionText(1, "Only "+ address + " with any ICMP code");
             } else if (proto == "udp") {
@@ -727,6 +832,11 @@ const PromptDialog = new Lang.Class({
         }
 
         this.optionList.buttonGroup._setChecked(this.optionList.scopeToIdx(action))
-        this.info.setDetails(ip, path, pid, uid, gid, user, group, origin, proto, optstring, sandbox);
+        this.info.setDetails(ip, path, pid, uid, gid, user, group, origin, proto, optstring, sandbox, this._expert);
     },
+
+    updateRemainingPrompts: function(count) {
+        this.header.setRemainingPrompts(count);
+    },
+
 });

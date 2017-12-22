@@ -2,7 +2,6 @@ package sgfw
 
 import (
 	"errors"
-	"fmt"
 	"net"
 	"path"
 	"strconv"
@@ -27,7 +26,7 @@ const introspectXML = `
     </method>
 
     <method name="ListRules">
-      <arg name="rules" direction="out" type="a(ussus)" />
+      <arg name="rules" direction="out" type="a(usssusssqsqbsuuss)" />
     </method>
 
     <method name="DeleteRule">
@@ -46,6 +45,28 @@ const introspectXML = `
       <arg name="key" direction="in" type="s" />
       <arg name="val" direction="in" type="v" />
     </method>
+
+    <method name="GetPendingRequests">
+      <arg name="policy" direction="in" type="s" />
+      <arg name="result" direction="out" type="b" />
+    </method>
+
+    <method name="AddRuleAsync">
+      <arg name="scope" direction="in" type="u" />
+      <arg name="rule" direction="in" type="s" />
+      <arg name="policy" direction="in" type="s" />
+      <arg name="guid" direction="in" type="s" />
+      <arg name="result" direction="out" type="b" />
+    </method>
+
+    <method name="AddNewRule">
+      <arg name="rule" direction="in" type="usssusssqsqsuuss" />
+      <arg name="result" direction="out" type="b" />
+    </method>
+
+    <signal name="Refresh">
+      <arg name="refresh_event" type="s" />
+    </signal>
   </interface>` +
 	introspect.IntrospectDataString +
 	`</node>`
@@ -56,15 +77,6 @@ const interfaceName = "com.subgraph.Firewall"
 
 type dbusObjectP struct {
 	dbus.BusObject
-}
-
-func newDbusObjectPrompt() (*dbusObjectP, error) {
-	conn, err := dbus.SystemBus()
-	if err != nil {
-		return nil, err
-	}
-
-	return &dbusObjectP{conn.Object("com.subgraph.fwprompt.EventNotifier", "/com/subgraph/fwprompt/EventNotifier")}, nil
 }
 
 func newDbusRedactedLogger() (*dbusObjectP, error) {
@@ -103,7 +115,7 @@ func DbusProcDeathCB(pid int, param interface{}) {
 	}
 
 	if updated {
-		dbusp.alertRule("Firewall removed on process death")
+		ds.fw.dbus.emitRefresh("removed")
 	}
 }
 
@@ -130,7 +142,7 @@ func newDbusServer() (*dbusServer, error) {
 	}
 
 	ds.conn = conn
-	ds.prompter = newPrompter(conn)
+	ds.prompter = newPrompter(ds)
 	pcoroner.AddCallback(DbusProcDeathCB, ds)
 	return ds, nil
 }
@@ -168,19 +180,24 @@ func createDbusRule(r *Rule) DbusRule {
 		pstr += ":" + strconv.Itoa(r.gid)
 	}
 
-	return DbusRule{
-		ID:      uint32(r.id),
-		Net:     netstr,
-		Origin:  ostr,
-		Proto:   r.proto,
-		Pid:     uint32(r.pid),
-		Privs:   pstr,
-		App:     path.Base(r.policy.path),
-		Path:    r.policy.path,
-		Verb:    uint16(r.rtype),
-		Target:  r.AddrString(false),
-		Mode:    uint16(r.mode),
-		Sandbox: r.sandbox,
+	return DbusRule {
+		ID:       uint32(r.id),
+		Net:      netstr,
+		Origin:   ostr,
+		Proto:    r.proto,
+		Pid:      uint32(r.pid),
+		Privs:    pstr,
+		App:      path.Base(r.policy.path),
+		Path:     r.policy.path,
+		Verb:     uint16(r.rtype),
+		Target:   r.AddrString(false),
+		Mode:     uint16(r.mode),
+		IsSocks:  false,//r.is_socks,
+		Sandbox:  r.policy.sandbox,
+		UID:      int32(r.uid),
+		GID:      int32(r.gid),
+		Username: r.uname,
+		Group:    r.gname,
 	}
 }
 
@@ -207,7 +224,7 @@ func (ds *dbusServer) DeleteRule(id uint32) *dbus.Error {
 	if r != nil {
 		r.policy.removeRule(r)
 	}
-	if r.mode != RULE_MODE_SESSION {
+	if r.mode != RULE_MODE_SESSION && r.mode != RULE_MODE_PROCESS {
 		ds.fw.saveRules()
 	}
 	return nil
@@ -276,14 +293,14 @@ func (ds *dbusServer) GetPendingRequests(policy string) (bool, *dbus.Error) {
 }
 
 func (ds *dbusServer) AddRuleAsync(scope uint32, rule, policy, guid string) (bool, *dbus.Error) {
-	log.Warningf("AddRuleAsync %v, %v / %v / %v\n", scope, rule, policy, guid)
+	log.Debug("AddRuleAsync %v, %v / %v / %v\n", scope, rule, policy, guid)
 	ds.fw.lock.Lock()
 	defer ds.fw.lock.Unlock()
 
 	prule := PendingRule{rule: rule, scope: int(scope), policy: policy, guid: guid}
 
 	for pname := range ds.fw.policyMap {
-		log.Debug("+++ Adding prule to policy")
+		log.Debugf("+++ Adding prule to policy: %s >>> %+b", pname, ds.fw.policyMap[pname].promptInProgress)
 		ds.fw.policyMap[pname].rulesPending = append(ds.fw.policyMap[pname].rulesPending, prule)
 	}
 
@@ -335,6 +352,88 @@ func (ds *dbusServer) AddTestVPC(proto string, srcip string, sport uint16, dstip
 	return true, nil
 }
 
+func (ds *dbusServer) AddNewRule(rule DbusRule) (bool, *dbus.Error) {
+	log.Debugf("AddNewRule %+v\n", rule)
+	var pn *Policy
+	if rule.Sandbox != "" {
+		pn = ds.fw.PolicyForPathAndSandbox(rule.Path, rule.Sandbox)
+	} else {
+		pn = ds.fw.PolicyForPath(rule.Path)
+	}
+	if RuleMode(rule.Mode) == RULE_MODE_SYSTEM {
+		log.Warningf("Cannot modify system rule: %+v", rule)
+		return false,nil
+	}
+	if rule.ID != 0 {
+		if RuleMode(rule.Mode) != RULE_MODE_PROCESS && RuleMode(rule.Mode) != RULE_MODE_SESSION {
+			log.Warningf("Saving a session/process rule as new without an ID?")
+			return false,nil
+		}
+		ds.fw.lock.Lock()
+		rr := ds.fw.rulesByID[uint(rule.ID)]
+		ds.fw.lock.Unlock()
+		if rr == nil {
+			log.Noticef("Saving a session/process rule as new without a valid ID?")
+		} else {
+			rr.policy.lock.Lock()
+			rr.policy.removeRule(rr)
+			rr.policy.lock.Unlock()
+		}
+		rule.ID = 0
+		rule.Mode = uint16(RULE_MODE_PERMANENT)
+	}
+	/*
+	pn.lock.Lock()
+	defer pn.lock.Unlock()
+	if RuleMode(rule.Mode) == RULE_MODE_PROCESS || RuleMode(rule.Mode) == RULE_MODE_SESSION {
+		if rule.ID == 0 {
+			log.Warningf("Saving a session/process rule as new without an ID?")
+			return false,nil
+		}
+		ds.fw.lock.Lock()
+		rr := ds.fw.rulesByID[uint(rule.ID)]
+		ds.fw.lock.Unlock()
+		if rr == nil {
+			log.Warningf("Saving a session/process rule as new without a valid ID?")
+			return false,nil
+		}
+		
+		pn.removeRule(rr)
+		rule.Mode = uint16(RULE_MODE_PERMANENT)
+	}
+*/
+	r := new(Rule)
+	r.addr = noAddress
+	if !r.parseTarget(rule.Target) {
+		log.Warningf("Unable to parse target: %s", rule.Target)
+		return false, nil
+	}
+	if RuleAction(rule.Verb) == RULE_ACTION_ALLOW || RuleAction(rule.Verb) == RULE_ACTION_ALLOW_TLSONLY || RuleAction(rule.Verb) == RULE_ACTION_DENY {
+		r.rtype = RuleAction(rule.Verb)
+	}
+	r.hostname = r.hostname
+	r.addr = r.addr
+	r.proto = rule.Proto
+	r.port = r.port
+	r.uid = int(rule.UID)
+	r.gid = int(rule.GID)
+	r.mode = RuleMode(rule.Mode)
+	r.policy = pn
+
+	ds.fw.addRule(r)
+
+	pn.lock.Lock()
+	pn.rules = append(pn.rules, r)
+	pn.lock.Unlock()
+	if r.mode != RULE_MODE_SESSION && r.mode != RULE_MODE_PROCESS {
+		ds.fw.saveRules()
+	}
+
+	ds.fw.dbus.emitRefresh("rules")
+
+	return true, nil
+}
+
 func (ds *dbusServer) UpdateRule(rule DbusRule) *dbus.Error {
 	log.Debugf("UpdateRule %v", rule)
 	ds.fw.lock.Lock()
@@ -352,20 +451,25 @@ func (ds *dbusServer) UpdateRule(rule DbusRule) *dbus.Error {
 			return nil
 		}
 		r.policy.lock.Lock()
-		if RuleAction(rule.Verb) == RULE_ACTION_ALLOW || RuleAction(rule.Verb) == RULE_ACTION_DENY {
+		if RuleAction(rule.Verb) == RULE_ACTION_ALLOW || RuleAction(rule.Verb) == RULE_ACTION_ALLOW_TLSONLY || RuleAction(rule.Verb) == RULE_ACTION_DENY {
 			r.rtype = RuleAction(rule.Verb)
 		}
 		r.hostname = tmp.hostname
-		r.proto = tmp.proto
-		r.pid = tmp.pid
+		r.proto = rule.Proto
+		//r.pid = tmp.pid
 		r.addr = tmp.addr
 		r.port = tmp.port
+		r.uid = int(rule.UID)
+		r.gid = int(rule.GID)
 		r.mode = RuleMode(rule.Mode)
-		r.sandbox = rule.Sandbox
 		r.policy.lock.Unlock()
-		if r.mode != RULE_MODE_SESSION {
+		if r.mode != RULE_MODE_SESSION && r.mode != RULE_MODE_PROCESS {
 			ds.fw.saveRules()
 		}
+
+		ds.fw.dbus.emitRefresh("rules")
+	} else {
+		log.Warning("Failed to update rule, rule id `%d` missing.", rule.ID)
 	}
 	return nil
 }
@@ -401,11 +505,12 @@ func (ds *dbusServer) SetConfig(key string, val dbus.Variant) *dbus.Error {
 		FirewallConfig.DefaultActionID = FilterScope(l)
 	}
 	writeConfig()
+	ds.emitRefresh("config")
 	return nil
 }
 
-func (ob *dbusObjectP) alertRule(data string) {
-	ob.Call("com.subgraph.fwprompt.EventNotifier.Alert", 0, data)
+func (ds *dbusServer) emitRefresh(data string) {
+	ds.conn.Emit("/com/subgraph/Firewall", "com.subgraph.Firewall.Refresh", data)
 }
 
 func (ob *dbusObjectP) logRedacted(level string, logline string) bool {
@@ -420,7 +525,7 @@ func (ob *dbusObjectP) logRedacted(level string, logline string) bool {
 
 	err := call.Store(&dres)
 	if err != nil {
-		fmt.Println("Error sending redacted log message to sublogmon:", err)
+		log.Warningf("Error sending redacted log message to sublogmon:", err)
 		return false
 	}
 

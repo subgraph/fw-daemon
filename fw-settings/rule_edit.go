@@ -87,7 +87,7 @@ func (re *ruleEdit) validateFields() bool {
 	if !isValidHost(host) {
 		return false
 	}
-	if !isValidPort(port) {
+	if !isValidPort(port, "") {
 		return false
 	}
 	return true
@@ -113,7 +113,8 @@ func isValidHost(host string) bool {
 	return true
 }
 
-func isValidPort(port string) bool {
+func isValidPort(port, proto string) bool {
+	min := 0
 	if port == "*" {
 		return true
 	}
@@ -122,7 +123,11 @@ func isValidPort(port string) bool {
 	if err != nil {
 		return false
 	}
-	return pval > 0 && pval <= 0xFFFF
+
+	if proto == "icmp" {
+		min = -1
+	}
+	return pval > min && pval <= 0xFFFF
 }
 
 func (re *ruleEdit) updateRow() {
@@ -145,15 +150,15 @@ func (re *ruleEdit) updateRow() {
 }
 
 func (re *ruleEdit) run(saveasnew bool) {
-	re.dialog.SetTransientFor(re.row.rl.win)
+	re.dialog.SetTransientFor(&re.row.rl.app.win.Window)
 	if re.dialog.Run() == editDialogOk {
 		if saveasnew {
 			re.row.rule.Mode = uint16(sgfw.RULE_MODE_PERMANENT)
 		}
 		re.updateRow()
-		re.row.rl.dbus.updateRule(re.row.rule)
+		re.row.rl.app.Dbus.updateRule(re.row.rule)
 		if saveasnew {
-			re.row.widget.Hide()
+			re.row.Hide()
 		}
 	}
 	re.dialog.Destroy()

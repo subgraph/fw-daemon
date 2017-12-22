@@ -16,13 +16,12 @@ func (*defRuleItem) String() string {
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="hexpand">True</property>
+    <property name="row_homogeneous">True</property>
     <child>
-      <object class="GtkLabel" id="app_label">
+      <object class="GtkImage" id="app_icon">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
-        <property name="halign">start</property>
-        <property name="margin_left">8</property>
-        <property name="margin_right">10</property>
+        <property name="stock">gtk-missing-image</property>
       </object>
       <packing>
         <property name="left_attach">0</property>
@@ -30,11 +29,13 @@ func (*defRuleItem) String() string {
       </packing>
     </child>
     <child>
-      <object class="GtkLabel" id="verb_label">
+      <object class="GtkLabel" id="app_label">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="halign">start</property>
+        <property name="margin_left">8</property>
         <property name="margin_right">10</property>
+        <property name="xalign">0</property>
       </object>
       <packing>
         <property name="left_attach">1</property>
@@ -42,26 +43,13 @@ func (*defRuleItem) String() string {
       </packing>
     </child>
     <child>
-      <object class="GtkLabel" id="origin_label">
+      <object class="GtkImage" id="verb_icon">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
-        <property name="halign">start</property>
-        <property name="margin_right">10</property>
+        <property name="stock">gtk-no</property>
       </object>
       <packing>
         <property name="left_attach">2</property>
-        <property name="top_attach">0</property>
-      </packing>
-    </child>
-    <child>
-      <object class="GtkLabel" id="privs_label">
-        <property name="visible">True</property>
-        <property name="can_focus">False</property>
-        <property name="halign">start</property>
-        <property name="margin_right">10</property>
-      </object>
-      <packing>
-        <property name="left_attach">3</property>
         <property name="top_attach">0</property>
       </packing>
     </child>
@@ -70,10 +58,13 @@ func (*defRuleItem) String() string {
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="halign">start</property>
+        <property name="margin_right">10</property>
         <property name="hexpand">True</property>
+        <property name="xpad">10</property>
+        <property name="xalign">0</property>
       </object>
       <packing>
-        <property name="left_attach">4</property>
+        <property name="left_attach">3</property>
         <property name="top_attach">0</property>
       </packing>
     </child>
@@ -90,6 +81,28 @@ func (*defRuleItem) String() string {
             <property name="visible">True</property>
             <property name="can_focus">False</property>
             <property name="icon_name">document-properties-symbolic</property>
+          </object>
+        </child>
+      </object>
+      <packing>
+        <property name="left_attach">4</property>
+        <property name="top_attach">0</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkButton" id="save_button">
+        <property name="sensitive">False</property>
+        <property name="can_focus">True</property>
+        <property name="receives_default">True</property>
+        <property name="no_show_all">True</property>
+        <property name="tooltip_text" translatable="yes">Save as new permanent firewall rule</property>
+        <property name="relief">none</property>
+        <signal name="clicked" handler="on_save_rule" swapped="no"/>
+        <child>
+          <object class="GtkImage" id="img_save_button">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="icon_name">document-new-symbolic</property>
           </object>
         </child>
       </object>
@@ -111,28 +124,6 @@ func (*defRuleItem) String() string {
             <property name="visible">True</property>
             <property name="can_focus">False</property>
             <property name="icon_name">edit-delete-symbolic</property>
-          </object>
-        </child>
-      </object>
-      <packing>
-        <property name="left_attach">7</property>
-        <property name="top_attach">0</property>
-      </packing>
-    </child>
-    <child>
-      <object class="GtkButton" id="save_button">
-        <property name="sensitive">False</property>
-        <property name="can_focus">True</property>
-        <property name="receives_default">True</property>
-        <property name="no_show_all">True</property>
-        <property name="tooltip_text" translatable="yes">Save as new permanent firewall rule</property>
-        <property name="relief">none</property>
-        <signal name="clicked" handler="on_save_rule" swapped="no"/>
-        <child>
-          <object class="GtkImage" id="img_save_button">
-            <property name="visible">True</property>
-            <property name="can_focus">False</property>
-            <property name="icon_name">document-new-symbolic</property>
           </object>
         </child>
       </object>

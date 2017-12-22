@@ -267,18 +267,13 @@ func (r *Rule) parse(s string) bool {
 		return false
 	}
 
-	if !r.parseSandbox(parts[4]) {
-		log.Warning("invalid sandbox ", parts[4], "in line ", s)
-		return false
-	}
-
 	// fmt.Printf("uid = %v, gid = %v, user = %v, group = %v, hostname = %v, sandbox = %v\n", r.uid, r.gid, r.uname, r.gname, r.hostname, r.sandbox)
 
-	if len(parts) == 6 && len(strings.TrimSpace(parts[5])) > 0 {
-		r.saddr = net.ParseIP(parts[5])
+	if len(parts) == 5 && len(strings.TrimSpace(parts[4])) > 0 {
+		r.saddr = net.ParseIP(parts[4])
 
 		if r.saddr == nil {
-			log.Notice("Error: invalid source IP ", parts[5], " in line ", s)
+			log.Notice("Error: invalid source IP ", parts[4], " in line ", s)
 			return false
 		}
 

@@ -68,6 +68,30 @@ toGApplication(void *p)
 	return (G_APPLICATION(p));
 }
 
+static GActionGroup *
+toGActionGroup(void *p)
+{
+	return (G_ACTION_GROUP(p));
+}
+
+static GActionMap *
+toGActionMap(void *p)
+{
+	return (G_ACTION_MAP(p));
+}
+
+static GAction *
+toGAction(void *p)
+{
+	return (G_ACTION(p));
+}
+
+static GSimpleAction *
+toGSimpleAction(void *p)
+{
+	return (G_SIMPLE_ACTION(p));
+}
+
 static GSettings *
 toGSettings(void *p)
 {
@@ -184,12 +208,11 @@ _g_closure_add_finalize_notifier(GClosure *closure)
 static inline guint _g_signal_new(const gchar *name) {
 	return g_signal_new(name,
 		G_TYPE_OBJECT,
-		G_SIGNAL_RUN_FIRST,
+		G_SIGNAL_RUN_FIRST | G_SIGNAL_ACTION,
 		0, NULL, NULL,
 		g_cclosure_marshal_VOID__POINTER,
 		G_TYPE_NONE,
-		1,
-		G_TYPE_POINTER);
+		0);
 }
 
 static void init_i18n(const char *domain, const char *dir) {

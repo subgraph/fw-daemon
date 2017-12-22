@@ -1,7 +1,7 @@
 {
 	"ImportPath": "github.com/subgraph/fw-daemon",
 	"GoVersion": "go1.7",
-	"GodepVersion": "v79",
+	"GodepVersion": "v74",
 	"Deps": [
 		{
 			"ImportPath": "github.com/godbus/dbus",
@@ -45,15 +45,15 @@
 		},
 		{
 			"ImportPath": "github.com/subgraph/go-nfnetlink",
-			"Rev": "34abd96bd88d0fbc1a5bbba9fff1bdc2c0448f47"
+			"Rev": "bd5c281b400452a89af0cf298503f5d0bddc57c2"
 		},
 		{
 			"ImportPath": "github.com/subgraph/go-nfnetlink/nfqueue",
-			"Rev": "34abd96bd88d0fbc1a5bbba9fff1bdc2c0448f47"
+			"Rev": "bd5c281b400452a89af0cf298503f5d0bddc57c2"
 		},
 		{
 			"ImportPath": "github.com/subgraph/go-procsnitch",
-			"Rev": "fbc2965632eec2dcea9b8d630b081b10980d325d"
+			"Rev": "26d0071b72fb28493634fff6b2194db40114f28a"
 		},
 		{
 			"ImportPath": "github.com/subgraph/oz/ipc",
@@ -63,6 +63,11 @@
 		{
 			"ImportPath": "github.com/subgraph/ozipc",
 			"Rev": "2cbf2ba8878e9dea012edb021f3b4836f7c93202"
+		},
+		{
+			"ImportPath": "github.com/subgraph/oz/vendor/github.com/op/go-logging",
+			"Comment": "0.2.5",
+			"Rev": "69e556d2d33a76f19546471d813a21f7b7fa4181"
 		}
 	]
 }

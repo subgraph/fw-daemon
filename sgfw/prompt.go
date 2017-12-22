@@ -16,10 +16,11 @@ import (
 
 var gPrompter *prompter = nil
 
-func newPrompter(conn *dbus.Conn) *prompter {
+func newPrompter(dbus *dbusServer) *prompter {
 	p := new(prompter)
+	p.dbus = dbus
 	p.cond = sync.NewCond(&p.lock)
-	p.dbusObj = conn.Object("com.subgraph.FirewallPrompt", "/com/subgraph/FirewallPrompt")
+	p.dbusObj = p.dbus.conn.Object("com.subgraph.FirewallPrompt", "/com/subgraph/FirewallPrompt")
 	p.policyMap = make(map[string]*Policy)
 
 	if gPrompter != nil {
@@ -32,6 +33,7 @@ func newPrompter(conn *dbus.Conn) *prompter {
 }
 
 type prompter struct {
+	dbus        *dbusServer
 	dbusObj     dbus.BusObject
 	lock        sync.Mutex
 	cond        *sync.Cond
@@ -265,7 +267,7 @@ func monitorPromptFDLoop() {
 
 }
 
-func init() {
+func InitPrompt() {
 	go monitorPromptFDLoop()
 }
 
@@ -388,7 +390,7 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		policy.fw.saveRules()
 	}
 	//log.Warningf("Prompt returning rule: %v", tempRule)
-	dbusp.alertRule("sgfw prompt added new rule")
+	p.dbus.emitRefresh("rules")
 }
 
 func (p *prompter) nextConnection() (pendingConnection, bool) {
@@ -498,7 +500,7 @@ func (p *prompter) nextConnection() (pendingConnection, bool) {
 						policy.fw.saveRules()
 					}
 					//log.Warningf("Prompt returning rule: %v", tempRule)
-					dbusp.alertRule("sgfw prompt added new rule")
+					p.dbus.emitRefresh("rules")
 				}
 
 			}

@@ -267,6 +267,26 @@ const (
 	WINDOW_STATE_TILED      WindowState = C.GDK_WINDOW_STATE_TILED
 )
 
+// WindowTypeHint is a representation of GDK's GdkWindowTypeHint
+type WindowTypeHint int
+
+const (
+	WINDOW_TYPE_HINT_NORMAL        WindowTypeHint = C.GDK_WINDOW_TYPE_HINT_NORMAL
+	WINDOW_TYPE_HINT_DIALOG        WindowTypeHint = C.GDK_WINDOW_TYPE_HINT_DIALOG
+	WINDOW_TYPE_HINT_MENU          WindowTypeHint = C.GDK_WINDOW_TYPE_HINT_MENU
+	WINDOW_TYPE_HINT_TOOLBAR       WindowTypeHint = C.GDK_WINDOW_TYPE_HINT_TOOLBAR
+	WINDOW_TYPE_HINT_SPLASHSCREEN  WindowTypeHint = C.GDK_WINDOW_TYPE_HINT_SPLASHSCREEN
+	WINDOW_TYPE_HINT_UTILITY       WindowTypeHint = C.GDK_WINDOW_TYPE_HINT_UTILITY
+	WINDOW_TYPE_HINT_DOCK          WindowTypeHint = C.GDK_WINDOW_TYPE_HINT_DOCK
+	WINDOW_TYPE_HINT_DESKTOP       WindowTypeHint = C.GDK_WINDOW_TYPE_HINT_DESKTOP
+	WINDOW_TYPE_HINT_DROPDOWN_MENU WindowTypeHint = C.GDK_WINDOW_TYPE_HINT_DROPDOWN_MENU
+	WINDOW_TYPE_HINT_POPUP_MENU    WindowTypeHint = C.GDK_WINDOW_TYPE_HINT_POPUP_MENU
+	WINDOW_TYPE_HINT_TOOLTIP       WindowTypeHint = C.GDK_WINDOW_TYPE_HINT_TOOLTIP
+	WINDOW_TYPE_HINT_NOTIFICATION  WindowTypeHint = C.GDK_WINDOW_TYPE_HINT_NOTIFICATION
+	WINDOW_TYPE_HINT_COMBO         WindowTypeHint = C.GDK_WINDOW_TYPE_HINT_COMBO
+	WINDOW_TYPE_HINT_DND           WindowTypeHint = C.GDK_WINDOW_TYPE_HINT_DND
+)
+
 // CURRENT_TIME is a representation of GDK_CURRENT_TIME
 
 const CURRENT_TIME = C.GDK_CURRENT_TIME
@@ -385,10 +405,7 @@ func CursorNewFromName(display *Display, name string) (*Cursor, error) {
 		return nil, nilPtrErr
 	}
 
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
-	runtime.SetFinalizer(obj, (*glib.Object).Unref)
-
-	return &Cursor{obj}, nil
+	return &Cursor{glib.Take(unsafe.Pointer(c))}, nil
 }
 
 // native returns a pointer to the underlying GdkCursor.
@@ -446,10 +463,8 @@ func (v *DeviceManager) GetDisplay() (*Display, error) {
 	if c == nil {
 		return nil, nilPtrErr
 	}
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
-	obj.Ref()
-	runtime.SetFinalizer(obj, (*glib.Object).Unref)
-	return &Display{obj}, nil
+
+	return &Display{glib.Take(unsafe.Pointer(c))}, nil
 }
 
 /*
@@ -497,11 +512,8 @@ func DisplayOpen(displayName string) (*Display, error) {
 	if c == nil {
 		return nil, nilPtrErr
 	}
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
-	d := &Display{obj}
-	obj.Ref()
-	runtime.SetFinalizer(obj, (*glib.Object).Unref)
-	return d, nil
+
+	return &Display{glib.Take(unsafe.Pointer(c))}, nil
 }
 
 // DisplayGetDefault() is a wrapper around gdk_display_get_default().
@@ -510,11 +522,8 @@ func DisplayGetDefault() (*Display, error) {
 	if c == nil {
 		return nil, nilPtrErr
 	}
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
-	d := &Display{obj}
-	obj.Ref()
-	runtime.SetFinalizer(obj, (*glib.Object).Unref)
-	return d, nil
+
+	return &Display{glib.Take(unsafe.Pointer(c))}, nil
 }
 
 // GetName() is a wrapper around gdk_display_get_name().
@@ -532,11 +541,8 @@ func (v *Display) GetDefaultScreen() (*Screen, error) {
 	if c == nil {
 		return nil, nilPtrErr
 	}
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
-	s := &Screen{obj}
-	obj.Ref()
-	runtime.SetFinalizer(obj, (*glib.Object).Unref)
-	return s, nil
+
+	return &Screen{glib.Take(unsafe.Pointer(c))}, nil
 }
 
 // DeviceIsGrabbed() is a wrapper around gdk_display_device_is_grabbed().
@@ -577,6 +583,8 @@ func (v *Display) GetEvent() (*Event, error) {
 	if c == nil {
 		return nil, nilPtrErr
 	}
+
+	//The finalizer is not on the glib.Object but on the event.
 	e := &Event{c}
 	runtime.SetFinalizer(e, (*Event).free)
 	return e, nil
@@ -588,6 +596,8 @@ func (v *Display) PeekEvent() (*Event, error) {
 	if c == nil {
 		return nil, nilPtrErr
 	}
+
+	//The finalizer is not on the glib.Object but on the event.
 	e := &Event{c}
 	runtime.SetFinalizer(e, (*Event).free)
 	return e, nil
@@ -645,11 +655,8 @@ func (v *Display) GetDefaultGroup() (*Window, error) {
 	if c == nil {
 		return nil, nilPtrErr
 	}
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
-	w := &Window{obj}
-	obj.Ref()
-	runtime.SetFinalizer(obj, (*glib.Object).Unref)
-	return w, nil
+
+	return &Window{glib.Take(unsafe.Pointer(c))}, nil
 }
 
 // SupportsSelectionNotification() is a wrapper around
@@ -676,6 +683,7 @@ func (v *Display) SupportsClipboardPersistence() bool {
 
 // TODO(jrick)
 func (v *Display) StoreClipboard(clipboardWindow *Window, time uint32, targets ...Atom) {
+	panic("Not implemented")
 }
 
 // SupportsShapes() is a wrapper around gdk_display_supports_shapes().
@@ -692,6 +700,7 @@ func (v *Display) SupportsInputShapes() bool {
 
 // TODO(jrick) glib.AppLaunchContext GdkAppLaunchContext
 func (v *Display) GetAppLaunchContext() {
+	panic("Not implemented")
 }
 
 // NotifyStartupComplete() is a wrapper around gdk_display_notify_startup_complete().
@@ -1257,6 +1266,7 @@ func (v *Pixbuf) GetPixels() (channels []byte) {
 	sliceHeader.Data = uintptr(unsafe.Pointer(c))
 	sliceHeader.Len = int(length)
 	sliceHeader.Cap = int(length)
+
 	// To make sure the slice doesn't outlive the Pixbuf, add a reference
 	v.Ref()
 	runtime.SetFinalizer(&channels, func(_ *[]byte) {
@@ -1308,10 +1318,8 @@ func PixbufNew(colorspace Colorspace, hasAlpha bool, bitsPerSample, width, heigh
 	if c == nil {
 		return nil, nilPtrErr
 	}
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
-	p := &Pixbuf{obj}
-	runtime.SetFinalizer(obj, (*glib.Object).Unref)
-	return p, nil
+
+	return &Pixbuf{glib.Take(unsafe.Pointer(c))}, nil
 }
 
 // PixbufCopy is a wrapper around gdk_pixbuf_copy().
@@ -1320,51 +1328,49 @@ func PixbufCopy(v *Pixbuf) (*Pixbuf, error) {
 	if c == nil {
 		return nil, nilPtrErr
 	}
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
-	p := &Pixbuf{obj}
-	runtime.SetFinalizer(obj, (*glib.Object).Unref)
-	return p, nil
+
+	return &Pixbuf{glib.Take(unsafe.Pointer(c))}, nil
 }
 
 // PixbufNewFromFile is a wrapper around gdk_pixbuf_new_from_file().
 func PixbufNewFromFile(filename string) (*Pixbuf, error) {
 	cstr := C.CString(filename)
 	defer C.free(unsafe.Pointer(cstr))
+
 	var err *C.GError
 	res := C.gdk_pixbuf_new_from_file((*C.char)(cstr), &err)
 	if res == nil {
 		defer C.g_error_free(err)
 		return nil, errors.New(C.GoString((*C.char)(err.message)))
 	}
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(res))}
-	p := &Pixbuf{obj}
-	runtime.SetFinalizer(obj, (*glib.Object).Unref)
-	return p, nil
+
+	return &Pixbuf{glib.Take(unsafe.Pointer(res))}, nil
 }
 
 // PixbufNewFromFileAtSize is a wrapper around gdk_pixbuf_new_from_file_at_size().
 func PixbufNewFromFileAtSize(filename string, width, height int) (*Pixbuf, error) {
 	cstr := C.CString(filename)
 	defer C.free(unsafe.Pointer(cstr))
+
 	var err *C.GError = nil
 	res := C.gdk_pixbuf_new_from_file_at_size(cstr, C.int(width), C.int(height), &err)
 	if err != nil {
 		defer C.g_error_free(err)
 		return nil, errors.New(C.GoString((*C.char)(err.message)))
 	}
+
 	if res == nil {
 		return nil, nilPtrErr
 	}
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(res))}
-	p := &Pixbuf{obj}
-	runtime.SetFinalizer(obj, (*glib.Object).Unref)
-	return p, nil
+
+	return &Pixbuf{glib.Take(unsafe.Pointer(res))}, nil
 }
 
 // PixbufNewFromFileAtScale is a wrapper around gdk_pixbuf_new_from_file_at_scale().
 func PixbufNewFromFileAtScale(filename string, width, height int, preserveAspectRatio bool) (*Pixbuf, error) {
 	cstr := C.CString(filename)
 	defer C.free(unsafe.Pointer(cstr))
+
 	var err *C.GError = nil
 	res := C.gdk_pixbuf_new_from_file_at_scale(cstr, C.int(width), C.int(height),
 		gbool(preserveAspectRatio), &err)
@@ -1372,13 +1378,12 @@ func PixbufNewFromFileAtScale(filename string, width, height int, preserveAspect
 		defer C.g_error_free(err)
 		return nil, errors.New(C.GoString((*C.char)(err.message)))
 	}
+
 	if res == nil {
 		return nil, nilPtrErr
 	}
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(res))}
-	p := &Pixbuf{obj}
-	runtime.SetFinalizer(obj, (*glib.Object).Unref)
-	return p, nil
+
+	return &Pixbuf{glib.Take(unsafe.Pointer(res))}, nil
 }
 
 // ScaleSimple is a wrapper around gdk_pixbuf_scale_simple().
@@ -1388,10 +1393,8 @@ func (v *Pixbuf) ScaleSimple(destWidth, destHeight int, interpType InterpType) (
 	if c == nil {
 		return nil, nilPtrErr
 	}
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
-	p := &Pixbuf{obj}
-	runtime.SetFinalizer(obj, (*glib.Object).Unref)
-	return p, nil
+
+	return &Pixbuf{glib.Take(unsafe.Pointer(c))}, nil
 }
 
 // RotateSimple is a wrapper around gdk_pixbuf_rotate_simple().
@@ -1400,10 +1403,8 @@ func (v *Pixbuf) RotateSimple(angle PixbufRotation) (*Pixbuf, error) {
 	if c == nil {
 		return nil, nilPtrErr
 	}
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
-	p := &Pixbuf{obj}
-	runtime.SetFinalizer(obj, (*glib.Object).Unref)
-	return p, nil
+
+	return &Pixbuf{glib.Take(unsafe.Pointer(c))}, nil
 }
 
 // ApplyEmbeddedOrientation is a wrapper around gdk_pixbuf_apply_embedded_orientation().
@@ -1412,10 +1413,8 @@ func (v *Pixbuf) ApplyEmbeddedOrientation() (*Pixbuf, error) {
 	if c == nil {
 		return nil, nilPtrErr
 	}
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
-	p := &Pixbuf{obj}
-	runtime.SetFinalizer(obj, (*glib.Object).Unref)
-	return p, nil
+
+	return &Pixbuf{glib.Take(unsafe.Pointer(c))}, nil
 }
 
 // Flip is a wrapper around gdk_pixbuf_flip().
@@ -1424,10 +1423,8 @@ func (v *Pixbuf) Flip(horizontal bool) (*Pixbuf, error) {
 	if c == nil {
 		return nil, nilPtrErr
 	}
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
-	p := &Pixbuf{obj}
-	runtime.SetFinalizer(obj, (*glib.Object).Unref)
-	return p, nil
+
+	return &Pixbuf{glib.Take(unsafe.Pointer(c))}, nil
 }
 
 // SaveJPEG is a wrapper around gdk_pixbuf_save().
@@ -1444,6 +1441,7 @@ func (v *Pixbuf) SaveJPEG(path string, quality int) error {
 		defer C.g_error_free(err)
 		return errors.New(C.GoString((*C.char)(err.message)))
 	}
+
 	return nil
 }
 
@@ -1501,10 +1499,7 @@ func PixbufLoaderNew() (*PixbufLoader, error) {
 		return nil, nilPtrErr
 	}
 
-	//TODO this should be some wrap object
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
-	p := &PixbufLoader{obj}
-	runtime.SetFinalizer(obj, (*glib.Object).Unref)
+	p := &PixbufLoader{glib.Take(unsafe.Pointer(c))}
 	return p, nil
 }
 
@@ -1525,11 +1520,7 @@ func PixbufLoaderNewWithType(t string) (*PixbufLoader, error) {
 		return nil, nilPtrErr
 	}
 
-	//TODO this should be some wrap object
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
-	p := &PixbufLoader{obj}
-	runtime.SetFinalizer(obj, (*glib.Object).Unref)
-	return p, nil
+	return &PixbufLoader{glib.Take(unsafe.Pointer(c))}, nil
 }
 
 // Write() is a wrapper around gdk_pixbuf_loader_write().  The
@@ -1582,11 +1573,8 @@ func (v *PixbufLoader) GetPixbuf() (*Pixbuf, error) {
 	if c == nil {
 		return nil, nilPtrErr
 	}
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
-	p := &Pixbuf{obj}
-	obj.Ref()
-	runtime.SetFinalizer(obj, (*glib.Object).Unref)
-	return p, nil
+
+	return &Pixbuf{glib.Take(unsafe.Pointer(c))}, nil
 }
 
 type RGBA struct {

@@ -146,10 +146,12 @@ type ApplicationFlags int
 const (
 	APPLICATION_FLAGS_NONE           ApplicationFlags = C.G_APPLICATION_FLAGS_NONE
 	APPLICATION_IS_SERVICE           ApplicationFlags = C.G_APPLICATION_IS_SERVICE
+	APPLICATION_IS_LAUNCHER          ApplicationFlags = C.G_APPLICATION_IS_LAUNCHER
 	APPLICATION_HANDLES_OPEN         ApplicationFlags = C.G_APPLICATION_HANDLES_OPEN
 	APPLICATION_HANDLES_COMMAND_LINE ApplicationFlags = C.G_APPLICATION_HANDLES_COMMAND_LINE
 	APPLICATION_SEND_ENVIRONMENT     ApplicationFlags = C.G_APPLICATION_SEND_ENVIRONMENT
 	APPLICATION_NON_UNIQUE           ApplicationFlags = C.G_APPLICATION_NON_UNIQUE
+	APPLICATION_CAN_OVERRIDE_APP_ID  ApplicationFlags = C.G_APPLICATION_CAN_OVERRIDE_APP_ID
 )
 
 // goMarshal is called by the GLib runtime when a closure needs to be invoked.
@@ -417,6 +419,22 @@ func (v *Object) native() *C.GObject {
 	}
 	p := unsafe.Pointer(v.GObject)
 	return C.toGObject(p)
+}
+
+// Take wraps a unsafe.Pointer as a glib.Object, taking ownership of it.
+// This function is exported for visibility in other gotk3 packages and
+// is not meant to be used by applications.
+func Take(ptr unsafe.Pointer) *Object {
+	obj := newObject(ToGObject(ptr))
+
+	if obj.IsFloating() {
+		obj.RefSink()
+	} else {
+		obj.Ref()
+	}
+
+	runtime.SetFinalizer(obj, (*Object).Unref)
+	return obj
 }
 
 // Native returns a pointer to the underlying GObject.

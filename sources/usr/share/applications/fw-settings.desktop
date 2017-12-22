@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Subgraph Firewall Settings
+Comment=Launch the Subgraph Firewall Settings
+Keywords=Network;Security;Settings;Subgraph;Firewall;fwdaemon;
+TryExec=fw-settings
+Exec=fw-settings
+Terminal=false
+Type=Application
+Icon=security-medium
+Categories=Security;Settings;
+X-Desktop-File-Install-Version=0.23
+DBusActivatable=true

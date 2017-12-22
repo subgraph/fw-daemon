@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/xml"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,6 +19,51 @@ const (
 	xmlExtension = ".xml"
 )
 
+type GtkXMLInterface struct {
+	XMLName xml.Name `xml:"interface"`
+	Objects []*GtkXMLObject `xml:"object"`
+	Requires *GtkXMLRequires `xml:"requires"`
+	Comment string `xml:",comment"`
+}
+
+type GtkXMLRequires struct {
+	Lib string `xml:"lib,attr"`
+	Version string `xml:"version,attr"`
+}
+
+type GtkXMLObject struct {
+	XMLName xml.Name `xml:"object"`
+	Class string `xml:"class,attr"`
+	ID string `xml:"id,attr,omitempty"`
+	Properties []GtkXMLProperty `xml:"property"`
+	Children []GtkXMLChild `xml:"child,omitempty"`
+	Signals []GtkXMLSignal `xml:"signal,omitempty"`
+}
+
+type GtkXMLChild struct {
+	XMLName xml.Name `xml:"child"`
+	Objects []*GtkXMLObject `xml:"object"`
+	Placeholder *GtkXMLPlaceholder `xml:"placeholder,omitempty"`
+	InternalChild string `xml:"internal-child,attr,omitempty"`
+}
+
+type GtkXMLProperty struct {
+	XMLName xml.Name `xml:"property"`
+	Name string `xml:"name,attr"`
+	Translatable string `xml:"translatable,attr,omitempty"`
+	Value string `xml:",chardata"`
+}
+
+type GtkXMLSignal struct {
+	XMLName xml.Name `xml:"signal"`
+	Name string `xml:"name,attr"`
+	Handler string `xml:"handler,attr"`
+}
+
+type GtkXMLPlaceholder struct {
+	XMLName xml.Name `xml:"placeholder"`
+}
+
 func getDefinitionWithFileFallback(uiName string) string {
 	// this makes sure a missing definition wont break only when the app is released
 	uiDef := getDefinition(uiName)
@@ -28,6 +74,38 @@ func getDefinitionWithFileFallback(uiName string) string {
 	}
 
 	return readFile(fileName)
+}
+
+// This must be called from the UI thread - otherwise bad things will happen sooner or later
+func builderForString(template string) *gtk.Builder {
+	// assertInUIThread()
+
+	maj := gtk.GetMajorVersion()
+	min := gtk.GetMinorVersion()
+
+	if (maj == 3) && (min < 20) {
+		fmt.Fprintf(os.Stderr,
+			"Attempting runtime work-around for older versions of libgtk-3...\n")
+		dep_re := regexp.MustCompile(`<\s?property\s+name\s?=\s?"icon_size"\s?>.+<\s?/property\s?>`)
+		template = dep_re.ReplaceAllString(template, ``)
+
+		dep_re2 := regexp.MustCompile(`version\s?=\s?"3.20"`)
+		template = dep_re2.ReplaceAllString(template, `version="3.18"`)
+	}
+
+	builder, err := gtk.BuilderNew()
+	if err != nil {
+		//We cant recover from this
+		panic(err)
+	}
+
+	err = builder.AddFromString(template)
+	if err != nil {
+		//This is a programming error
+		panic(fmt.Sprintf("gui: failed load string template: %s\n", err.Error()))
+	}
+
+	return builder
 }
 
 // This must be called from the UI thread - otherwise bad things will happen sooner or later
@@ -95,6 +173,10 @@ type builder struct {
 
 func newBuilder(uiName string) *builder {
 	return &builder{builderForDefinition(uiName)}
+}
+
+func newBuilderFromString(template string) *builder {
+	return &builder{builderForString(template)}
 }
 
 func (b *builder) getItem(name string, target interface{}) {
