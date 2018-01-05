@@ -31,12 +31,14 @@ const FirewallSupport = new Lang.Class({
             this.handler = null;
         }
     },
+
     enable: function() {
         this._destroyHandler();
         this.handler = new FirewallPromptHandler();
         //this.cmon.install();
         this.menu.install();
     },
+
     disable: function() {
         this.menu.destroy();
         //this.cmon.remove();
@@ -137,14 +139,14 @@ const FirewallPromptHandler = new Lang.Class({
     },
 
     _destroyKeybindings: function() {
-        for (var i = 0 , ii = keyBindings.length; i < ii; i++) {
+        for (var i = 0 , ii = this._keyBindings.length; i < ii; i++) {
             Main.wm.removeKeybinding(this._keyBindings[i]);
         }
     },
 
     _closeDialogs: function() {
         log("SGFW: Closing all dialogs");
-        if (this._dialogs.length > 0) {
+        while (this._dialogs.length > 0) {
             dialog = this._dialogs.shift();
             dialog.close();
         }
