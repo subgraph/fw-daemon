@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const TLSGUARD_READ_TIMEOUT = 8 // seconds
+const TLSGUARD_READ_TIMEOUT = 10 // seconds
 const TLSGUARD_MIN_TLS_VER_MAJ = 3
 const TLSGUARD_MIN_TLS_VER_MIN = 1
 
@@ -25,9 +25,13 @@ const SSL3_RT_APPLICATION_DATA = 23
 const SSL3_MT_HELLO_REQUEST = 0
 const SSL3_MT_CLIENT_HELLO = 1
 const SSL3_MT_SERVER_HELLO = 2
+const SSL3_MT_HELLO_VERIFY_REQUEST = 3
+const SSL3_MT_NEW_SESSION_TICKET = 4
 const SSL3_MT_CERTIFICATE = 11
+const SSL3_MT_SERVER_KEY_EXCHANGE = 12
 const SSL3_MT_CERTIFICATE_REQUEST = 13
 const SSL3_MT_SERVER_DONE = 14
+const SSL3_MT_CLIENT_KEY_EXCHANGE = 16
 const SSL3_MT_CERTIFICATE_STATUS = 22
 
 const SSL3_AL_WARNING = 1
@@ -273,7 +277,8 @@ func connectionReader(conn net.Conn, is_client bool, c chan connReader, done cha
 	ntimeouts := 0
 
 	for {
-		if ret_error != nil {
+		//fmt.Println("stage ", stage, " is client ", is_client, " ntimeouts ", ntimeouts)
+		if ret_error != nil || ntimeouts >= TLSGUARD_READ_TIMEOUT {
 			cr := connReader{client: is_client, data: nil, rtype: 0, err: ret_error}
 			c <- cr
 			break
@@ -296,11 +301,11 @@ func connectionReader(conn net.Conn, is_client bool, c chan connReader, done cha
 				_, err := io.ReadFull(conn, header)
 				conn.SetReadDeadline(time.Time{})
 				if err != nil {
-					if err, ok := err.(net.Error); ok && err.Timeout() {
+					if err, ok := err.(net.Error); ok && !err.Timeout() {
 						ret_error = err
 					} else {
 						ntimeouts++
-						if ntimeouts == TLSGUARD_READ_TIMEOUT {
+						if ntimeouts >= TLSGUARD_READ_TIMEOUT {
 							ret_error = err
 						}
 					}
@@ -334,18 +339,19 @@ func connectionReader(conn net.Conn, is_client bool, c chan connReader, done cha
 				ntimeouts = 0
 			} else if stage == 2 {
 				remainder := make([]byte, mlen)
-				conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+				conn.SetReadDeadline(time.Now().Add(1 * time.Second))
 				numRead, err := io.ReadFull(conn, remainder)
 				conn.SetReadDeadline(time.Time{})
 				if err != nil {
-					if err, ok := err.(net.Error); ok && err.Timeout() {
+					if err, ok := err.(net.Error); ok && !err.Timeout() {
 						ret_error = err
 						if numRead > 0 {
 							buffered = append(buffered, remainder[:numRead]...)
 						}
 					} else {
 						ntimeouts++
-						if ntimeouts == TLSGUARD_READ_TIMEOUT {
+						//fmt.Println(is_client, " timeout #", ntimeouts)
+						if ntimeouts >= TLSGUARD_READ_TIMEOUT {
 							ret_error = err
 						}
 					}
@@ -396,8 +402,8 @@ func TLSGuard(conn, conn2 net.Conn, fqdn string) error {
 	go connectionReader(conn, true, crChan, dChan)
 	go connectionReader(conn2, false, crChan, dChan2)
 
-	client_expected := []uint{SSL3_MT_CLIENT_HELLO}
-	server_expected := []uint{SSL3_MT_SERVER_HELLO}
+	client_expected := []uint{SSL3_MT_CLIENT_HELLO, SSL3_MT_CLIENT_KEY_EXCHANGE, SSL3_MT_HELLO_REQUEST}
+	server_expected := []uint{SSL3_MT_SERVER_HELLO, SSL3_MT_HELLO_VERIFY_REQUEST, SSL3_MT_SERVER_KEY_EXCHANGE, SSL3_MT_NEW_SESSION_TICKET}
 
 	client_sess := false
 	server_sess := false
@@ -408,8 +414,8 @@ select_loop:
 	for {
 		if ndone == 2 {
 			// fmt.Println("DONE channel got both notifications. Terminating loop.")
-			close(dChan)
-			close(dChan2)
+			//close(dChan)
+			//close(dChan2)
 			close(crChan)
 			break
 		}
@@ -481,14 +487,14 @@ select_loop:
 
 				if (client_sess || server_sess) && (client_change_cipher || server_change_cipher) {
 
-					//if handshakeMessageLenInt > len(cr.data)+9 {
+					if handshakeMessageLenInt > len(cr.data)+9 {
 						log.Notice("TLSGuard saw what looks like a resumed encrypted session... passing connection through")
 						other.Write(cr.data)
 						dChan <- true
 						dChan2 <- true
 						x509Valid = true
 						break select_loop
-					//}
+					}
 
 				}
 
@@ -504,7 +510,7 @@ select_loop:
 					//SRC := ""
 
 					if s != SSL3_MT_CLIENT_HELLO {
-						server_expected = []uint{SSL3_MT_CERTIFICATE, SSL3_MT_HELLO_REQUEST}
+						server_expected = []uint{SSL3_MT_CERTIFICATE, SSL3_MT_HELLO_REQUEST, SSL3_MT_HELLO_VERIFY_REQUEST, SSL3_MT_SERVER_KEY_EXCHANGE, SSL3_MT_NEW_SESSION_TICKET}
 						//SRC = "CLIENT"
 					} else {
 						//SRC = "SERVER"
@@ -610,7 +616,7 @@ select_loop:
 					server_expected = []uint{SSL3_MT_CERTIFICATE}
 				}
 
-				if !cr.client && s == SSL3_MT_HELLO_REQUEST {
+				if !cr.client && s == SSL3_MT_HELLO_REQUEST || s == SSL3_MT_HELLO_VERIFY_REQUEST {
 					//fmt.Println("Server sent hello request")
 					other.Write(cr.data)
 					continue
@@ -727,7 +733,6 @@ select_loop:
 	if !x509Valid {
 		return errors.New("Unknown error: TLS connection could not be validated")
 	}
-
 	return nil
 
 }

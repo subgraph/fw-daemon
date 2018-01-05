@@ -420,9 +420,9 @@ func (c *socksChainSession) forwardTraffic(tls bool) {
 				log.Errorf("TLSGuard violation: Dropping traffic from %s (unsandboxed) to %s: %s", c.pinfo.ExePath, dest, x509ValidationError)
 			}
 			return
-		} /*else {
+		} else {
 			log.Notice("TLSGuard approved certificate presented for connection to: ", dest)
-		} */
+		} 
 	}
 
 	var wg sync.WaitGroup
@@ -431,7 +431,7 @@ func (c *socksChainSession) forwardTraffic(tls bool) {
 	copyLoop := func(dst, src net.Conn) {
 		defer wg.Done()
 		defer dst.Close()
-
+		//fmt.Println("in copy loop")
 		io.Copy(dst, src)
 	}
 	go copyLoop(c.upstreamConn, c.clientConn)
