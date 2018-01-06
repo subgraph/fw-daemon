@@ -190,6 +190,12 @@ const FirewallPromptHandler = new Lang.Class({
 
     onCloseDialog: function() {
         log("SGFW: Closed dialog");
+        try {
+            this._dialog.close();
+            this._dialog.destroy();
+        } catch (err) {
+            log("SGFW: Unable to close/destroy modal...");
+        }
         this._dialog = null;
         if (this._dialogs.length > 0) {
             log("SGFW: Opening next dialogs (remaining: " + this._dialogs.length + ")");
