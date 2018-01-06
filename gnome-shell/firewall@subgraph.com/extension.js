@@ -1,5 +1,7 @@
 const Lang = imports.lang;
+
 const Main = imports.ui.main;
+
 const Meta = imports.gi.Meta;
 const Shell = imports.gi.Shell;
 
@@ -87,6 +89,7 @@ const FirewallPromptHandler = new Lang.Class({
         this._dbusImpl.export(Gio.DBus.system, '/com/subgraph/FirewallPrompt');
         Gio.bus_own_name_on_connection(Gio.DBus.system, 'com.subgraph.FirewallPrompt', Gio.BusNameOwnerFlags.REPLACE, null, null);
         this._dialogs = new Array();
+        this._dialog = null;
         this._initKeybindings();
     },
 
@@ -118,23 +121,23 @@ const FirewallPromptHandler = new Lang.Class({
     },
 
     _handleKeybinding: function(a, b, c, d, binding) {
-        if (this._dialogs.length <= 0) {
+        if (this._dialog === null || this._dialog === undefined) {
             return false;
         }
 
         let fname = binding.replace(/-([a-z])/g, function (g) { return g[1].toUpperCase(); });
         let fname = "_on"+ fname[0].toUpperCase() + fname.substr(1);
-        if (!( fname in this._dialogs[0] )) {
+        if (!( fname in this._dialog )) {
             log("SGFW: Invalid key binding (1)... " + fname);
             return true;
         }
-        let fn = this._dialogs[0][fname];
+        let fn = this._dialog[fname];
         if (typeof fn !== "function") {
             log("SGFW: Invalid key binding (2)... " + fname + " " + (typeof fn));
             return true;
         }
 
-        Lang.bind(this._dialogs[0], fn)();
+        Lang.bind(this._dialog, fn)();
         return true;
     },
 
@@ -146,32 +149,53 @@ const FirewallPromptHandler = new Lang.Class({
 
     _closeDialogs: function() {
         log("SGFW: Closing all dialogs");
+        if (this._dialog !== null && this._dialog !== undefined) {
+            this._dialog.close();
+        }
         while (this._dialogs.length > 0) {
-            dialog = this._dialogs.shift();
-            dialog.close();
+            this._dialogs.shift();
         }
     },
 
     RequestPromptAsync: function(params, invocation) {
-        let [app, icon, path, address, port, ip, origin, proto, uid, gid, user, group, pid, sandbox, tlsguard, optstring, expanded, expert, action] = params;
-        let cbfn = function(self) {
-            return function() { return self.onCloseDialog(); }
-        }(this)
+        log("SGFW: Requesting new dialog prompt...");
+        try {
+            params.push(invocation)
+            this._dialogs.push(params);
+            log("SGFW: DERP: " + this._dialogs);
+            if (this._dialog === null || this._dialog === undefined) {
+                this._dialog = true;
+                this._createDialog();
+            }
+        } catch (err) {
+            log("SGFW: Error while requesting prompt: " + err);
+        }
+    },
 
-        let l = this._dialogs.push(new Dialog.PromptDialog(invocation, (pid >= 0), (sandbox != ""), tlsguard, cbfn));
-        let dialog = this._dialogs[l-1]
-        dialog.update(app, icon, path, address, port, ip, origin, uid, gid, user, group, pid, proto, tlsguard, optstring, sandbox, expanded, expert, action);
-        if (this._dialogs.length == 1) {
-            dialog.open();
+    _createDialog: function() {
+        log("SGFW: Creating next available dialog...");
+        try {
+            let params = this._dialogs.shift();
+            log("SGFW: " + params);
+            let [app, icon, path, address, port, ip, origin, proto, uid, gid, user, group, pid, sandbox, tlsguard, optstring, expanded, expert, action, invocation] = params;
+            let cbfn = function(self) {
+                return function() { return self.onCloseDialog(); }
+            }(this)
+
+            this._dialog = new Dialog.PromptDialog(invocation, (pid >= 0), (sandbox != ""), tlsguard, cbfn);
+            this._dialog.update(app, icon, path, address, port, ip, origin, uid, gid, user, group, pid, proto, tlsguard, optstring, sandbox, expanded, expert, action);
+            this._dialog.open();
+        } catch (err) {
+            log("SGFW: Error while creating prompt: " + err);
         }
     },
 
     onCloseDialog: function() {
         log("SGFW: Closed dialog");
-        this._dialogs.shift();
+        this._dialog = null;
         if (this._dialogs.length > 0) {
             log("SGFW: Opening next dialogs (remaining: " + this._dialogs.length + ")");
-            this._dialogs[0].open();
+            this._createDialog();
         }
     },
 
