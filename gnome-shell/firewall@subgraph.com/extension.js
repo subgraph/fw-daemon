@@ -162,7 +162,6 @@ const FirewallPromptHandler = new Lang.Class({
         try {
             params.push(invocation)
             this._dialogs.push(params);
-            log("SGFW: DERP: " + this._dialogs);
             if (this._dialog === null || this._dialog === undefined) {
                 this._dialog = true;
                 this._createDialog();
@@ -176,7 +175,6 @@ const FirewallPromptHandler = new Lang.Class({
         log("SGFW: Creating next available dialog...");
         try {
             let params = this._dialogs.shift();
-            log("SGFW: " + params);
             let [app, icon, path, address, port, ip, origin, proto, uid, gid, user, group, pid, sandbox, tlsguard, optstring, expanded, expert, action, invocation] = params;
             let cbfn = function(self) {
                 return function() { return self.onCloseDialog(); }
