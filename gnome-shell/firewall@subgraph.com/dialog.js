@@ -603,17 +603,17 @@ const PromptDialog = new Lang.Class({
     },
 
     onAllow: function() {
-        if (this.cbClose !== undefined && this.cbClose !== null) {
-            this.cbClose();
-        }
+        //if (this.cbClose !== undefined && this.cbClose !== null) {
+        //    this.cbClose();
+        //}
         this.close();
         this.sendReturnValue(true);
     },
 
     onDeny: function() {
-        if (this.cbClose !== undefined && this.cbClose !== null) {
-            this.cbClose();
-        }
+        //if (this.cbClose !== undefined && this.cbClose !== null) {
+        //    this.cbClose();
+        //}
         this.close();
         this.sendReturnValue(false);
     },

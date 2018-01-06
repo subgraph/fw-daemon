@@ -182,6 +182,7 @@ const FirewallPromptHandler = new Lang.Class({
 
             this._dialog = new Dialog.PromptDialog(invocation, (pid >= 0), (sandbox != ""), tlsguard, cbfn);
             this._dialog.update(app, icon, path, address, port, ip, origin, uid, gid, user, group, pid, proto, tlsguard, optstring, sandbox, expanded, expert, action);
+            this._dialog.connect("closed", Lang.bind(this, this.onCloseDialog));
             this._dialog.open();
         } catch (err) {
             log("SGFW: Error while creating prompt: " + err);
@@ -194,7 +195,7 @@ const FirewallPromptHandler = new Lang.Class({
             this._dialog.close();
             this._dialog.destroy();
         } catch (err) {
-            log("SGFW: Unable to close/destroy modal...");
+            log("SGFW: Error unable to close/destroy modal...");
         }
         this._dialog = null;
         if (this._dialogs.length > 0) {
