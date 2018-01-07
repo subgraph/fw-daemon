@@ -6,6 +6,7 @@ const Meta = imports.gi.Meta;
 const Shell = imports.gi.Shell;
 
 const Gio = imports.gi.Gio;
+const GLib = imports.gi.GLib;
 
 const Extension = imports.misc.extensionUtils.getCurrentExtension();
 const Convenience = Extension.imports.convenience;
@@ -176,14 +177,16 @@ const FirewallPromptHandler = new Lang.Class({
         try {
             let params = this._dialogs.shift();
             let [app, icon, path, address, port, ip, origin, proto, uid, gid, user, group, pid, sandbox, tlsguard, optstring, expanded, expert, action, invocation] = params;
-            let cbfn = function(self) {
-                return function() { return self.onCloseDialog(); }
-            }(this)
 
-            this._dialog = new Dialog.PromptDialog(invocation, (pid >= 0), (sandbox != ""), tlsguard, cbfn);
+            this._dialog = new Dialog.PromptDialog(invocation, (pid >= 0), (sandbox != ""), tlsguard);
             this._dialog.update(app, icon, path, address, port, ip, origin, uid, gid, user, group, pid, proto, tlsguard, optstring, sandbox, expanded, expert, action);
             this._dialog.connect("closed", Lang.bind(this, this.onCloseDialog));
-            this._dialog.open();
+            let dio = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, Lang.bind(this, function() {
+                if (this._dialog.open()) {
+                    GLib.source_remove(dio);
+                    dio = null;
+                }
+            }));
         } catch (err) {
             log("SGFW: Error while creating prompt: " + err);
         }
