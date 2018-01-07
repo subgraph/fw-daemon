@@ -101,7 +101,11 @@ const FirewallPromptHandler = new Lang.Class({
         this._dbusImpl.unexport();
         this._destroyKeybindings();
         if (this._promptTimeout !== null) {
-            GLib.source_remove(this._promptTimeout);
+            try {
+                GLib.source_remove(this._promptTimeout);
+            } catch (err) {
+                //
+            }
         }
     },
 
@@ -186,13 +190,15 @@ const FirewallPromptHandler = new Lang.Class({
             this._dialog.update(app, icon, path, address, port, ip, origin, uid, gid, user, group, pid, proto, tlsguard, optstring, sandbox, expanded, expert, action);
             this._dialog.connect("closed", Lang.bind(this, this.onCloseDialog));
             let fcount = 0;
-            this._promptTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 10, Lang.bind(this, function() {
+            this._promptTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 20, Lang.bind(this, function() {
                 if (this._dialog.open()) {
+                    this._promptTimeout = null;
                     return false;
                 }
-                if (fcount++ > 100) {
-                    this._dialog.destroy();
+                if (fcount++ > 200) {
                     log("SGFW: Failed creating dialog, repeated pushModal failures!");
+                    this._promptTimeout = null;
+                    this.onCloseDialog();
                     return false;
                 }
                 return true;
