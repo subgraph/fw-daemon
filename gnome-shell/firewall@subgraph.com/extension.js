@@ -91,6 +91,7 @@ const FirewallPromptHandler = new Lang.Class({
         Gio.bus_own_name_on_connection(Gio.DBus.system, 'com.subgraph.FirewallPrompt', Gio.BusNameOwnerFlags.REPLACE, null, null);
         this._dialogs = new Array();
         this._dialog = null;
+        this._promptTimeout = null;
         this._initKeybindings();
     },
 
@@ -99,6 +100,9 @@ const FirewallPromptHandler = new Lang.Class({
         this._closeDialogs();
         this._dbusImpl.unexport();
         this._destroyKeybindings();
+        if (this._promptTimeout !== null) {
+            GLib.source_remove(this._promptTimeout);
+        }
     },
 
     _initKeybindings: function() {
@@ -181,11 +185,17 @@ const FirewallPromptHandler = new Lang.Class({
             this._dialog = new Dialog.PromptDialog(invocation, (pid >= 0), (sandbox != ""), tlsguard);
             this._dialog.update(app, icon, path, address, port, ip, origin, uid, gid, user, group, pid, proto, tlsguard, optstring, sandbox, expanded, expert, action);
             this._dialog.connect("closed", Lang.bind(this, this.onCloseDialog));
-            let dio = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, Lang.bind(this, function() {
+            let fcount = 0;
+            this._promptTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 10, Lang.bind(this, function() {
                 if (this._dialog.open()) {
-                    GLib.source_remove(dio);
-                    dio = null;
+                    return false;
                 }
+                if (fcount++ > 100) {
+                    this._dialog.destroy();
+                    log("SGFW: Failed creating dialog, repeated pushModal failures!");
+                    return false;
+                }
+                return true;
             }));
         } catch (err) {
             log("SGFW: Error while creating prompt: " + err);
