@@ -140,7 +140,7 @@ func (*defRuleNew) String() string {
                 <property name="can_focus">False</property>
                 <property name="halign">start</property>
                 <property name="hexpand">False</property>
-                <property name="label" translatable="yes">Sandbox:</property>
+                <property name="label" translatable="yes">Realm:</property>
                 <attributes>
                   <attribute name="weight" value="bold"/>
                 </attributes>

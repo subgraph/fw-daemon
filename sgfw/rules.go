@@ -165,7 +165,10 @@ func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint
 		//log.Notice("------------ trying match of src ", src, " against: ", r, " | ", r.saddr, " / optstr = ", optstr, "; pid ", pinfo.Pid, " vs rule pid ", r.pid)
 		//log.Notice("r.saddr: ", r.saddr, "src: ", src, "sandboxed ", sandboxed, "optstr: ", optstr)
 		if r.saddr == nil && src != nil && sandboxed {
-			log.Notice("! Skipping comparison against incompatible rule types: rule src = ", r.saddr, " / packet src = ", src)
+			if pkt != nil {
+			nfqproto = getNFQProto(pkt)
+		}
+			//log.Notice("! Skipping comparison against incompatible rule types: rule src = ", r.saddr, " / packet src = ", src)
 			// continue
 		} else if r.saddr == nil && src == nil && sandboxed {
 			// continue

@@ -194,6 +194,7 @@ func createDbusRule(r *Rule) DbusRule {
 		Mode:     uint16(r.mode),
 		IsSocks:  false,//r.is_socks,
 		Sandbox:  r.policy.sandbox,
+		Realm:    r.policy.sandbox,
 		UID:      int32(r.uid),
 		GID:      int32(r.gid),
 		Username: r.uname,

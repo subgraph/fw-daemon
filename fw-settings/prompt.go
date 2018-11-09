@@ -57,7 +57,7 @@ const (
 type ruleColumns struct {
 	nrefs     int
 	Path      string
-	Sandbox   string
+	Sandbox     string
 	GUID      string
 	Icon      string
 	Proto     string
@@ -102,8 +102,8 @@ func createPromptView(app *fwApp, sw *gtk.ScrolledWindow) (*Prompt, error) {
 
 	p.tv.AppendColumn(createColumnText("Path", COL_NO_PATH))
 
-	sbcol := createColumnText("Sandbox", COL_NO_SANDBOX)
-	sbcol.SetVisible(false)
+	sbcol := createColumnText("Realm", COL_NO_SANDBOX)
+	//sbcol.SetVisible(true)
 	p.tv.AppendColumn(sbcol)
 
 	icol := createColumnText("Icon", COL_NO_ICON)

@@ -147,7 +147,7 @@ func (fa *fwApp) init() {
 		panic(err)
 	}
 
-	fa.initOZProfiles()
+	//fa.initOZProfiles()
 
 	fa.initGtk()
 	fa.Settings = settings.Init()
@@ -925,6 +925,7 @@ func (fa *fwApp) ConnectShortcut(accel, group, title string, w gtk.Window, actio
 }
 
 func (fa *fwApp) LookupUsername(uid int32) string {
+	// TODO: needs to be realm aware
 	if uid == -1 {
 		return "any"
 	}
@@ -938,6 +939,7 @@ func (fa *fwApp) LookupUsername(uid int32) string {
 }
 
 func (fa *fwApp) LookupGroup(gid int32) string {
+	// TODO: needs to be realm aware
 	if gid == -1 {
 		return "any"
 	}

@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"unsafe"
+	// "github.com/godbus/dbus"
 )
 
 var log = logging.MustGetLogger("go-procsockets")
@@ -28,6 +29,7 @@ var pcache = &pidCache{}
 // Note: this can aid in the construction of unit tests.
 type ProcInfo interface {
 	LookupTCPSocketProcess(srcPort uint16, dstAddr net.IP, dstPort uint16) *Info
+	LookupTCPSocketProcessAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort uint16, custdata []string) *Info
 	LookupUNIXSocketProcess(socketFile string) *Info
 	LookupUDPSocketProcess(srcPort uint16) *Info
 }
@@ -39,6 +41,10 @@ type SystemProcInfo struct {
 // LookupTCPSocketProcess returns the process information for a given TCP connection.
 func (r SystemProcInfo) LookupTCPSocketProcess(srcPort uint16, dstAddr net.IP, dstPort uint16) *Info {
 	return LookupTCPSocketProcess(srcPort, dstAddr, dstPort)
+}
+
+func (r SystemProcInfo) LookupTCPSocketProcessAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort uint16, custdata []string) *Info {
+	return LookupTCPSocketProcessAll(srcAddr, srcPort, dstAddr, dstPort, custdata)
 }
 
 // LookupUNIXSocketProcess returns the process information for a given UNIX socket connection.
@@ -58,11 +64,12 @@ func FindProcessForConnection(conn net.Conn, procInfo ProcInfo) *Info {
 	if conn.LocalAddr().Network() == "tcp" {
 		fields := strings.Split(conn.RemoteAddr().String(), ":")
 		dstPortStr := fields[1]
+		srcIP := net.ParseIP(fields[0]);
 		fields = strings.Split(conn.LocalAddr().String(), ":")
 		dstIP := net.ParseIP(fields[0])
 		srcP, _ := strconv.ParseUint(dstPortStr, 10, 16)
 		dstP, _ := strconv.ParseUint(fields[1], 10, 16)
-		info = procInfo.LookupTCPSocketProcess(uint16(srcP), dstIP, uint16(dstP))
+		info = procInfo.LookupTCPSocketProcessAll(srcIP, uint16(srcP), dstIP, uint16(dstP), nil)
 	} else if conn.LocalAddr().Network() == "unix" {
 		info = procInfo.LookupUNIXSocketProcess(conn.LocalAddr().String())
 	}
@@ -208,6 +215,43 @@ func getConnections() ([]*connectionInfo, error) {
 
 func resolveProcinfo(conns []*connectionInfo) {
 	var sockets []*socketStatus
+	//conn, _ := dbus.SystemBus()
+	
+/*	m := make(map[string]string)
+
+	for _, ci := range conns {
+		if _, ok := m[ci.local.ip.String()]; !ok {
+			var leaderpid string
+			obj := conn.Object("com.subgraph.realms", "/")
+			call := obj.Call("com.subgraph.realms.Manager.LeaderPidFromIP", 0, ci.local.ip.String()).Store(&leaderpid);
+			m[ci.local.ip.String()] = leaderpid;
+		}
+	}
+
+	for ip, pid := range m {
+		if pid != "" {
+			for _, line := range getSocketLinesPid("tcp", pid) {
+				if len(strings.TrimSpace(line)) == 0 {
+					continue
+				}
+				ss := new(socketStatus)
+				if err := ss.parseLine(line); err != nil {
+					log.Warningf("Unable to parse line [%s]: %v", line, err)
+				} 
+			}
+		} else {
+			for _, line := range getSocketLines("tcp") {
+				if len(strings.TrimSpace(line)) == 0 {
+					continue
+				}
+				ss := new (socketStatus)
+				if err := ss.parseLine(line); err != nil {
+					log.Warningf("Unable to parse line [%s]: %v", line, err)
+				}
+			}
+		}
+	}
+/*
 	for _, line := range getSocketLines("tcp") {
 		if len(strings.TrimSpace(line)) == 0 {
 			continue
@@ -225,7 +269,7 @@ func resolveProcinfo(conns []*connectionInfo) {
 				}
 
 		}*/
-	}
+	// }
 	for _, ci := range conns {
 		ss := findContrackSocket(ci, sockets)
 		if ss == nil {

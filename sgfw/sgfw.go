@@ -1,13 +1,8 @@
 package sgfw
 
 import (
-	"bufio"
-	"encoding/json"
-	"fmt"
 	"os"
 	"os/signal"
-	"regexp"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -146,56 +141,6 @@ func (fw *Firewall) runFilter() {
 	}
 }
 
-type SocksJsonConfig struct {
-	Name          string
-	SocksListener string
-	TorSocks      string
-}
-
-var commentRegexp = regexp.MustCompile("^[ \t]*#")
-
-const defaultSocksCfgPath = "/etc/sgfw/fw-daemon-socks.json"
-
-func loadSocksConfiguration(configFilePath string) (*SocksJsonConfig, error) {
-	config := SocksJsonConfig{}
-	file, err := os.Open(configFilePath)
-	if err != nil {
-		return nil, err
-	}
-	scanner := bufio.NewScanner(file)
-	bs := ""
-	for scanner.Scan() {
-		line := scanner.Text()
-		if !commentRegexp.MatchString(line) {
-			bs += line + "\n"
-		}
-	}
-	if err := json.Unmarshal([]byte(bs), &config); err != nil {
-		return nil, err
-	}
-	return &config, nil
-}
-
-func getSocksChainConfig(config *SocksJsonConfig) *socksChainConfig {
-	// TODO: fix this to support multiple named proxy forwarders of different types
-	fields := strings.Split(config.TorSocks, "|")
-	torSocksNet := fields[0]
-	torSocksAddr := fields[1]
-	fields = strings.Split(config.SocksListener, "|")
-	socksListenNet := fields[0]
-	socksListenAddr := fields[1]
-	socksConfig := socksChainConfig{
-		Name:            config.Name,
-		TargetSocksNet:  torSocksNet,
-		TargetSocksAddr: torSocksAddr,
-		ListenSocksNet:  socksListenNet,
-		ListenSocksAddr: socksListenAddr,
-	}
-	log.Notice("Loaded Socks chain config:")
-	log.Notice(socksConfig)
-	return &socksConfig
-}
-
 func Main() {
 	readConfig()
 	logBackend, logBackend2 := setupLoggerBackend(FirewallConfig.LoggingLevel)
@@ -235,40 +180,9 @@ func Main() {
 
 	fw.loadRules()
 
-	/*
-	   go func() {
-	           http.ListenAndServe("localhost:6060", nil)
-	   }()
-	*/
-
-	wg := sync.WaitGroup{}
-
-	scfile := os.Getenv("SGFW_SOCKS_CONFIG")
-
-	if scfile == "" {
-		scfile = defaultSocksCfgPath
-	}
-
-	config, err := loadSocksConfiguration(scfile)
-	if err != nil && !os.IsNotExist(err) {
-		panic(err)
-	}
-	if config != nil {
-		socksConfig := getSocksChainConfig(config)
-		chain := NewSocksChain(socksConfig, &wg, fw)
-		chain.start()
-	} else {
-		log.Notice("Did not find SOCKS5 configuration file at", scfile, "; ignoring subsystem...")
-	}
-
-	dbLogger, err = newDbusRedactedLogger()
-	if err != nil {
-		panic(fmt.Sprintf("Failed to connect to DBus system bus for redacted logger: %v", err))
-	}
-
 	fw.dbus.emitRefresh("init")
 
-	go OzReceiver(fw)
+	//go OzReceiver(fw)
 
 	fw.runFilter()
 

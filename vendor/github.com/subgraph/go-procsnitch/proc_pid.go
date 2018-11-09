@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"github.com/godbus/dbus"
 )
 
 // Info is a struct containing the result of a socket proc query
@@ -23,7 +24,8 @@ type Info struct {
 	FirstArg      string
 	ParentCmdLine string
 	ParentExePath string
-	Sandbox       string
+	Realm         string
+	Sandbox         string
 	Inode         uint64
 	FD            int
 }
@@ -182,6 +184,11 @@ func (pi *Info) loadProcessInfo() bool {
 		}
 	}
 
+	conn, _ := dbus.SystemBus()
+	obj := conn.Object("com.subgraph.realms", "/")
+	realm := "Realm: unknown"
+	obj.Call("com.subgraph.realms.Manager.RealmFromContainerPid", 0, fmt.Sprintf("%d",pi.Pid)).Store(&realm)
+
 	finfo, err := os.Stat(fmt.Sprintf("/proc/%d", pi.Pid))
 	if err != nil {
 		log.Warningf("Could not stat /proc/%d: %v", pi.Pid, err)
@@ -194,6 +201,8 @@ func (pi *Info) loadProcessInfo() bool {
 	pi.ParentCmdLine = string(pbs)
 	pi.ParentExePath = string(pexePath)
 	pi.ExePath = exePath
+	pi.Realm = realm
+	pi.Sandbox = realm
 	pi.CmdLine = string(bcs)
 	pi.loaded = true
 	return true

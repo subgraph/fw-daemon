@@ -147,6 +147,7 @@ type DbusRule struct {
 	Mode     uint16
 	IsSocks  bool
 	Sandbox  string
+	Realm    string
 	UID      int32
 	GID      int32
 	Username string

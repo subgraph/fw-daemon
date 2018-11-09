@@ -3,6 +3,7 @@ package procsnitch
 import (
 	"errors"
 	"fmt"
+	"github.com/godbus/dbus"
 	"io/ioutil"
 	"net"
 	"strconv"
@@ -218,16 +219,34 @@ func findTCPSocketAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort ui
 	if srcAddr.To4() == nil {
 		proto += "6"
 	}
+	// HACK
+//	var sockets []*socketStatus
+	conn, _ := dbus.SystemBus()
+	var leaderpid string
+	obj := conn.Object("com.subgraph.realms", "/")
+	obj.Call("com.subgraph.realms.Manager.LeaderPidFromIP", 0, srcAddr.String()).Store(&leaderpid)
+	if leaderpid != "" {
+		if custdata == nil {
+			return findSocketPid(proto, leaderpid, func(ss socketStatus) bool {
+				return ss.remote.port == dstPort && ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
+			})
+		}
 
-	if custdata == nil {
-		return findSocket(proto, func(ss socketStatus) bool {
+		return findSocketCustom(proto, custdata, func(ss socketStatus) bool {
 			return ss.remote.port == dstPort && ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
 		})
+	} else {
+		if custdata == nil {
+			return findSocket(proto, func(ss socketStatus) bool {
+				return ss.remote.port == dstPort && ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
+			})
+			return findSocketCustom(proto, custdata, func(ss socketStatus) bool {
+				return ss.remote.port == dstPort && ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
+			})
+		}
 	}
 
-	return findSocketCustom(proto, custdata, func(ss socketStatus) bool {
-		return ss.remote.port == dstPort && ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
-	})
+	return nil
 }
 
 func findUNIXSocket(socketFile string) *socketStatus {
@@ -303,6 +322,24 @@ func findSocket(proto string, matcher func(socketStatus) bool) *socketStatus {
 	return nil
 }
 
+func findSocketPid(proto string, pid string, matcher func(socketStatus) bool) *socketStatus {
+	var ss socketStatus
+	for _, line := range getSocketLinesPid(proto,pid) {
+		if len(line) == 0 {
+			continue
+		}
+		if err := ss.parseLine(line); err != nil {
+			log.Warningf("Unable to parse line from /proc/net/%s [%s]: %v", proto, line, err)
+			continue
+		}
+		if matcher(ss) {
+			ss.line = line
+			return &ss
+		}
+	}
+	return nil
+}
+
 func (ss *socketStatus) parseLine(line string) error {
 	fs := strings.Fields(line)
 	if len(fs) < 10 {
@@ -358,7 +395,21 @@ func (ss *socketStatus) parseUnixProcLine(line string) error {
 }
 
 func getSocketLines(proto string) []string {
-	path := fmt.Sprintf("/proc/net/%s", proto)
+	path := fmt.Sprintf("/proc/2047/root/proc/1/net/%s", proto)
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		log.Warningf("Error reading %s: %v", path, err)
+		return nil
+	}
+	lines := strings.Split(string(data), "\n")
+	if len(lines) > 0 {
+		lines = lines[1:]
+	}
+	return lines
+}
+
+func getSocketLinesPid(proto string, leaderpid string) []string {
+	path := fmt.Sprintf("/proc/%s/root/proc/1/net/%s", leaderpid, proto)
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		log.Warningf("Error reading %s: %v", path, err)

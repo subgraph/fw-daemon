@@ -89,6 +89,10 @@ func (pp *pendingPkt) sandbox() string {
 	return pp.pinfo.Sandbox
 }
 
+func (pp *pendingPkt) realm() string {
+	return pp.pinfo.Realm
+}
+
 func (pp *pendingPkt) getTimestamp() string {
 	return pp.timestamp.Format("15:04:05.00")
 }
@@ -602,6 +606,7 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket, timestamp time.Time) {
 		//		return
 	} else {
 		ppath = pinfo.ExePath
+		optstring = fmt.Sprintf("Realm: %s", pinfo.Realm);
 		cf := strings.Fields(pinfo.CmdLine)
 		if len(cf) > 1 && strings.HasPrefix(cf[1], "/") {
 			for _, intp := range _interpreters {
