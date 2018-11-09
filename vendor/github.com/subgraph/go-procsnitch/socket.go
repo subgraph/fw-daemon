@@ -3,7 +3,7 @@ package procsnitch
 import (
 	"errors"
 	"fmt"
-	"github.com/godbus/dbus"
+//	"github.com/godbus/dbus"
 	"io/ioutil"
 	"net"
 	"strconv"
@@ -221,12 +221,15 @@ func findTCPSocketAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort ui
 	}
 	// HACK
 //	var sockets []*socketStatus
-	conn, _ := dbus.SystemBus()
-	var leaderpid string
-	obj := conn.Object("com.subgraph.realms", "/")
+	//conn2, _ := dbus.SystemBus()
+	leaderpid := ""
+	/*var db,_ = dbus.SystemBus()
+	obj := db.Object("com.subgraph.realms", "/")
 	obj.Call("com.subgraph.realms.Manager.LeaderPidFromIP", 0, srcAddr.String()).Store(&leaderpid)
+*/
 	if leaderpid != "" {
 		if custdata == nil {
+			log.Warningf("%v",leaderpid)
 			return findSocketPid(proto, leaderpid, func(ss socketStatus) bool {
 				return ss.remote.port == dstPort && ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort && ss.local.ip.Equal(srcAddr)
 			})
@@ -247,6 +250,13 @@ func findTCPSocketAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort ui
 	}
 
 	return nil
+}
+
+func f2(srcPort uint16, dstAddr net.IP, dstPort uint16, custdata[]string) *socketStatus {
+	proto := "tcp"
+	return findSocketCustom(proto, custdata, func(ss socketStatus) bool {
+		return ss.remote.port == dstPort && ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort
+	})
 }
 
 func findUNIXSocket(socketFile string) *socketStatus {
@@ -395,7 +405,7 @@ func (ss *socketStatus) parseUnixProcLine(line string) error {
 }
 
 func getSocketLines(proto string) []string {
-	path := fmt.Sprintf("/proc/2047/root/proc/1/net/%s", proto)
+	path := fmt.Sprintf("/proc/net/%s", proto)
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		log.Warningf("Error reading %s: %v", path, err)

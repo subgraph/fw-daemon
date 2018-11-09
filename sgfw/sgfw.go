@@ -182,7 +182,7 @@ func Main() {
 
 	fw.dbus.emitRefresh("init")
 
-	//go OzReceiver(fw)
+	go OzReceiver(fw)
 
 	fw.runFilter()
 

@@ -283,14 +283,14 @@ func OzReceiver(fw *Firewall) {
 			log.Warning("Adding existing Oz sandbox init pids...")
 			for s := 0; s < len(sboxes); s++ {
 				//profname := fmt.Sprintf("%s (%d)", sboxes[s].Profile, sboxes[s].Id)
-				addInitPid(sboxes[s].InitPid, sboxes[s].Profile, sboxes[s].Id)
+				addInitPid(sboxes[s].InitPid, sboxes[s].Name, sboxes[s].Id)
 			}
 		} else {
 			log.Warning("It does not appear there were any Oz sandboxed processes already launched.")
 		}
 
 	}
-
+/*
 	os.Remove(ReceiverSocketPath)
 	lfd, err := net.Listen("unix", ReceiverSocketPath)
 	if err != nil {
@@ -305,7 +305,7 @@ func OzReceiver(fw *Firewall) {
 
 		go ReceiverLoop(fw, fd)
 	}
-
+*/
 }
 
 type ListProxiesMsg struct {

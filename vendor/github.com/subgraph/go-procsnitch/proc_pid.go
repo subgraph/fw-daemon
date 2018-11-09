@@ -186,7 +186,9 @@ func (pi *Info) loadProcessInfo() bool {
 
 	conn, _ := dbus.SystemBus()
 	obj := conn.Object("com.subgraph.realms", "/")
-	realm := "Realm: unknown"
+	realm := "unknown"
+	//leaderpid := ""
+
 	obj.Call("com.subgraph.realms.Manager.RealmFromContainerPid", 0, fmt.Sprintf("%d",pi.Pid)).Store(&realm)
 
 	finfo, err := os.Stat(fmt.Sprintf("/proc/%d", pi.Pid))
@@ -203,6 +205,7 @@ func (pi *Info) loadProcessInfo() bool {
 	pi.ExePath = exePath
 	pi.Realm = realm
 	pi.Sandbox = realm
+	//pi.Leaderpid = leaderpid
 	pi.CmdLine = string(bcs)
 	pi.loaded = true
 	return true

@@ -157,8 +157,11 @@ func monitorPromptFDs(pc pendingConnection) {
 	//fmt.Printf("ADD TO MONITOR: %v | %v / %v / %v\n", pc.policy().application, guid, pid, fd)
 
 	if pid == -1 || fd == -1 || prompter == nil {
-		log.Warning("Unexpected error condition occurred while adding socket fd to monitor")
+		log.Warning("Unexpected error condition occurred while adding socket fd to monitor: %d %d %v",pid, fd, prompter)
 		return
+	} else
+	{
+		log.Warning("No unexpected errors");
 	}
 
 	PC2FDMapLock.Lock()

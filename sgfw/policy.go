@@ -680,7 +680,7 @@ func getAllProcNetDataLocal() ([]string, error) {
 	OzInitPidsLock.Lock()
 
 	for i := 0; i < len(OzInitPids); i++ {
-		fname := fmt.Sprintf("/proc/%d/net/tcp", OzInitPids[i])
+		fname := fmt.Sprintf("/proc/%d/root/proc/1/net/tcp", OzInitPids[i])
 		//fmt.Println("XXX: opening: ", fname)
 		bdata, err := readFileDirect(fname)
 
@@ -743,7 +743,7 @@ func LookupSandboxProc(srcip net.IP, srcp uint16, dstip net.IP, dstp uint16, pro
 
 	for i := 0; i < len(OzInitPids); i++ {
 		data := ""
-		fname := fmt.Sprintf("/proc/%d/net/%s", OzInitPids[i].Pid, proto)
+		fname := fmt.Sprintf("/proc/%d/root/proc/1/net/%s", OzInitPids[i].Pid, proto)
 		//fmt.Println("XXX: opening: ", fname)
 		bdata, err := readFileDirect(fname)
 
@@ -838,7 +838,8 @@ func findProcessForPacket(pkt *nfqueue.NFQPacket, reverse bool, strictness int) 
 
 	// Try normal way first, before the more resource intensive/invasive way.
 	if proto == "tcp" {
-		res = procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, nil)
+		//log.Warningf("%v %v %v %v %v",srcip, srcp, dstip, dstp, reverse)
+		res = procsnitch.LookupTCPSocketProcess(srcp, dstip, dstp)
 	} else if proto == "udp" {
 		res = procsnitch.LookupUDPSocketProcessAll(srcip, srcp, dstip, dstp, nil, strictness)
 	} else if proto == "icmp" {
@@ -848,10 +849,10 @@ func findProcessForPacket(pkt *nfqueue.NFQPacket, reverse bool, strictness int) 
 	if res == nil {
 		removePids := make([]int, 0)
 		OzInitPidsLock.Lock()
-
+		
 		for i := 0; i < len(OzInitPids); i++ {
 			data := ""
-			fname := fmt.Sprintf("/proc/%d/net/%s", OzInitPids[i].Pid, proto)
+			fname := fmt.Sprintf("/proc/%d/root/proc/1/net/%s", OzInitPids[i].Pid, proto)
 			//fmt.Println("XXX: opening: ", fname)
 			bdata, err := readFileDirect(fname)
 
@@ -880,7 +881,8 @@ func findProcessForPacket(pkt *nfqueue.NFQPacket, reverse bool, strictness int) 
 				}
 
 				if proto == "tcp" {
-					res = procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, rlines)
+					//res = procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, rlines)
+					res = procsnitch.L2(srcp, dstip, dstp, rlines)
 				} else if proto == "udp" {
 					res = procsnitch.LookupUDPSocketProcessAll(srcip, srcp, dstip, dstp, rlines, strictness)
 				} else if proto == "icmp" {
@@ -888,7 +890,7 @@ func findProcessForPacket(pkt *nfqueue.NFQPacket, reverse bool, strictness int) 
 				}
 
 				if res != nil {
-					optstr = "Sandbox: " + OzInitPids[i].Name
+					optstr = "Realm: " + OzInitPids[i].Name
 					res.ExePath = GetRealRoot(res.ExePath, OzInitPids[i].Pid)
 					break
 				}

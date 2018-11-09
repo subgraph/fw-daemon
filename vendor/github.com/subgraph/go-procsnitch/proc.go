@@ -85,6 +85,7 @@ func LookupICMPSocketProcessAll(srcAddr net.IP, dstAddr net.IP, code int, custda
 	return pcache.lookup(ss.inode)
 }
 
+
 // LookupUDPSocketProcessAll searches for a UDP socket a given source port, destination IP, and destination port - AND source destination
 func LookupUDPSocketProcessAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort uint16, custdata []string, strictness int) *Info {
 	ss := findUDPSocketAll(srcAddr, srcPort, dstAddr, dstPort, custdata, strictness)
@@ -115,6 +116,15 @@ func LookupTCPSocketProcessAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, d
 // LookupTCPSocketProcess searches for a TCP socket with a given source port, destination IP, and destination port
 func LookupTCPSocketProcess(srcPort uint16, dstAddr net.IP, dstPort uint16) *Info {
 	ss := findTCPSocket(srcPort, dstAddr, dstPort)
+	if ss == nil {
+		return nil
+	}
+	return pcache.lookup(ss.inode)
+}
+
+
+func L2(srcPort uint16, dstAddr net.IP, dstPort uint16, custdata []string) *Info {
+	ss := f2(srcPort, dstAddr, dstPort, custdata)
 	if ss == nil {
 		return nil
 	}
