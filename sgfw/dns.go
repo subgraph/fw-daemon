@@ -68,6 +68,9 @@ func (dc *dnsCache) processDNS(pkt *nfqueue.NFQPacket) {
 		pinfo := getEmptyPInfo()
 		if !isNSTrusted(srcip) {
 			pinfo, _ = findProcessForPacket(pkt, true, procsnitch.MATCH_LOOSEST)
+			if pinfo == nil {
+				findProcessForPacket(pkt, false, procsnitch.MATCH_LOOSEST)
+			}
 
 			if pinfo == nil {
 				if !FirewallConfig.LogRedact {
@@ -77,6 +80,8 @@ func (dc *dnsCache) processDNS(pkt *nfqueue.NFQPacket) {
 				}
 
 				return
+			} else {
+				log.Warningf("%v", pinfo)
 			}
 		}
 		//log.Notice("XXX: PROCESS LOOKUP -> ", pinfo)

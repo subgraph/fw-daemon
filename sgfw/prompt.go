@@ -150,6 +150,7 @@ var PC2FDMapLock = &sync.Mutex{}
 func monitorPromptFDs(pc pendingConnection) {
 	guid := pc.getGUID()
 	pid := pc.procInfo().Pid
+	//leaderpid := pc.procInfo().LeaderPid
 	inode := pc.procInfo().Inode
 	fd := pc.procInfo().FD
 	prompter := pc.getPrompter()
@@ -157,17 +158,21 @@ func monitorPromptFDs(pc pendingConnection) {
 	//fmt.Printf("ADD TO MONITOR: %v | %v / %v / %v\n", pc.policy().application, guid, pid, fd)
 
 	if pid == -1 || fd == -1 || prompter == nil {
-		log.Warning("Unexpected error condition occurred while adding socket fd to monitor: %d %d %v",pid, fd, prompter)
+		log.Warningf("Unexpected error condition occurred while adding socket fd to monitor: %d %d %v",pid, fd, prompter)
 		return
-	} else
-	{
+	} else {
 		log.Warning("No unexpected errors");
 	}
 
 	PC2FDMapLock.Lock()
 	defer PC2FDMapLock.Unlock()
-
-	fdpath := fmt.Sprintf("/proc/%d/fd/%d", pid, fd)
+	var fdpath string
+//	log.Warning("leaderpid:",pc.procInfo().LeaderPid) 
+	//if pc.procInfo().LeaderPid != "" {
+//		fdpath = fmt.Sprintf("/proc/%s/root/%d/fd/%d", leaderpid, pid, fd)
+//	} else {
+		fdpath = fmt.Sprintf("/proc/%d/fd/%d", pid, fd)
+//	}
 	PC2FDMap[guid] = PC2FDMapping{guid: guid, inode: inode, fd: fd, fdpath: fdpath, prompter: prompter}
 	return
 }

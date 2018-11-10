@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"github.com/godbus/dbus"
+	//"github.com/godbus/dbus"
 )
 
 // Info is a struct containing the result of a socket proc query
@@ -25,7 +25,8 @@ type Info struct {
 	ParentCmdLine string
 	ParentExePath string
 	Realm         string
-	Sandbox         string
+	Sandbox       string
+	LeaderPid     string
 	Inode         uint64
 	FD            int
 }
@@ -139,13 +140,24 @@ func (pi *Info) loadProcessInfo() bool {
 	if pi.loaded {
 		return true
 	}
-
-	exePath, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pi.Pid))
+	leaderpid := ""
+	realm := "unknown"
+	//conn, _ := dbus.SystemBus()
+	//obj := conn.Object("com.subgraph.realms", "/")
+	//obj.Call("com.subgraph.realms.Manager.RealmFromContainerPid", 0, fmt.Sprintf("%d",pi.Pid)).Store(&realm)
+	//obj.Call("com.subgraph.realms.Manager.LeaderPidFromRealm", 0, realm).Store(&leaderpid)
+	pi.LeaderPid = leaderpid
+	prefix := ""
+	if leaderpid != "" {
+		prefix = fmt.Sprintf("/proc/%s/root",leaderpid)
+	}
+	prefix = "" 
+	exePath, err := os.Readlink(fmt.Sprintf("%s/proc/%d/exe", prefix, pi.Pid))
 	if err != nil {
 		log.Warningf("Error reading exe link for pid %d: %v", pi.Pid, err)
 		return false
 	}
-	bcs, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pi.Pid))
+	bcs, err := ioutil.ReadFile(fmt.Sprintf("%s/proc/%d/cmdline", prefix, pi.Pid))
 	if err != nil {
 		log.Warningf("Error reading cmdline for pid %d: %v", pi.Pid, err)
 		return false
@@ -156,7 +168,7 @@ func (pi *Info) loadProcessInfo() bool {
 		}
 	}
 
-	bs, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/stat", pi.Pid))
+	bs, err := ioutil.ReadFile(fmt.Sprintf("%s/proc/%d/stat", prefix, pi.Pid))
 	if err != nil {
 		log.Warningf("Error reading cmdline for pid %d: %v", pi.Pid, err)
 		return false
@@ -168,12 +180,12 @@ func (pi *Info) loadProcessInfo() bool {
 	}
 	ppid := toPid(fs[3])
 
-	pexePath, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", ppid))
+	pexePath, err := os.Readlink(fmt.Sprintf("%s/proc/%d/exe", prefix, ppid))
 	if err != nil {
 		log.Warningf("Error reading exe link for parent pid %d: %v", ppid, err)
 		return false
 	}
-	pbs, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/cmdline", ppid))
+	pbs, err := ioutil.ReadFile(fmt.Sprintf("%s/proc/%d/cmdline", prefix, ppid))
 	if err != nil {
 		log.Warningf("Error reading cmdline for parent pid %d: %v", ppid, err)
 		return false
@@ -184,14 +196,9 @@ func (pi *Info) loadProcessInfo() bool {
 		}
 	}
 
-	conn, _ := dbus.SystemBus()
-	obj := conn.Object("com.subgraph.realms", "/")
-	realm := "unknown"
-	//leaderpid := ""
 
-	obj.Call("com.subgraph.realms.Manager.RealmFromContainerPid", 0, fmt.Sprintf("%d",pi.Pid)).Store(&realm)
-
-	finfo, err := os.Stat(fmt.Sprintf("/proc/%d", pi.Pid))
+		
+	finfo, err := os.Stat(fmt.Sprintf("%s/proc/%d", prefix, pi.Pid))
 	if err != nil {
 		log.Warningf("Could not stat /proc/%d: %v", pi.Pid, err)
 		return false
@@ -205,7 +212,7 @@ func (pi *Info) loadProcessInfo() bool {
 	pi.ExePath = exePath
 	pi.Realm = realm
 	pi.Sandbox = realm
-	//pi.Leaderpid = leaderpid
+	pi.LeaderPid = leaderpid
 	pi.CmdLine = string(bcs)
 	pi.loaded = true
 	return true

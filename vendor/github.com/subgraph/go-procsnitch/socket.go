@@ -254,6 +254,10 @@ func findTCPSocketAll(srcAddr net.IP, srcPort uint16, dstAddr net.IP, dstPort ui
 
 func f2(srcPort uint16, dstAddr net.IP, dstPort uint16, custdata[]string) *socketStatus {
 	proto := "tcp"
+/*	if dstAddr.To4() == nil {
+		proto += "6"
+	}
+*/	
 	return findSocketCustom(proto, custdata, func(ss socketStatus) bool {
 		return ss.remote.port == dstPort && ss.remote.ip.Equal(dstAddr) && ss.local.port == srcPort
 	})

@@ -123,8 +123,9 @@ func (fw *Firewall) runFilter() {
 					p.Packet = ip6p
 
 				}
-
-				fw.filterPacket(p, timestamp)
+				var pkt nfqueue.NFQPacket
+				pkt = *p
+				go fw.filterPacket(&pkt, timestamp)
 			} else {
 				p.Accept()
 			}

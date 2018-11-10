@@ -606,7 +606,7 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket, timestamp time.Time) {
 		//		return
 	} else {
 		ppath = pinfo.ExePath
-		optstring = fmt.Sprintf("Realm: %s", pinfo.Realm);
+		optstring = fmt.Sprintf("Realm: %s", pinfo.Realm)
 		cf := strings.Fields(pinfo.CmdLine)
 		if len(cf) > 1 && strings.HasPrefix(cf[1], "/") {
 			for _, intp := range _interpreters {
@@ -846,53 +846,61 @@ func findProcessForPacket(pkt *nfqueue.NFQPacket, reverse bool, strictness int) 
 		res = procsnitch.LookupICMPSocketProcessAll(srcip, dstip, icode, nil)
 	}
 
+	if res != nil {
+		res.Sandbox = "citadel"
+		res.Realm = "citadel"
+	}
+
 	if res == nil {
 		removePids := make([]int, 0)
 		OzInitPidsLock.Lock()
-		
+
 		for i := 0; i < len(OzInitPids); i++ {
-			data := ""
-			fname := fmt.Sprintf("/proc/%d/root/proc/1/net/%s", OzInitPids[i].Pid, proto)
-			//fmt.Println("XXX: opening: ", fname)
-			bdata, err := readFileDirect(fname)
+			if OzInitPids[i].Address.Equal(srcip) {
+				data := ""
+				fname := fmt.Sprintf("/proc/%d/root/proc/1/net/%s", OzInitPids[i].Pid, proto)
+				//fmt.Println("XXX: opening: ", fname)
+				bdata, err := readFileDirect(fname)
 
-			if err != nil {
-				fmt.Println("Error reading proc data from ", fname, ": ", err)
+				if err != nil {
+					fmt.Println("Error reading proc data from ", fname, ": ", err)
 
-				if err == syscall.ENOENT {
-					removePids = append(removePids, OzInitPids[i].Pid)
-				}
-
-				continue
-			} else {
-				data = string(bdata)
-				lines := strings.Split(data, "\n")
-				rlines := make([]string, 0)
-
-				for l := 0; l < len(lines); l++ {
-					lines[l] = strings.TrimSpace(lines[l])
-					ssplit := strings.Split(lines[l], ":")
-
-					if len(ssplit) != 6 {
-						continue
+					if err == syscall.ENOENT {
+						removePids = append(removePids, OzInitPids[i].Pid)
 					}
 
-					rlines = append(rlines, strings.Join(ssplit, ":"))
-				}
+					continue
+				} else {
+					data = string(bdata)
+					lines := strings.Split(data, "\n")
+					rlines := make([]string, 0)
 
-				if proto == "tcp" {
-					//res = procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, rlines)
-					res = procsnitch.L2(srcp, dstip, dstp, rlines)
-				} else if proto == "udp" {
-					res = procsnitch.LookupUDPSocketProcessAll(srcip, srcp, dstip, dstp, rlines, strictness)
-				} else if proto == "icmp" {
-					res = procsnitch.LookupICMPSocketProcessAll(srcip, dstip, icode, rlines)
-				}
+					for l := 0; l < len(lines); l++ {
+						lines[l] = strings.TrimSpace(lines[l])
+						ssplit := strings.Split(lines[l], ":")
 
-				if res != nil {
-					optstr = "Realm: " + OzInitPids[i].Name
-					res.ExePath = GetRealRoot(res.ExePath, OzInitPids[i].Pid)
-					break
+						if len(ssplit) != 6 {
+							continue
+						}
+
+						rlines = append(rlines, strings.Join(ssplit, ":"))
+					}
+
+					if proto == "tcp" {
+						//res = procsnitch.LookupTCPSocketProcessAll(srcip, srcp, dstip, dstp, rlines)
+						res = procsnitch.L2(srcp, dstip, dstp, rlines)
+					} else if proto == "udp" {
+						res = procsnitch.LookupUDPSocketProcessAll(srcip, srcp, dstip, dstp, rlines, strictness)
+					} else if proto == "icmp" {
+						res = procsnitch.LookupICMPSocketProcessAll(srcip, dstip, icode, rlines)
+					}
+
+					if res != nil {
+						optstr = "Realm: " + OzInitPids[i].Name
+						res.Sandbox = OzInitPids[i].Name
+						res.ExePath = GetRealRoot(res.ExePath, OzInitPids[i].Pid)
+						break
+					}
 				}
 			}
 
@@ -912,10 +920,15 @@ func findProcessForPacket(pkt *nfqueue.NFQPacket, reverse bool, strictness int) 
 func basicAllowPacket(pkt *nfqueue.NFQPacket) bool {
 	srcip, dstip := getPacketIPAddrs(pkt)
 	if pkt.Packet.Layer(layers.LayerTypeUDP) != nil {
-		_, dport := getPacketUDPPorts(pkt)
+		sport, dport := getPacketUDPPorts(pkt)
 		if dport == 53 {
 			//                   fw.dns.processDNS(pkt)
 			return true
+		} else {
+			if sport == 53 {
+		//		fw.dns.processDNS(pkt)
+				return true
+			}
 		}
 	}
 	if pkt.Packet.Layer(layers.LayerTypeICMPv4) != nil && srcip.Equal(dstip) {

@@ -7,6 +7,7 @@ import (
 	"os"
 	"bufio"
 	"strconv"
+	"net"
 	"github.com/godbus/dbus"
 )
 
@@ -16,7 +17,7 @@ type ListSandboxesMsg struct {
 
 type SandboxInfo struct {
 	Id      int
-	Address string
+	Address net.IP
 	Name    string
 	Profile string
 	Mounts  []string
@@ -53,8 +54,8 @@ func getSandboxes() ([]SandboxInfo, error) {
 		s := strings.Split(scanner.Text(), ":")
 		obj.Call("com.subgraph.realms.Manager.LeaderPidFromIP", 0, s[1]).Store(&leaderpid)
 		p, _ := strconv.Atoi(leaderpid)
-		sboxes = append(sboxes,SandboxInfo{Id: i, Name: s[0], Address: s[1], InitPid: p})
-		fmt.Print(s[0], s[1], leaderpid)
+		sboxes = append(sboxes,SandboxInfo{Id: i, Name: s[0], Address: net.ParseIP(s[1]), InitPid: p})
+		log.Warningf("Found realm, name=%v ip=%v leader pid=%v ", s[0], s[1], leaderpid)
 		i++;
 	}
 
