@@ -226,13 +226,13 @@ func (rr *ruleRow) update() {
 		tt = tt + " for "
 	}
 	if rr.rule.UID > -1 {
-		tt = tt + rr.rl.app.LookupUsername(rr.rule.UID)
+		tt = tt + rr.rl.app.LookupUsername(rr.rule.Sandbox, rr.rule.UID)
 	}
 	if rr.rule.UID > -1 && rr.rule.GID > -1 {
 		tt = tt + ":"
 	}
 	if rr.rule.GID > -1 {
-		tt = tt + rr.rl.app.LookupGroup(rr.rule.GID)
+		tt = tt + rr.rl.app.LookupGroup(rr.rule.Sandbox, rr.rule.GID)
 	}
 	rr.gtkLabelTarget.SetText(tt)
 }

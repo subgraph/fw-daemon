@@ -134,7 +134,7 @@ const FirewallPromptHandler = new Lang.Class({
             return false;
         }
 
-        let fname = binding.replace(/-([a-z])/g, function (g) { return g[1].toUpperCase(); });
+       // let fname = binding.replace(/-([a-z])/g, function (g) { return g[1].toUpperCase(); });
         let fname = "_on"+ fname[0].toUpperCase() + fname.substr(1);
         if (!( fname in this._dialog )) {
             log("SGFW: Invalid key binding (1)... " + fname);
@@ -291,18 +291,18 @@ const FirewallPromptHandler = new Lang.Class({
         }
     },
 
-    _updateDialogRemainingPrompts: function() {
+    _updateDialogRemainingPrompts: function() { /*
         if (this._dialog === null) {
             return;
         }
         try {
             let remaining = (this._guids.length - 1);
-            if (remaining > 0) {
+            /*if (remaining > 0) {
                 this._dialog.updateRemainingPrompts(remaining);
             }
         } catch(err) {
             log("SGFW: Error while updating remaining dialogs count: " + err);
-        }
+        }*/
         return;
     }
 

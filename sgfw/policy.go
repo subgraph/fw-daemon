@@ -426,7 +426,7 @@ func (p *Policy) filterPendingOne(rule *Rule, guid string) {
 			continue
 		}
 
-		if rule.match(pc.src(), pc.dst(), pc.dstPort(), pc.hostname(), pc.proto(), pc.procInfo().UID, pc.procInfo().GID, uidToUser(pc.procInfo().UID), gidToGroup(pc.procInfo().GID), pc.procInfo().Sandbox) {
+		if rule.match(pc.src(), pc.dst(), pc.dstPort(), pc.hostname(), pc.proto(), pc.procInfo().UID, pc.procInfo().GID, uidToUser(pc.sandbox(),pc.procInfo().UID), gidToGroup(pc.sandbox(),pc.procInfo().GID), pc.procInfo().Sandbox) {
 			prompter := pc.getPrompter()
 
 			if prompter == nil {
@@ -465,7 +465,7 @@ func (p *Policy) filterPendingOne(rule *Rule, guid string) {
 func (p *Policy) filterPending(rule *Rule) {
 	remaining := []pendingConnection{}
 	for _, pc := range p.pendingQueue {
-		if rule.match(pc.src(), pc.dst(), pc.dstPort(), pc.hostname(), pc.proto(), pc.procInfo().UID, pc.procInfo().GID, uidToUser(pc.procInfo().UID), gidToGroup(pc.procInfo().GID), pc.procInfo().Sandbox) {
+		if rule.match(pc.src(), pc.dst(), pc.dstPort(), pc.hostname(), pc.proto(), pc.procInfo().UID, pc.procInfo().GID, uidToUser(pc.sandbox(),pc.procInfo().UID), gidToGroup(pc.sandbox(),pc.procInfo().GID), pc.procInfo().Sandbox) {
 			prompter := pc.getPrompter()
 
 			if prompter == nil {
@@ -606,7 +606,6 @@ func (fw *Firewall) filterPacket(pkt *nfqueue.NFQPacket, timestamp time.Time) {
 		//		return
 	} else {
 		ppath = pinfo.ExePath
-		optstring = fmt.Sprintf("Realm: %s", pinfo.Realm)
 		cf := strings.Fields(pinfo.CmdLine)
 		if len(cf) > 1 && strings.HasPrefix(cf[1], "/") {
 			for _, intp := range _interpreters {
@@ -896,7 +895,8 @@ func findProcessForPacket(pkt *nfqueue.NFQPacket, reverse bool, strictness int) 
 					}
 
 					if res != nil {
-						optstr = "Realm: " + OzInitPids[i].Name
+						//optstr = "Realm: " + OzInitPids[i].Name
+						res.Realm = OzInitPids[i].Name
 						res.Sandbox = OzInitPids[i].Name
 						res.ExePath = GetRealRoot(res.ExePath, OzInitPids[i].Pid)
 						break

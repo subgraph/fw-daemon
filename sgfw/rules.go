@@ -200,7 +200,7 @@ func (rl *RuleList) filter(pkt *nfqueue.NFQPacket, src, dst net.IP, dstPort uint
 			//log.Notice("! Skipping comparison of mismatching PIDs")
 			continue
 		}
-		if r.match(src, dst, dstPort, hostname, nfqproto, pinfo.UID, pinfo.GID, uidToUser(pinfo.UID), gidToGroup(pinfo.GID), pinfo.Sandbox) {
+		if r.match(src, dst, dstPort, hostname, nfqproto, pinfo.UID, pinfo.GID, uidToUser(pinfo.Sandbox, pinfo.UID), gidToGroup(pinfo.Sandbox, pinfo.GID), pinfo.Sandbox) {
 			// log.Notice("+ MATCH SUCCEEDED")
 			dstStr := dst.String()
 			if FirewallConfig.LogRedact {

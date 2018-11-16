@@ -158,7 +158,7 @@ func monitorPromptFDs(pc pendingConnection) {
 	//fmt.Printf("ADD TO MONITOR: %v | %v / %v / %v\n", pc.policy().application, guid, pid, fd)
 
 	if pid == -1 || fd == -1 || prompter == nil {
-		log.Warningf("Unexpected error condition occurred while adding socket fd to monitor: %d %d %v",pid, fd, prompter)
+		log.Warning("Unexpected error condition occurred while adding socket fd to monitor");
 		return
 	} else {
 		log.Warning("No unexpected errors");
@@ -315,8 +315,8 @@ func (p *prompter) processConnection(pc pendingConnection) {
 		pc.proto(),
 		int32(pc.procInfo().UID),
 		int32(pc.procInfo().GID),
-		uidToUser(pc.procInfo().UID),
-		gidToGroup(pc.procInfo().GID),
+		uidToUser(pc.sandbox(), pc.procInfo().UID),
+		gidToGroup(pc.sandbox(), pc.procInfo().GID),
 		int32(pc.procInfo().Pid),
 		pc.sandbox(),
 		pc.socks(),
@@ -589,7 +589,16 @@ func lookupGroup(gid int) string {
 	return g.Name
 }
 
-func uidToUser(uid int) string {
+func uidToUser(realm string, uid int) string {
+        // TODO: cache	
+	if (realm != "") {
+		user := "";
+                var db,_ = dbus.SystemBus()
+                obj := db.Object("com.subgraph.realms", "/")
+                obj.Call("com.subgraph.realms.Manager.RealmUsernameFromUID", 0, realm, strconv.Itoa(uid)).Store(&user)
+                return user;
+        }
+
 	uname, ok := userMap[uid]
 	if ok {
 		return uname
@@ -599,7 +608,16 @@ func uidToUser(uid int) string {
 	return uname
 }
 
-func gidToGroup(gid int) string {
+func gidToGroup(realm string, gid int) string {
+	// TODO: cache
+	if (realm != "") {
+		group := "";
+	        var db,_ = dbus.SystemBus()
+       		obj := db.Object("com.subgraph.realms", "/")
+                obj.Call("com.subgraph.realms.Manager.RealmGroupnameFromGID", 0, realm, strconv.Itoa(gid)).Store(&group)
+		return group;
+	}
+
 	gname, ok := groupMap[gid]
 	if ok {
 		return gname

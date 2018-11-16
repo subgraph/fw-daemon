@@ -76,6 +76,10 @@
     font-weight: bold;
 }
 
+.fw-details-section-container {
+    padding: 5px;
+}
+
 .fw-details-section {
     padding: 20px;
 }
@@ -112,4 +116,12 @@
     padding: 0 !important;
     padding-top: 2px !important;
     vertical-align: middle;
+}
+
+.realm-running-dot {
+	min-width: 15px;
+	height: 2px;/*3*/
+	background-color: #ffffff;
+	padding: 0px 0px 0px 0px;
+	margin: 0px 0px 0px 0px;
 }

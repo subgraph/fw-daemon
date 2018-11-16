@@ -17,8 +17,8 @@ import (
 	"io/ioutil"
 	"os"
 	"os/signal"
-	"strings"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -29,6 +29,8 @@ import (
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
+
+	"github.com/godbus/dbus"
 )
 
 type promptModes uint
@@ -55,6 +57,7 @@ type appShortcuts struct {
 type cbPromptAdd func(guid, path, icon, proto string, pid int, ipaddr, hostname string, port, uid, gid int,
 	origin, timestamp string, is_socks bool, optstring string, sandbox string, action int) bool
 type cbPromptRemove func(string)
+
 var cbPromptAddRequest cbPromptAdd = nil
 var cbPromptRemoveRequest cbPromptRemove = nil
 
@@ -66,63 +69,62 @@ type fwApp struct {
 
 	forceMenu bool
 
-	Dbus *dbusObject
+	Dbus       *dbusObject
 	DbusServer *dbusServer
 
 	promptMode promptModes
-	prompt *Prompt
+	prompt     *Prompt
 
-	Config *sgfw.FirewallConfigs
+	Config   *sgfw.FirewallConfigs
 	Settings *settings.Settings
 
-	winb *builder
-	win *gtk.ApplicationWindow
+	winb       *builder
+	win        *gtk.ApplicationWindow
 	repopMutex *sync.Mutex
 
 	swRulesPermanent *gtk.ScrolledWindow
-	swRulesSession *gtk.ScrolledWindow
-	swRulesProcess *gtk.ScrolledWindow
-	swRulesSystem *gtk.ScrolledWindow
-	swPrompt *gtk.ScrolledWindow
+	swRulesSession   *gtk.ScrolledWindow
+	swRulesProcess   *gtk.ScrolledWindow
+	swRulesSystem    *gtk.ScrolledWindow
+	swPrompt         *gtk.ScrolledWindow
 
 	boxPermanent *gtk.ListBox
-	boxSession *gtk.ListBox
-	boxProcess *gtk.ListBox
-	boxSystem *gtk.ListBox
+	boxSession   *gtk.ListBox
+	boxProcess   *gtk.ListBox
+	boxSystem    *gtk.ListBox
 
 	rlPermanent *ruleList
-	rlSession *ruleList
-	rlProcess *ruleList
-	rlSystem *ruleList
+	rlSession   *ruleList
+	rlProcess   *ruleList
+	rlSystem    *ruleList
 
-	btnNewRule *gtk.Button
-	nbRules *gtk.Notebook
-	tlStack *gtk.Stack
+	btnNewRule      *gtk.Button
+	nbRules         *gtk.Notebook
+	tlStack         *gtk.Stack
 	tlStackSwitcher *gtk.StackSwitcher
-	gridConfig *gtk.Grid
-	entrySearch *gtk.SearchEntry
-	btnSearch *gtk.ToggleButton
-	revealerSearch *gtk.Revealer
-	boxAppMenu *gtk.Box
-	btnAppMenu *gtk.MenuButton
-	dialog *gtk.MessageDialog
+	gridConfig      *gtk.Grid
+	entrySearch     *gtk.SearchEntry
+	btnSearch       *gtk.ToggleButton
+	revealerSearch  *gtk.Revealer
+	boxAppMenu      *gtk.Box
+	btnAppMenu      *gtk.MenuButton
+	dialog          *gtk.MessageDialog
 
 	signalDelete glib.SignalHandle
 
-	lcache string
+	lcache    string
 	shortcuts []appShortcuts
 
-	userMap map[int32]string
-	userIDs []int32
-	groupMap map[int32]string
-	groupIDs []int32
-	userMapLock *sync.Mutex
+	userMap      map[int32]string
+	userIDs      []int32
+	groupMap     map[int32]string
+	groupIDs     []int32
+	userMapLock  *sync.Mutex
 	groupMapLock *sync.Mutex
-	intcount uint
+	intcount     uint
 
 	ozProfiles []string
 }
-
 
 /*
  * App Setup
@@ -183,7 +185,7 @@ func (fa *fwApp) initGtk() {
 	appFlags |= glib.APPLICATION_CAN_OVERRIDE_APP_ID
 	//appFlags |= glib.APPLICATION_IS_LAUNCHER
 	//appFlags |= glib.APPLICATION_IS_SERVICE
-	app, err := gtk.ApplicationNew("com.subgraph.Firewall.Settings", appFlags)//glib.APPLICATION_FLAGS_NONE)
+	app, err := gtk.ApplicationNew("com.subgraph.Firewall.Settings", appFlags) //glib.APPLICATION_FLAGS_NONE)
 	if err != nil {
 		panic(fmt.Sprintf("gtk.ApplicationNew() failed: %v", err))
 	}
@@ -241,25 +243,25 @@ func (fa *fwApp) build() {
 
 func (fa *fwApp) registerActions() {
 	anr := glib.SimpleActionNew("new_rule", glib.VARIANT_TYPE_NONE)
-	anr.Connect("activate", func () {
+	anr.Connect("activate", func() {
 		fa.btnNewRule.Activate()
 	})
 	fa.ActionMap.AddAction(&anr.Action)
 
 	snr := glib.SimpleActionNew("shortcuts", glib.VARIANT_TYPE_NONE)
-	snr.Connect("activate", func () {
+	snr.Connect("activate", func() {
 		fa.showShortcutsWindow()
 	})
 	fa.ActionMap.AddAction(&snr.Action)
 
 	abnr := glib.SimpleActionNew("about", glib.VARIANT_TYPE_NONE)
-	abnr.Connect("activate", func() {fa.showAboutDialog()})
+	abnr.Connect("activate", func() { fa.showAboutDialog() })
 	fa.ActionMap.AddAction(&abnr.Action)
-/*
-	hbnr := glib.SimpleActionNew("help", glib.VARIANT_TYPE_NONE)
-	hbnr.Connect("activate", func() {fmt.Println("UNIMPLEMENTED")})
-	fa.ActionMap.AddAction(&hbnr.Action)
-*/
+	/*
+		hbnr := glib.SimpleActionNew("help", glib.VARIANT_TYPE_NONE)
+		hbnr.Connect("activate", func() {fmt.Println("UNIMPLEMENTED")})
+		fa.ActionMap.AddAction(&hbnr.Action)
+	*/
 	qnr := glib.SimpleActionNew("quit", glib.VARIANT_TYPE_NONE)
 	qnr.Connect("activate", func() {
 		fa.win.Close()
@@ -268,18 +270,18 @@ func (fa *fwApp) registerActions() {
 }
 
 func (fa *fwApp) registerShortcuts() {
-	fa.ConnectShortcut("<Primary><Alt>Page_Down", "rules", "Go to next rules views", fa.win.Window, func (win gtk.Window) {
+	fa.ConnectShortcut("<Primary><Alt>Page_Down", "rules", "Go to next rules views", fa.win.Window, func(win gtk.Window) {
 		fa.switchRulesItem(switcherDirectionUp)
 	})
-	fa.ConnectShortcut("<Primary><Alt>Page_Up", "rules", "Go to previous rules views", fa.win.Window, func (win gtk.Window) {
+	fa.ConnectShortcut("<Primary><Alt>Page_Up", "rules", "Go to previous rules views", fa.win.Window, func(win gtk.Window) {
 		fa.switchRulesItem(switcherDirectionDown)
 	})
-	fa.ConnectShortcut("<Primary>n", "rules", "Create new rule", fa.win.Window, func (win gtk.Window) {
+	fa.ConnectShortcut("<Primary>n", "rules", "Create new rule", fa.win.Window, func(win gtk.Window) {
 		if fa.btnNewRule.GetSensitive() {
 			fa.btnNewRule.Emit("clicked")
 		}
 	})
-	fa.ConnectShortcut("<Primary>f", "rules", "Search for rule", fa.win.Window, func (win gtk.Window) {
+	fa.ConnectShortcut("<Primary>f", "rules", "Search for rule", fa.win.Window, func(win gtk.Window) {
 		if fa.tlStack.GetVisibleChildName() == "rules" {
 			reveal := fa.revealerSearch.GetRevealChild()
 			if !reveal {
@@ -289,31 +291,31 @@ func (fa *fwApp) registerShortcuts() {
 			fa.entrySearch.Widget.GrabFocus()
 		}
 	})
-	fa.ConnectShortcut("<Primary><Shift>Page_Down", "general", "Go to the next view", fa.win.Window, func (win gtk.Window) {
+	fa.ConnectShortcut("<Primary><Shift>Page_Down", "general", "Go to the next view", fa.win.Window, func(win gtk.Window) {
 		fa.switchStackItem(switcherDirectionDown)
 	})
-	fa.ConnectShortcut("<Primary><Shift>Page_Up", "general", "Go to the previous view", fa.win.Window, func (win gtk.Window) {
+	fa.ConnectShortcut("<Primary><Shift>Page_Up", "general", "Go to the previous view", fa.win.Window, func(win gtk.Window) {
 		fa.switchStackItem(switcherDirectionUp)
 	})
 	if fa.promptMode != promptModeDisabled {
 		fa.RegisterShortcutHelp("<Primary><Alt>space", "general", "Answer first firewall prompt")
 	}
-/*
-	fa.ConnectShortcut("<Primary>question", "general", "Show the program help", fa.win.Window, func (win gtk.Window) {
-		ha := fa.ActionMap.LookupAction("help")
-		if ha != nil {
-			ha.Activate(nil)
-		}
-	})
-*/
-	fa.ConnectShortcut("F1", "general", "Show this help window", fa.win.Window, func (win gtk.Window) {
+	/*
+		fa.ConnectShortcut("<Primary>question", "general", "Show the program help", fa.win.Window, func (win gtk.Window) {
+			ha := fa.ActionMap.LookupAction("help")
+			if ha != nil {
+				ha.Activate(nil)
+			}
+		})
+	*/
+	fa.ConnectShortcut("F1", "general", "Show this help window", fa.win.Window, func(win gtk.Window) {
 		fa.showShortcutsWindow()
 	})
-	fa.ConnectShortcut("<Primary>q", "general", "Exit program", fa.win.Window, func (win gtk.Window) {
+	fa.ConnectShortcut("<Primary>q", "general", "Exit program", fa.win.Window, func(win gtk.Window) {
 		fa.win.Close()
 	})
 	// Easter Egg
-	fa.ConnectShortcut("<Primary>F5", "", "", fa.win.Window, func (win gtk.Window) {
+	fa.ConnectShortcut("<Primary>F5", "", "", fa.win.Window, func(win gtk.Window) {
 		fa.repopulateWindow()
 		fa.loadConfig(false)
 	})
@@ -342,12 +344,12 @@ func (fa *fwApp) buildWindow() {
 
 	fa.win.SetIconName("security-medium")
 	fa.win.SetTitle("Subgraph Firewall Settings")
-/*
-	fa.winb.ConnectSignals(map[string]interface{} {
-		"on_changed_search": fa.onChangedSearch,
-		"on_stoped_search":  fa.onStopedSearch,
-	})
-*/
+	/*
+		fa.winb.ConnectSignals(map[string]interface{} {
+			"on_changed_search": fa.onChangedSearch,
+			"on_stoped_search":  fa.onStopedSearch,
+		})
+	*/
 	//fa.swRulesPermanent.Connect("key-press-event", fa.onRulesKeyPress)
 	fa.entrySearch.Connect("search-changed", fa.onChangedSearch)
 	fa.entrySearch.Connect("stop-search", fa.onStopedSearch)
@@ -414,7 +416,6 @@ func (fa *fwApp) buildAppMenu() {
 	}
 }
 
-
 /*
  * Windows
  */
@@ -449,7 +450,7 @@ func (fa *fwApp) showPromptQuit() bool {
 func (fa *fwApp) showAddRuleDialog() {
 	rule := &sgfw.DbusRule{}
 	rl := &ruleList{app: fa}
-	rr := &ruleRow{ rl: rl, rule: rule}
+	rr := &ruleRow{rl: rl, rule: rule}
 	rnew := newRuleAdd(rr, DIALOG_MODE_NEW)
 	rnew.update()
 	rnew.run("", nil)
@@ -479,7 +480,7 @@ func (fa *fwApp) showAboutDialog() {
 	ad, _ := gtk.AboutDialogNew()
 	ad.SetName(sfs)
 	ad.SetProgramName(sfs)
-	ad.SetAuthors([]string{"<a href=\""+url+"\">Subgraph Inc</a>"})
+	ad.SetAuthors([]string{"<a href=\"" + url + "\">Subgraph Inc</a>"})
 	//ad.AddCreditSection("", []string{"- Bruce Leidl", "- David Mirza", "- Stephen Watt", "- Matthieu Lalonde"})
 	ad.SetVersion("0.1.0")
 	ad.SetCopyright(fmt.Sprintf("© %s.", cs))
@@ -501,8 +502,8 @@ func (fa *fwApp) showShortcutsWindow() {
 	var groups = []string{"general", "rules", "prompt"}
 	var titles = map[string]string{
 		"general": "General",
-		"rules": "Rules",
-		"prompt": "Firewall Prompt",
+		"rules":   "Rules",
+		"prompt":  "Firewall Prompt",
 	}
 	xv := new(GtkXMLInterface)
 	xv.Comment = " interface-requires gtk+ 3.20 "
@@ -517,19 +518,19 @@ func (fa *fwApp) showShortcutsWindow() {
 	xss := new(GtkXMLObject)
 	xss.Class = "GtkShortcutsSection"
 	xss.Properties = []GtkXMLProperty{
-			{Name: "visible", Value: "1"},
-			{Name: "section-name", Value: "shortcuts"},
-			{Name: "max-height", Value: "16"},
-		}
+		{Name: "visible", Value: "1"},
+		{Name: "section-name", Value: "shortcuts"},
+		{Name: "max-height", Value: "16"},
+	}
 	xsw.Children = append(xsw.Children, GtkXMLChild{Objects: []*GtkXMLObject{xss}})
 
 	for _, g := range groups {
 		xsg := new(GtkXMLObject)
 		xsg.Class = "GtkShortcutsGroup"
 		xsg.Properties = []GtkXMLProperty{
-				{Name: "title", Value: titles[g], Translatable: "yes"},
-				{Name: "visible", Value: "1"},
-			}
+			{Name: "title", Value: titles[g], Translatable: "yes"},
+			{Name: "visible", Value: "1"},
+		}
 		found := false
 		for _, sc := range fa.shortcuts {
 			if sc.Group != g {
@@ -539,10 +540,10 @@ func (fa *fwApp) showShortcutsWindow() {
 			xps := new(GtkXMLObject)
 			xps.Class = "GtkShortcutsShortcut"
 			xps.Properties = []GtkXMLProperty{
-					{Name: "visible", Value: "yes"},
-					{Name: "accelerator", Value: sc.Accel},
-					{Name: "title", Translatable: "yes", Value: sc.Title},
-				}
+				{Name: "visible", Value: "yes"},
+				{Name: "accelerator", Value: sc.Accel},
+				{Name: "title", Translatable: "yes", Value: sc.Title},
+			}
 			xsg.Children = append(xsg.Children, GtkXMLChild{Objects: []*GtkXMLObject{xps}})
 		}
 		if found {
@@ -573,7 +574,6 @@ func (fa *fwApp) showShortcutsWindow() {
 	}
 }
 
-
 /*
  * Private Utils
  */
@@ -583,7 +583,7 @@ func (fa *fwApp) populateWindow() {
 	if fa.boxPermanent == nil {
 		fa.boxPermanent, _ = gtk.ListBoxNew()
 		fa.swRulesPermanent.Add(fa.boxPermanent)
-			
+
 		fa.rlPermanent = newRuleList(fa, fa.boxPermanent, sgfw.RULE_MODE_PERMANENT)
 		if _, err := fa.Dbus.isEnabled(); err != nil {
 			failDialog(&fa.win.Window, "Unable is connect to firewall daemon.  Is it running?")
@@ -591,7 +591,6 @@ func (fa *fwApp) populateWindow() {
 	}
 	fa.rlPermanent.loadRules(true)
 	fa.rlPermanent.reloadRules(tt)
-
 
 	if fa.boxSession == nil {
 		fa.boxSession, _ = gtk.ListBoxNew()
@@ -604,7 +603,6 @@ func (fa *fwApp) populateWindow() {
 	}
 	fa.rlSession.loadRules(true)
 	fa.rlSession.reloadRules(tt)
-
 
 	if fa.boxProcess == nil {
 		fa.boxProcess, _ = gtk.ListBoxNew()
@@ -621,7 +619,7 @@ func (fa *fwApp) populateWindow() {
 	if fa.boxSystem == nil {
 		fa.boxSystem, _ = gtk.ListBoxNew()
 		fa.swRulesSystem.Add(fa.boxSystem)
-		
+
 		fa.rlSystem = newRuleList(fa, fa.boxSystem, sgfw.RULE_MODE_SYSTEM)
 		if _, err := fa.Dbus.isEnabled(); err != nil {
 			failDialog(&fa.win.Window, "Unable is connect to firewall daemon.  Is it running?")
@@ -630,38 +628,37 @@ func (fa *fwApp) populateWindow() {
 	fa.rlSystem.loadRules(true)
 	fa.rlSystem.reloadRules(tt)
 
-
 }
 
 func (fa *fwApp) repopulateWindow() {
 	fmt.Println("Refreshing firewall rule list.")
 	fa.repopMutex.Lock()
 	defer fa.repopMutex.Unlock()
-/*
-	child, err := fa.swRulesPermanent.GetChild()
-	if err != nil {
-		failDialog(&fa.win.Window, "Unable to clear out permanent rules list display: %v", err)
-	}
-	fa.swRulesPermanent.Remove(child)
+	/*
+		child, err := fa.swRulesPermanent.GetChild()
+		if err != nil {
+			failDialog(&fa.win.Window, "Unable to clear out permanent rules list display: %v", err)
+		}
+		fa.swRulesPermanent.Remove(child)
 
-	child, err = fa.swRulesSession.GetChild()
-	if err != nil {
-		failDialog(&fa.win.Window, "Unable to clear out session rules list display: %v", err)
-	}
-	fa.swRulesSession.Remove(child)
+		child, err = fa.swRulesSession.GetChild()
+		if err != nil {
+			failDialog(&fa.win.Window, "Unable to clear out session rules list display: %v", err)
+		}
+		fa.swRulesSession.Remove(child)
 
-	child, err = fa.swRulesProcess.GetChild()
-	if err != nil {
-		failDialog(&fa.win.Window, "Unable to clear out process rules list display: %v", err)
-	}
-	fa.swRulesProcess.Remove(child)
+		child, err = fa.swRulesProcess.GetChild()
+		if err != nil {
+			failDialog(&fa.win.Window, "Unable to clear out process rules list display: %v", err)
+		}
+		fa.swRulesProcess.Remove(child)
 
-	child, err = fa.swRulesSystem.GetChild()
-	if err != nil {
-		failDialog(&fa.win.Window, "Unable to clear out system rules list display: %v", err)
-	}
-	fa.swRulesSystem.Remove(child)
-*/
+		child, err = fa.swRulesSystem.GetChild()
+		if err != nil {
+			failDialog(&fa.win.Window, "Unable to clear out system rules list display: %v", err)
+		}
+		fa.swRulesSystem.Remove(child)
+	*/
 	if fa.tlStack.GetVisibleChildName() != "rules" && fa.promptMode == promptModeDisabled {
 		stack := fa.tlStack.GetChildByName("rules")
 		err := fa.tlStack.ChildSetProperty(stack, "needs-attention", true)
@@ -701,7 +698,7 @@ func (fa *fwApp) switchStackItem(dir switcherDirection) {
 	stacks := []string{"prompt", "rules", "config"}
 	stacksByName := map[string]int{
 		"prompt": 0,
-		"rules": 1,
+		"rules":  1,
 		"config": 2,
 	}
 	if fa.promptMode == promptModeDisabled {
@@ -727,7 +724,6 @@ func (fa *fwApp) switchStackItem(dir switcherDirection) {
 	fa.onStackChanged()
 }
 
-
 /*
  * Handlers
  */
@@ -738,7 +734,7 @@ func (fa *fwApp) handleSignals(c <-chan os.Signal) {
 		switch sig {
 		case syscall.SIGINT:
 			if fa.intcount == 0 {
-				glib.IdleAdd(func () bool {
+				glib.IdleAdd(func() bool {
 					fa.win.Close()
 					return false
 				})
@@ -780,7 +776,7 @@ func (fa *fwApp) onWindowDelete() bool {
 }
 
 func (fa *fwApp) onStackChanged() {
-tn := fa.tlStack.GetVisibleChildName()
+	tn := fa.tlStack.GetVisibleChildName()
 	nra := fa.ActionMap.LookupAction("new_rule")
 	if tn == "rules" {
 		fa.btnNewRule.SetSensitive(true)
@@ -803,7 +799,7 @@ tn := fa.tlStack.GetVisibleChildName()
 		nra.SetProperty("enabled", false)
 	}
 
-	if fa.prompt != nil && tn != "prompt"{
+	if fa.prompt != nil && tn != "prompt" {
 		pstack := fa.tlStack.GetChildByName("prompt")
 		nag, _ := fa.tlStack.ChildGetProperty(pstack, "needs-attention", glib.TYPE_BOOLEAN)
 		if fa.prompt.HasItems() && !nag.(bool) {
@@ -853,7 +849,6 @@ func (fa *fwApp) onRulesKeyPress(i interface{}, e *gdk.Event) bool {
 	return true
 }
 
-
 /*
  * Users, Groups
  */
@@ -867,7 +862,7 @@ func (fa *fwApp) cacheUsers() error {
 	fa.userMapLock.Lock()
 	defer fa.userMapLock.Unlock()
 
-	readColonFile(f, func (line []byte) {
+	readColonFile(f, func(line []byte) {
 		t := strings.Split(string(line), ":")
 		id, _ := strconv.ParseInt(t[2], 10, 32)
 		fa.userMap[int32(id)] = t[0]
@@ -886,7 +881,7 @@ func (fa *fwApp) cacheGroups() error {
 	fa.groupMapLock.Lock()
 	defer fa.groupMapLock.Unlock()
 
-	readColonFile(f, func (line []byte) {
+	readColonFile(f, func(line []byte) {
 		t := strings.Split(string(line), ":")
 		id, _ := strconv.ParseInt(t[2], 10, 32)
 		fa.groupMap[int32(id)] = t[0]
@@ -894,7 +889,6 @@ func (fa *fwApp) cacheGroups() error {
 	})
 	return nil
 }
-
 
 /*
  * Exported
@@ -918,14 +912,23 @@ func (fa *fwApp) ConnectShortcut(accel, group, title string, w gtk.Window, actio
 	})
 
 	w.AddAccelGroup(gr)
-	w.Connect("delete-event", func () bool {
+	w.Connect("delete-event", func() bool {
 		w.RemoveAccelGroup(gr)
 		return false
 	})
 }
 
-func (fa *fwApp) LookupUsername(uid int32) string {
+func (fa *fwApp) LookupUsername(realm string, uid int32) string {
 	// TODO: needs to be realm aware
+	// TODO: cache ^^
+	if realm != "" {
+		user := ""
+		var db, _ = dbus.SystemBus()
+		obj := db.Object("com.subgraph.realms", "/")
+		obj.Call("com.subgraph.realms.Manager.RealmUsernameFromUID", 0, realm, strconv.Itoa(int(uid))).Store(&user)
+		return user
+	}
+
 	if uid == -1 {
 		return "any"
 	}
@@ -938,8 +941,17 @@ func (fa *fwApp) LookupUsername(uid int32) string {
 	return "unknown"
 }
 
-func (fa *fwApp) LookupGroup(gid int32) string {
+func (fa *fwApp) LookupGroup(realm string, gid int32) string {
 	// TODO: needs to be realm aware
+	// ^^ cache
+	if realm != "" {
+		group := ""
+		var db, _ = dbus.SystemBus()
+		obj := db.Object("com.subgraph.realms", "/")
+		obj.Call("com.subgraph.realms.Manager.RealmGroupnameFromGID", 0, realm, strconv.Itoa(int(gid))).Store(&group)
+		return group
+	}
+
 	if gid == -1 {
 		return "any"
 	}
@@ -951,7 +963,6 @@ func (fa *fwApp) LookupGroup(gid int32) string {
 	}
 	return "unknown"
 }
-
 
 /*
  * Global Utils
@@ -989,7 +1000,6 @@ func readColonFile(r io.Reader, fn func(line []byte)) (v interface{}, err error)
 	}
 	return nil, bs.Err()
 }
-
 
 /*
  * Main

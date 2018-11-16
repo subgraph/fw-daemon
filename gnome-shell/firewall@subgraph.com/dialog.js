@@ -9,6 +9,8 @@ const St = imports.gi.St;
 const CheckBox = imports.ui.checkBox
 const ModalDialog = imports.ui.modalDialog;
 const Tweener = imports.ui.tweener;
+const Extension = imports.misc.extensionUtils.getCurrentExtension();
+const Misc = Extension.imports.misc;
 
 const RuleScope = {
     APPLY_SESSION: 0,
@@ -22,36 +24,47 @@ const DetailSection = new Lang.Class({
     Name: 'DetailSection',
 
     _init: function(sandboxed) {
-        this.actor = new St.BoxLayout({ style_class: 'fw-details-section' });
-        this._left = new St.BoxLayout({ vertical: true, style_class: 'fw-details-left'});
+        //this.actor = new St.BoxLayout({ style_class: 'fw-details-section', pack_start: false });
+        this.actor = new St.BoxLayout({ style_class: 'fw-details-section-container', pack_start: false });
+	this._cont = new St.BoxLayout({ style_class: 'fw-details-section' });
+        this._left = new St.BoxLayout({ vertical: true, style_class: 'fw-details-left' });
+        //this._right = new St.BoxLayout({ vertical: true, style_class: 'fw-details-right' });
         this._right = new St.BoxLayout({ vertical: true, style_class: 'fw-details-right' });
-        this.actor.add_child(this._left);
-        this.actor.add_child(this._right);
-
+        this._more = new St.BoxLayout({ vertical: true, style_class: 'fw-details-right', y_align: Clutter.ActorAlign.CENTER, x_align: St.Align.END });
+	this._cont.add_child(this._left);
+	this._cont.add_child(this._right);
+	this.actor.add_child(this._cont);
+	this.actor.add_child(this._more);
+        //this.actor.add_child(this._left);
+        //this.actor.add_child(this._right);
+	//this.actor.add_child(this._more);
+        if (sandboxed) {
+            this.sandbox = this._addDetails("Realm:");
+        }
         this.ipAddr = this._addDetails("IP Address:");
         this.path = this._addDetails("Path:");
         this.pid = this._addDetails("Process ID:");
-        this.origin = this._addDetails("Origin:");
+        this.origin = this._addDetails("Origin IP address:");
         this.user = this._addCheckboxDetails("User:");
         this.group = this._addCheckboxDetails("Group:");
         this.sandboxed = sandboxed;
 
-        if (sandboxed) {
-            this.sandbox = this._addDetails("Sandbox:");
-        }
         this.optstring = this._addDetails("");
     },
 
     _addDetails: function(text, d) {
         let title = new St.Label({ style_class: 'fw-detail-title', text: text});
+        //this._left.add(title, { expand: true, x_fill: false, x_align: St.Align.END});
         this._left.add(title, { expand: true, x_fill: false, x_align: St.Align.END});
         let msg = new St.Label({ style_class: 'fw-detail-message' });
         if (d === undefined) {
-            this._right.add(msg);
+	    // this._right.add(msg);
+            this._right.add(msg, { expand: true, x_fill: false, x_align: St.Align.END});
         } else {
-            let inner = new St.BoxLayout({ vertical: false, style_class: 'fw-ugid-apply-checkbox' });
-            inner.add(msg);
-            inner.add(d.actor);
+            let inner = new St.BoxLayout({ vertical: false, style_class: 'fw-ugid-apply-checkbox', x_align: St.Align.END });
+	    //inner.add(msg);
+            inner.add(msg, { expand: true, x_fill: true, x_align: St.Align.END});
+            inner.add(d.actor, { x_fill: true, x_align: St.Align.END, expand: true});
             this._right.add(inner);
         }
         return msg;
@@ -60,13 +73,14 @@ const DetailSection = new Lang.Class({
     _addCheckboxDetails: function(text) {
         let title = new St.Label({ style_class: 'fw-detail-title', text: text});
         title.hide();
+        //this._left.add(title, { expand: true, x_fill: false, x_align: St.Align.END});
         this._left.add(title, { expand: true, x_fill: false, x_align: St.Align.END});
         //let msg = new St.Label({ style_class: 'fw-detail-message' });
         
         let check = new CheckBox.CheckBox("");
         check.actor.checked = true;
         check.actor.hide();
-        this._right.add(check.actor);
+        this._right.add(check.actor, { expand: true, x_align: St.Align.END, x_fill: false});
         
         /*
         let inner = new St.BoxLayout({ vertical: false, style_class: 'fw-ugid-apply-checkbox' });
@@ -115,10 +129,78 @@ const DetailSection = new Lang.Class({
         }
 
         if (sandbox != "") {
-            this.sandbox.text = sandbox;
+	    
+            //this.sandbox = new St.Label({ style_class: 'fw-detail-message' });
+	    //this._right.remove_child(this.sandbox);
+            //let yek = new St.Label({ style_class: 'fw-detail-message' });
+	    var [r,g,b] = Misc.pastelColorsFromName(sandbox);
+	    var hexbg = r.toString(16) + g.toString(16) + b.toString(16);
+	    this.sandbox.get_clutter_text().set_markup('<span font_weight="bold" underline_color="#'+hexbg+'"><u>'+sandbox+'</u></span>');
+	    //this._right.add_child(yek);
+	    //this.sandbox.show();
+//		                        result_label.get_clutter_text().set_markup('<span foreground="' + styles[stat] + '" underline_color="red">' + Fuzzy.fuzzysort.highlight(r[k], open = '<u>', close = '</u>') + '</span>');
+
+       //     global.log(hexbg);
+    	    /* var _dot = new St.Widget({ style_class: 'realm-running-dot',//'app-well-app-running-dot',
+									layout_manager: new Clutter.BinLayout(),
+									x_expand: true, y_expand: true,
+									x_align: Clutter.ActorAlign.CENTER,
+									y_align: Clutter.ActorAlign.CENTER });
+
+	    _dot.style = 'background-color: #'+hexbg+';width: '+width+'px;';
+	    this.sandbox.add_actor(_dot);
+	    this.sandbox = _dot;
+	    _dot.show(); */
+	
         }
 
-        this.optstring.text = optstring
+        this.optstring.text = optstring;
+	let windows = global.get_window_actors();
+	let tnpid = -1;
+	let winpids = {};
+	let t;
+	let mw; 
+	let x = 0;
+	let thumb = false;
+        for (x = 0; x < windows.length; x++) {
+		mw = windows[x].get_meta_window();
+		if (typeof mw != 'undefined') {
+			global.log("pid: "+pid+" mw.get_client_pid(): "+mw.get_client_pid().toString());
+			winpids[pid] = windows[x].get_meta_window();
+			if (pid == mw.get_client_pid().toString()) {
+				t = Misc.getThumbnail(mw);
+				this._more.add(t);
+				tnpid = pid;
+				thumb = true;
+				break;
+			}
+		}
+	}
+	if (pid > 1 && tnpid == -1) {
+		tnpid = Misc.findParentProcessWindow(pid);
+		global.log(tnpid);
+	}
+	if (tnpid > 1 && thumb == false) {
+        	for (x = 0; x < windows.length; x++) {
+			mw = windows[x].get_meta_window();
+			if (typeof mw != 'undefined') {
+				if (tnpid == mw.get_client_pid().toString()) {
+					t = Misc.getThumbnail(mw);
+					t.expand = true;
+					t.x_align = St.Align.END;
+					t.x_fill = true;
+					t.y_fill = true;
+					this._more.add(t);
+					thumb = true;
+					break;
+				}
+			}
+		}
+        
+    	}
+	if (thumb == true) {
+		this._right.height = this._left.height;
+	}
     }
 });
 
@@ -184,7 +266,7 @@ const OptionList = new Lang.Class({
         }
         this.actor.add_child(this.buttonGroup.actor);
         this.items = [];
-        this._selected;
+        this._selected = "";
         this.tlsGuard = false;
         if (sandboxed) {
             this.tlsGuard = true;
@@ -595,7 +677,9 @@ const PromptDialogHeader = new Lang.Class({
         if (!remaining) {
             this.waiting.text;
         } else {
-            this.waiting.text = "Remaining: " + remaining;
+	    //ithis.waiting.text = "Remaining: " + remaining;
+
+    //        this.waiting = new St.Label({style_class: 'fw-prompt-waiting', text: "Remaining: " + remaining});
         }
     },
 
@@ -782,7 +866,7 @@ const PromptDialog = new Lang.Class({
         }
 
         if (sandbox != "") {
-            application = application + " (sandboxed)"
+            application = application; 
         }
 
         this.header.setTitle(application);
